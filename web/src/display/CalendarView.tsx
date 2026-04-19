@@ -2,8 +2,8 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
-import type { EventClickArg } from "@fullcalendar/core";
-import { useRef } from "react";
+import type { DatesSetArg, EventClickArg } from "@fullcalendar/core";
+import { useRef, useState } from "react";
 import { refreshCalendars } from "../api";
 import type { CalendarEvent } from "../types";
 
@@ -22,6 +22,7 @@ const VIEW_MAP = {
 
 export default function CalendarView({ events, defaultView, onEventClick, onDayClick }: Props) {
   const ref = useRef<FullCalendar | null>(null);
+  const [title, setTitle] = useState("");
 
   const fcEvents = events.map((e) => ({
     id: e.id,
@@ -47,6 +48,10 @@ export default function CalendarView({ events, defaultView, onEventClick, onDayC
     ref.current?.getApi().changeView(VIEW_MAP[key]);
   };
 
+  const handleDatesSet = (arg: DatesSetArg) => {
+    setTitle(arg.view.title);
+  };
+
   return (
     <div className="calendar-wrapper">
       <div className="calendar-toolbar">
@@ -55,6 +60,7 @@ export default function CalendarView({ events, defaultView, onEventClick, onDayC
           <button onClick={() => ref.current?.getApi().today()}>Today</button>
           <button onClick={() => ref.current?.getApi().next()}>›</button>
         </div>
+        <h2 className="calendar-title">{title}</h2>
         <div className="group view-switch">
           <button onClick={() => setView("day")}>Day</button>
           <button onClick={() => setView("week")}>Week</button>
@@ -73,6 +79,7 @@ export default function CalendarView({ events, defaultView, onEventClick, onDayC
         events={fcEvents}
         eventClick={handleEventClick}
         dateClick={handleDateClick}
+        datesSet={handleDatesSet}
         nowIndicator
         longPressDelay={250}
         selectLongPressDelay={250}
