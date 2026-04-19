@@ -13,6 +13,14 @@ export interface Weather {
   location: string;
 }
 
+export interface Tide {
+  latitude: number;
+  longitude: number;
+  units: "metric" | "imperial";
+  timezone: string;
+  location: string;
+}
+
 export interface GeoResult {
   name: string;
   admin1?: string;
@@ -29,6 +37,7 @@ export interface Display {
   defaultView: "day" | "week" | "month";
   calendarRefreshSeconds: number;
   weatherRefreshSeconds: number;
+  tideRefreshSeconds: number;
   theme: ThemePalette;
   mode: ThemeMode;
 }
@@ -40,6 +49,7 @@ export interface SnowDay {
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
+  tide: Tide;
   snowDay: SnowDay;
   display: Display;
 }
@@ -86,6 +96,20 @@ export interface WeatherSnapshot {
   daily: WeatherDaily[];
 }
 
+export interface TideEvent {
+  time: string;
+  type: "high" | "low";
+  heightMeters: number;
+}
+
+export interface TideSnapshot {
+  updatedAt: string;
+  units: string;
+  timezone: string;
+  currentMeters: number;
+  events: TideEvent[];
+}
+
 export interface SnowDaySnapshot {
   updatedAt: string;
   url: string;
@@ -104,8 +128,10 @@ export type WSFrame =
       events: CalendarEvent[];
       weather: WeatherSnapshot | null;
       snowday: SnowDaySnapshot | null;
+      tide: TideSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
   | { type: "snowday"; snowday: SnowDaySnapshot | null }
+  | { type: "tide"; tide: TideSnapshot | null }
   | { type: "config"; config: Config };

@@ -26,11 +26,19 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			Timezone:  "America/Vancouver",
 			Location:  "Vancouver, BC, Canada",
 		},
+		Tide: types.Tide{
+			Latitude:  48.4284,
+			Longitude: -123.3656,
+			Units:     "imperial",
+			Timezone:  "America/Vancouver",
+			Location:  "Victoria, BC, Canada",
+		},
 		SnowDay: types.SnowDay{URL: "https://example.com/snow"},
 		Display: types.Display{
 			DefaultView:            "day",
 			CalendarRefreshSeconds: 120,
 			WeatherRefreshSeconds:  600,
+			TideRefreshSeconds:     1800,
 			Theme:                  "ocean",
 			Mode:                   "dark",
 		},
@@ -51,6 +59,29 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 	got := reopened.Get()
 	if !reflect.DeepEqual(got, input) {
 		t.Errorf("persisted config differed from input.\ninput=%+v\ngot=%+v", input, got)
+	}
+}
+
+func TestNormalizeFillsTideDefaultsWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cfg := s.Get()
+	if cfg.Tide.Units != "metric" {
+		t.Errorf("Tide.Units = %q, want %q", cfg.Tide.Units, "metric")
+	}
+	if cfg.Tide.Timezone == "" {
+		t.Errorf("Tide.Timezone should default to non-empty, got empty")
+	}
+	if cfg.Display.TideRefreshSeconds <= 0 {
+		t.Errorf("Display.TideRefreshSeconds = %d, want positive default",
+			cfg.Display.TideRefreshSeconds)
 	}
 }
 

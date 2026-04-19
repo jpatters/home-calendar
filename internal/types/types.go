@@ -20,10 +20,19 @@ type Weather struct {
 	Location  string  `json:"location"`
 }
 
+type Tide struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Units     string  `json:"units"`
+	Timezone  string  `json:"timezone"`
+	Location  string  `json:"location"`
+}
+
 type Display struct {
 	DefaultView            string `json:"defaultView"`
 	CalendarRefreshSeconds int    `json:"calendarRefreshSeconds"`
 	WeatherRefreshSeconds  int    `json:"weatherRefreshSeconds"`
+	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
 	Theme                  string `json:"theme"`
 	Mode                   string `json:"mode"`
 }
@@ -35,6 +44,7 @@ type SnowDay struct {
 type Config struct {
 	Calendars []Calendar `json:"calendars"`
 	Weather   Weather    `json:"weather"`
+	Tide      Tide       `json:"tide"`
 	SnowDay   SnowDay    `json:"snowDay"`
 	Display   Display    `json:"display"`
 }
@@ -100,6 +110,20 @@ type WeatherSnapshot struct {
 	Daily     []WeatherDaily `json:"daily"`
 }
 
+type TideEvent struct {
+	Time         time.Time `json:"time"`
+	Type         string    `json:"type"`
+	HeightMeters float64   `json:"heightMeters"`
+}
+
+type TideSnapshot struct {
+	UpdatedAt     time.Time   `json:"updatedAt"`
+	Units         string      `json:"units"`
+	Timezone      string      `json:"timezone"`
+	CurrentMeters float64     `json:"currentMeters"`
+	Events        []TideEvent `json:"events"`
+}
+
 type SnowDaySnapshot struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 	URL         string    `json:"url"`
@@ -121,10 +145,15 @@ func DefaultConfig() Config {
 			Timezone:  "auto",
 			Location:  "Toronto, Ontario, Canada",
 		},
+		Tide: Tide{
+			Units:    "metric",
+			Timezone: "auto",
+		},
 		Display: Display{
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
+			TideRefreshSeconds:     3600,
 			Theme:                  "default",
 			Mode:                   "light",
 		},

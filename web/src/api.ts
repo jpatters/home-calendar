@@ -28,6 +28,10 @@ export async function refreshSnowDay(): Promise<void> {
   await fetch("/api/snowday/refresh", { method: "POST" });
 }
 
+export async function refreshTide(): Promise<void> {
+  await fetch("/api/tide/refresh", { method: "POST" });
+}
+
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {
   const res = await fetch(`/api/weather/geocode?q=${encodeURIComponent(query)}`, { signal });
   if (!res.ok) throw new Error(`GET /api/weather/geocode ${res.status}`);

@@ -5,6 +5,8 @@ import CalendarView from "./CalendarView";
 import ClockWidget from "./ClockWidget";
 import WeatherWidget from "./WeatherWidget";
 import SnowDayWidget from "./SnowDayWidget";
+import TideWidget from "./TideWidget";
+import TideModal from "./TideModal";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 
@@ -15,6 +17,7 @@ interface Props {
 export default function Display({ live }: Props) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [tideOpen, setTideOpen] = useState(false);
 
   if (!live.ready) {
     return <div className="loading">Loading…</div>;
@@ -38,12 +41,24 @@ export default function Display({ live }: Props) {
         <ClockWidget />
         <WeatherWidget weather={live.weather} config={live.config?.weather} />
         <SnowDayWidget snowday={live.snowday} config={live.config?.snowDay} />
+        <TideWidget
+          tide={live.tide}
+          config={live.config?.tide}
+          onOpen={() => setTideOpen(true)}
+        />
         <div className="connection-indicator">
           <span className={live.connected ? "dot ok" : "dot bad"} />
           {live.connected ? "live" : "reconnecting…"}
         </div>
       </aside>
 
+      {tideOpen && live.tide && (
+        <TideModal
+          tide={live.tide}
+          config={live.config?.tide}
+          onClose={() => setTideOpen(false)}
+        />
+      )}
       {selectedEvent && (
         <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       )}

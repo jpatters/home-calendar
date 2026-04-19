@@ -17,10 +17,18 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
     connected: true,
     events: [],
     snowday: null,
+    tide: null,
     weather,
     config: {
       calendars: [],
       weather: {
+        latitude: 0,
+        longitude: 0,
+        units: "metric",
+        timezone: "UTC",
+        location: "",
+      },
+      tide: {
         latitude: 0,
         longitude: 0,
         units: "metric",
@@ -32,6 +40,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         defaultView: "week",
         calendarRefreshSeconds: 300,
         weatherRefreshSeconds: 900,
+        tideRefreshSeconds: 3600,
         theme,
         mode,
       },
@@ -102,6 +111,7 @@ describe("useTheme", () => {
       events: [],
       weather: null,
       snowday: null,
+      tide: null,
     };
     render(<Harness live={live} />);
     expect(document.documentElement.dataset.palette).toBeUndefined();

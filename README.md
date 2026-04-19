@@ -17,6 +17,9 @@ private network.
   touch), React Router.
 - **Calendars**: Google Calendar "Secret address in iCal format" URLs.
 - **Weather**: [Open-Meteo](https://open-meteo.com/) — no API key.
+- **Tides**: [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) —
+  no API key. Derives next high/low tide events from hourly sea-level heights.
+  Modelled at 8 km resolution — not suitable for navigation.
 - **Snow day predictor**: optional widget backed by
   [snowdaypredictor.com](https://www.snowdaypredictor.com/) — paste a location
   page URL.
