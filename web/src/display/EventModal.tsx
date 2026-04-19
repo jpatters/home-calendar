@@ -5,9 +5,15 @@ interface Props {
   onClose: () => void;
 }
 
+// All-day event dates arrive as "YYYY-MM-DD". Parse them as local midnight
+// so the browser doesn't shift the date across timezones.
+function parseEventDate(iso: string, allDay: boolean): Date {
+  return allDay ? new Date(iso + "T00:00:00") : new Date(iso);
+}
+
 function fmtRange(ev: CalendarEvent): string {
-  const start = new Date(ev.start);
-  const end = new Date(ev.end);
+  const start = parseEventDate(ev.start, ev.allDay);
+  const end = parseEventDate(ev.end, ev.allDay);
   if (ev.allDay) {
     const sameDay = start.toDateString() === new Date(end.getTime() - 1).toDateString();
     if (sameDay) {

@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Calendar struct {
 	ID    string `json:"id"`
@@ -40,6 +43,25 @@ type Event struct {
 	AllDay        bool      `json:"allDay"`
 	Location      string    `json:"location,omitempty"`
 	Description   string    `json:"description,omitempty"`
+}
+
+// MarshalJSON emits Start/End as date-only strings ("YYYY-MM-DD") for all-day
+// events so browsers don't timezone-shift them. Timed events use RFC3339.
+func (e Event) MarshalJSON() ([]byte, error) {
+	type alias Event
+	startFmt, endFmt := time.RFC3339, time.RFC3339
+	if e.AllDay {
+		startFmt, endFmt = "2006-01-02", "2006-01-02"
+	}
+	return json.Marshal(&struct {
+		alias
+		Start string `json:"start"`
+		End   string `json:"end"`
+	}{
+		alias: alias(e),
+		Start: e.Start.Format(startFmt),
+		End:   e.End.Format(endFmt),
+	})
 }
 
 type WeatherCurrent struct {
