@@ -92,17 +92,29 @@ export default function Admin({ live }: Props) {
           <DisplayPanel
             value={draft.display}
             onChange={(display) => setDraft({ ...draft, display })}
-            autoAvailable={Boolean(draft.weather.location) && (draft.weather.latitude !== 0 || draft.weather.longitude !== 0)}
+            autoAvailable={
+              draft.weather.enabled &&
+              Boolean(draft.weather.location) &&
+              (draft.weather.latitude !== 0 || draft.weather.longitude !== 0)
+            }
           />
         )}
       </div>
 
       <footer className="admin-footer">
         <div className="actions">
-          <button onClick={() => void refreshCalendars()}>Refresh calendars now</button>
-          <button onClick={() => void refreshWeather()}>Refresh weather now</button>
-          <button onClick={() => void refreshTide()}>Refresh tide now</button>
-          <button onClick={() => void refreshSnowDay()}>Refresh snow day now</button>
+          {live.config?.display.calendarEnabled && (
+            <button onClick={() => void refreshCalendars()}>Refresh calendars now</button>
+          )}
+          {live.config?.weather.enabled && (
+            <button onClick={() => void refreshWeather()}>Refresh weather now</button>
+          )}
+          {live.config?.tide.enabled && (
+            <button onClick={() => void refreshTide()}>Refresh tide now</button>
+          )}
+          {live.config?.snowDay.enabled && (
+            <button onClick={() => void refreshSnowDay()}>Refresh snow day now</button>
+          )}
         </div>
         <div className="save">
           {error && <span className="error">{error}</span>}

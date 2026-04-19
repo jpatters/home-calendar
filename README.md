@@ -92,32 +92,53 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     }
   ],
   "weather": {
+    "enabled": true,
     "latitude": 43.65,
     "longitude": -79.38,
     "units": "metric",
     "timezone": "auto",
     "location": "Toronto, Ontario, Canada"
   },
+  "tide": {
+    "enabled": true,
+    "latitude": 48.42,
+    "longitude": -123.36,
+    "units": "metric",
+    "timezone": "auto",
+    "location": "Victoria, BC"
+  },
   "snowDay": {
+    "enabled": true,
     "url": "https://www.snowdaypredictor.com/prediction/canoe-cove-pe"
   },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
+    "tideRefreshSeconds": 3600,
     "theme": "default",
-    "mode": "light"
+    "mode": "light",
+    "calendarEnabled": true,
+    "clockEnabled": true
   }
 }
 ```
 
+Each widget has an `enabled` flag. Weather, Tide, and Snow Day each carry their
+own `enabled` field; the calendar and clock live under `display.calendarEnabled`
+and `display.clockEnabled`. When a widget is disabled the server stops its
+background fetcher (so no API calls are made) and the display hides it. You can
+toggle widgets from the admin page — look for the "Show …" checkbox at the top
+of each panel. Configs written before these flags existed are treated as
+all-enabled when loaded.
+
 `theme` is the colour palette — one of `default`, `ocean`, `sunset`, `forest`.
 `mode` is one of `light`, `dark`, or `auto`. `auto` flips between light and dark
 based on the configured weather location's sunrise/sunset (so the display
-follows your local sun). Configs from earlier versions that used
-`"theme": "light"` or `"theme": "dark"` are migrated automatically the first
-time the server reads them — they become `"theme": "default"` with the
-corresponding `mode`.
+follows your local sun). It requires weather to be enabled with a valid
+location. Configs from earlier versions that used `"theme": "light"` or
+`"theme": "dark"` are migrated automatically the first time the server reads
+them — they become `"theme": "default"` with the corresponding `mode`.
 
 Edit via `/admin` rather than by hand — the admin UI performs validation,
 assigns IDs, and triggers an immediate refresh.
@@ -135,17 +156,26 @@ assigns IDs, and triggers an immediate refresh.
 | GET    | `/api/weather/geocode?q=`     | Search Open-Meteo geocoding for a place   |
 | GET    | `/api/snowday`                | Current snow day prediction snapshot      |
 | POST   | `/api/snowday/refresh`        | Force a snow day refresh                  |
+| GET    | `/api/tide`                   | Current tide snapshot                     |
+| POST   | `/api/tide/refresh`           | Force a tide refresh                      |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
+
+The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
+widget is disabled.
 
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
 { "type": "snowday",  "snowday": {...} }
+{ "type": "tide",     "tide": {...} }
 { "type": "config",   "config": {...} }
 ```
+
+When a widget is disabled via config save, the server broadcasts its frame type
+with a `null` payload so clients can drop any stale snapshot immediately.
 
 On connect the client receives a `snapshot` with everything it needs to render.
 Subsequent frames arrive whenever a background fetcher updates the cache or the

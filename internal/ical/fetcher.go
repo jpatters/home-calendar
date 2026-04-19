@@ -64,6 +64,10 @@ func (f *Fetcher) Stop() {
 		f.doneWG.Wait()
 		f.cancel = nil
 	}
+	f.mu.Lock()
+	f.events = nil
+	f.lastErr = nil
+	f.mu.Unlock()
 }
 
 // RefreshNow triggers an immediate fetch with the given calendars.

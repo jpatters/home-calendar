@@ -37,6 +37,10 @@ func (s *Server) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCalendarRefresh(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
+	if !cfg.Display.CalendarEnabled {
+		http.Error(w, "calendar widget is disabled", http.StatusConflict)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
 	s.ical.RefreshNow(ctx, cfg.Calendars)
@@ -54,6 +58,10 @@ func (s *Server) handleGetWeather(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleWeatherRefresh(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
+	if !cfg.Weather.Enabled {
+		http.Error(w, "weather widget is disabled", http.StatusConflict)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	s.weather.RefreshNow(ctx, cfg.Weather)
@@ -92,6 +100,10 @@ func (s *Server) handleGetSnowDay(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSnowDayRefresh(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
+	if !cfg.SnowDay.Enabled {
+		http.Error(w, "snow day widget is disabled", http.StatusConflict)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	s.snowday.RefreshNow(ctx, cfg.SnowDay)
@@ -109,6 +121,10 @@ func (s *Server) handleGetTide(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTideRefresh(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg.Get()
+	if !cfg.Tide.Enabled {
+		http.Error(w, "tide widget is disabled", http.StatusConflict)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	s.tide.RefreshNow(ctx, cfg.Tide)

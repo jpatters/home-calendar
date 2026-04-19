@@ -13,6 +13,7 @@ type Calendar struct {
 }
 
 type Weather struct {
+	Enabled   bool    `json:"enabled"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	Units     string  `json:"units"`
@@ -21,6 +22,7 @@ type Weather struct {
 }
 
 type Tide struct {
+	Enabled   bool    `json:"enabled"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	Units     string  `json:"units"`
@@ -35,10 +37,13 @@ type Display struct {
 	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
 	Theme                  string `json:"theme"`
 	Mode                   string `json:"mode"`
+	CalendarEnabled        bool   `json:"calendarEnabled"`
+	ClockEnabled           bool   `json:"clockEnabled"`
 }
 
 type SnowDay struct {
-	URL string `json:"url"`
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
 }
 
 type Config struct {
@@ -139,6 +144,7 @@ func DefaultConfig() Config {
 	return Config{
 		Calendars: []Calendar{},
 		Weather: Weather{
+			Enabled:   true,
 			Latitude:  43.65,
 			Longitude: -79.38,
 			Units:     "metric",
@@ -146,8 +152,12 @@ func DefaultConfig() Config {
 			Location:  "Toronto, Ontario, Canada",
 		},
 		Tide: Tide{
+			Enabled:  true,
 			Units:    "metric",
 			Timezone: "auto",
+		},
+		SnowDay: SnowDay{
+			Enabled: true,
 		},
 		Display: Display{
 			DefaultView:            "week",
@@ -156,6 +166,8 @@ func DefaultConfig() Config {
 			TideRefreshSeconds:     3600,
 			Theme:                  "default",
 			Mode:                   "light",
+			CalendarEnabled:        true,
+			ClockEnabled:           true,
 		},
 	}
 }

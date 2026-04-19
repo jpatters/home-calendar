@@ -11,6 +11,24 @@ export default function DisplayPanel({ value, onChange, autoAvailable }: Props) 
   return (
     <div className="panel">
       <h2>Display</h2>
+      <div className="toggle-row">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={value.calendarEnabled}
+            onChange={(e) => onChange({ ...value, calendarEnabled: e.target.checked })}
+          />
+          Show calendar
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={value.clockEnabled}
+            onChange={(e) => onChange({ ...value, clockEnabled: e.target.checked })}
+          />
+          Show clock
+        </label>
+      </div>
       <div className="form-grid">
         <label>
           <span>Default view</span>

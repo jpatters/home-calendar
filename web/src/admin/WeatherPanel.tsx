@@ -65,8 +65,18 @@ export default function WeatherPanel({ value, onChange }: Props) {
   };
 
   return (
-    <div className="panel">
+    <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
       <h2>Weather (Open-Meteo)</h2>
+      <div className="toggle-row">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={value.enabled}
+            onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
+          />
+          Show weather widget
+        </label>
+      </div>
       <p className="hint">Search for your city, town, or region — no API key required.</p>
       <div className="form-grid">
         <label>

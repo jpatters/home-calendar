@@ -65,8 +65,18 @@ export default function TidePanel({ value, onChange }: Props) {
   };
 
   return (
-    <div className="panel">
+    <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
       <h2>Tides (Open-Meteo Marine)</h2>
+      <div className="toggle-row">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={value.enabled}
+            onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
+          />
+          Show tide widget
+        </label>
+      </div>
       <p className="hint">
         Search for a coastal location — no API key required. Note: this data
         is modelled at 8 km resolution and is not suitable for navigation.

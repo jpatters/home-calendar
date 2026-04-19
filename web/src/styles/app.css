@@ -236,6 +236,10 @@ input, select {
   height: 100vh;
 }
 
+.display-grid[data-calendar-hidden="true"] {
+  grid-template-columns: 1fr;
+}
+
 .calendar-pane {
   background: var(--bg-widget);
   border-radius: 12px;
@@ -486,6 +490,37 @@ input, select {
 .panel { background: var(--bg-surface); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .panel h2 { margin: 0 0 8px; font-size: 1.15rem; }
 .hint { color: var(--fg-muted); margin: 0 0 16px; }
+
+.panel-disabled .form-grid,
+.panel-disabled .hint,
+.panel-disabled .calendar-list,
+.panel-disabled .geo-results {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.toggle-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
 
 .calendar-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
 .calendar-row {

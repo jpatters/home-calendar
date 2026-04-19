@@ -7,15 +7,24 @@ interface Props {
 
 export default function SnowDayPanel({ value, onChange }: Props) {
   return (
-    <div className="panel">
+    <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
       <h2>Snow Day Predictor</h2>
+      <div className="toggle-row">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={value.enabled}
+            onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
+          />
+          Show snow day widget
+        </label>
+      </div>
       <p className="hint">
         Paste a location page URL from{" "}
         <a href="https://www.snowdaypredictor.com" target="_blank" rel="noreferrer">
           snowdaypredictor.com
         </a>{" "}
-        (e.g. <code>https://www.snowdaypredictor.com/prediction/canoe-cove-pe</code>). Leave blank
-        to disable the widget.
+        (e.g. <code>https://www.snowdaypredictor.com/prediction/canoe-cove-pe</code>).
       </p>
       <div className="form-grid">
         <label style={{ gridColumn: "1 / -1" }}>

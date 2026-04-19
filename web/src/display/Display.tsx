@@ -25,27 +25,43 @@ export default function Display({ live }: Props) {
 
   const events = live.events;
   const display = live.config?.display;
+  const calendarEnabled = display?.calendarEnabled ?? true;
+  const clockEnabled = display?.clockEnabled ?? true;
+  const weatherEnabled = live.config?.weather.enabled ?? true;
+  const snowDayEnabled = live.config?.snowDay.enabled ?? true;
+  const tideEnabled = live.config?.tide.enabled ?? true;
 
   return (
-    <div className="display-grid">
-      <main className="calendar-pane">
-        <CalendarView
-          events={events}
-          defaultView={display?.defaultView ?? "week"}
-          onEventClick={setSelectedEvent}
-          onDayClick={setSelectedDay}
-        />
-      </main>
+    <div
+      className="display-grid"
+      data-calendar-hidden={!calendarEnabled ? "true" : undefined}
+    >
+      {calendarEnabled && (
+        <main className="calendar-pane">
+          <CalendarView
+            events={events}
+            defaultView={display?.defaultView ?? "week"}
+            onEventClick={setSelectedEvent}
+            onDayClick={setSelectedDay}
+          />
+        </main>
+      )}
 
       <aside className="widget-pane">
-        <ClockWidget />
-        <WeatherWidget weather={live.weather} config={live.config?.weather} />
-        <SnowDayWidget snowday={live.snowday} config={live.config?.snowDay} />
-        <TideWidget
-          tide={live.tide}
-          config={live.config?.tide}
-          onOpen={() => setTideOpen(true)}
-        />
+        {clockEnabled && <ClockWidget />}
+        {weatherEnabled && (
+          <WeatherWidget weather={live.weather} config={live.config?.weather} />
+        )}
+        {snowDayEnabled && (
+          <SnowDayWidget snowday={live.snowday} config={live.config?.snowDay} />
+        )}
+        {tideEnabled && (
+          <TideWidget
+            tide={live.tide}
+            config={live.config?.tide}
+            onOpen={() => setTideOpen(true)}
+          />
+        )}
         <div className="connection-indicator">
           <span className={live.connected ? "dot ok" : "dot bad"} />
           {live.connected ? "live" : "reconnecting…"}

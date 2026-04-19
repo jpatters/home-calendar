@@ -6,11 +6,97 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/ical"
+	"github.com/jpatters/home-calendar/internal/snowday"
+	"github.com/jpatters/home-calendar/internal/tide"
 	"github.com/jpatters/home-calendar/internal/weather"
 )
+
+func newTestStore(t *testing.T, mutate func(*config.Store)) *config.Store {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := config.Open(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatalf("config.Open: %v", err)
+	}
+	if mutate != nil {
+		mutate(store)
+	}
+	return store
+}
+
+func TestWeatherRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Weather.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, weather: weather.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/weather/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleWeatherRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTideRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Tide.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, tide: tide.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/tide/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleTideRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSnowDayRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.SnowDay.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, snowday: snowday.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/snowday/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleSnowDayRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCalendarRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Display.CalendarEnabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, ical: ical.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/calendar/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleCalendarRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
 
 func TestWeatherGeocodeRejectsEmptyQuery(t *testing.T) {
 	s := &Server{geocode: func(context.Context, string) ([]weather.GeoResult, error) {

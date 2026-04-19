@@ -6,6 +6,7 @@ export interface Calendar {
 }
 
 export interface Weather {
+  enabled: boolean;
   latitude: number;
   longitude: number;
   units: "metric" | "imperial";
@@ -14,6 +15,7 @@ export interface Weather {
 }
 
 export interface Tide {
+  enabled: boolean;
   latitude: number;
   longitude: number;
   units: "metric" | "imperial";
@@ -40,9 +42,12 @@ export interface Display {
   tideRefreshSeconds: number;
   theme: ThemePalette;
   mode: ThemeMode;
+  calendarEnabled: boolean;
+  clockEnabled: boolean;
 }
 
 export interface SnowDay {
+  enabled: boolean;
   url: string;
 }
 
