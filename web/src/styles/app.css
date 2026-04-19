@@ -151,6 +151,7 @@ input, select {
 /* -------- weather -------- */
 .weather-widget { display: flex; flex-direction: column; gap: 12px; }
 .weather-current { text-align: center; }
+.weather-location { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 4px; }
 .weather-icon { font-size: 3.5rem; line-height: 1; }
 .weather-temp {
   font-size: 2.5rem;
@@ -316,6 +317,29 @@ input, select {
 }
 .form-grid label { display: flex; flex-direction: column; gap: 6px; font-weight: 500; font-size: 0.95rem; }
 .form-grid span { color: var(--fg-muted); font-weight: 400; font-size: 0.85rem; }
+
+.geo-results {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.geo-results li { border-bottom: 1px solid var(--border); }
+.geo-results li:last-child { border-bottom: 0; }
+.geo-results button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.geo-results button:hover { background: #f2f4f8; }
+.panel .error { color: var(--danger); margin: 0 0 16px; }
 
 .admin-footer {
   position: fixed;

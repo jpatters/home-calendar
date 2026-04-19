@@ -35,8 +35,9 @@ Open:
 - `http://<host>:8080/admin` — configuration page
 
 On first run the app seeds an empty config at `./data/config.json`. Go to
-`/admin`, add your Google Calendar iCal URLs, set your weather latitude/longitude,
-and save. Changes are broadcast to the display instantly over the WebSocket.
+`/admin`, add your Google Calendar iCal URLs, search for your city in the
+**Weather** tab, and save. Changes are broadcast to the display instantly over
+the WebSocket.
 
 ### Getting a Google Calendar iCal URL
 
@@ -91,7 +92,8 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "latitude": 43.65,
     "longitude": -79.38,
     "units": "metric",
-    "timezone": "auto"
+    "timezone": "auto",
+    "location": "Toronto, Ontario, Canada"
   },
   "snowDay": {
     "url": "https://www.snowdaypredictor.com/prediction/canoe-cove-pe"
@@ -118,6 +120,7 @@ assigns IDs, and triggers an immediate refresh.
 | POST   | `/api/calendar/refresh`       | Force an iCal refresh                     |
 | GET    | `/api/weather`                | Current weather snapshot                  |
 | POST   | `/api/weather/refresh`        | Force a weather refresh                   |
+| GET    | `/api/weather/geocode?q=`     | Search Open-Meteo geocoding for a place   |
 | GET    | `/api/snowday`                | Current snow day prediction snapshot      |
 | POST   | `/api/snowday/refresh`        | Force a snow day refresh                  |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |

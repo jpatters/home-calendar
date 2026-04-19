@@ -20,6 +20,7 @@ type Server struct {
 	snowday *snowday.Fetcher
 	hub     *Hub
 	rootCtx context.Context
+	geocode func(ctx context.Context, query string) ([]weather.GeoResult, error)
 }
 
 func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) {
@@ -38,6 +39,9 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.snowday = snowday.New(func(snap *types.SnowDaySnapshot) {
 		hub.Broadcast(Frame{Type: "snowday", SnowDay: snap})
 	})
+	s.geocode = func(ctx context.Context, q string) ([]weather.GeoResult, error) {
+		return weather.Search(ctx, s.weather.HTTPClient(), weather.DefaultGeocodingURL, q)
+	}
 
 	current := cfg.Get()
 	s.ical.Start(ctx, current.Calendars, time.Duration(current.Display.CalendarRefreshSeconds)*time.Second)
@@ -51,6 +55,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("POST /api/calendar/refresh", s.handleCalendarRefresh)
 	mux.HandleFunc("GET /api/weather", s.handleGetWeather)
 	mux.HandleFunc("POST /api/weather/refresh", s.handleWeatherRefresh)
+	mux.HandleFunc("GET /api/weather/geocode", s.handleWeatherGeocode)
 	mux.HandleFunc("GET /api/snowday", s.handleGetSnowDay)
 	mux.HandleFunc("POST /api/snowday/refresh", s.handleSnowDayRefresh)
 	mux.HandleFunc("GET /api/ws", s.handleWS)

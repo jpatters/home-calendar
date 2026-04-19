@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -57,6 +58,27 @@ func (s *Server) handleWeatherRefresh(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	s.weather.RefreshNow(ctx, cfg.Weather)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleWeatherGeocode(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		http.Error(w, "query parameter q is required", http.StatusBadRequest)
+		return
+	}
+	if len(q) > 100 {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	results, err := s.geocode(ctx, q)
+	if err != nil {
+		log.Printf("weather geocode: %v", err)
+		http.Error(w, "geocoding failed", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
 }
 
 func (s *Server) handleGetSnowDay(w http.ResponseWriter, r *http.Request) {

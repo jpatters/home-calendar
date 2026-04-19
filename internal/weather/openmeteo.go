@@ -33,6 +33,10 @@ func New(onUpdate func(*types.WeatherSnapshot)) *Fetcher {
 	}
 }
 
+func (f *Fetcher) HTTPClient() *http.Client {
+	return f.client
+}
+
 func (f *Fetcher) Snapshot() *types.WeatherSnapshot {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -95,13 +99,13 @@ type openMeteoResponse struct {
 		Precipitation       float64 `json:"precipitation"`
 	} `json:"current"`
 	Daily struct {
-		Time                  []string  `json:"time"`
-		Temperature2mMax      []float64 `json:"temperature_2m_max"`
-		Temperature2mMin      []float64 `json:"temperature_2m_min"`
-		WeatherCode           []int     `json:"weather_code"`
-		Sunrise               []string  `json:"sunrise"`
-		Sunset                []string  `json:"sunset"`
-		PrecipitationSum      []float64 `json:"precipitation_sum"`
+		Time             []string  `json:"time"`
+		Temperature2mMax []float64 `json:"temperature_2m_max"`
+		Temperature2mMin []float64 `json:"temperature_2m_min"`
+		WeatherCode      []int     `json:"weather_code"`
+		Sunrise          []string  `json:"sunrise"`
+		Sunset           []string  `json:"sunset"`
+		PrecipitationSum []float64 `json:"precipitation_sum"`
 	} `json:"daily"`
 }
 

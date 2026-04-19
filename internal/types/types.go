@@ -17,6 +17,7 @@ type Weather struct {
 	Longitude float64 `json:"longitude"`
 	Units     string  `json:"units"`
 	Timezone  string  `json:"timezone"`
+	Location  string  `json:"location"`
 }
 
 type Display struct {
@@ -117,6 +118,7 @@ func DefaultConfig() Config {
 			Longitude: -79.38,
 			Units:     "metric",
 			Timezone:  "auto",
+			Location:  "Toronto, Ontario, Canada",
 		},
 		Display: Display{
 			DefaultView:            "week",
