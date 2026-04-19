@@ -22,11 +22,15 @@ export interface GeoResult {
   longitude: number;
 }
 
+export type ThemePalette = "default" | "ocean" | "sunset" | "forest";
+export type ThemeMode = "light" | "dark" | "auto";
+
 export interface Display {
   defaultView: "day" | "week" | "month";
   calendarRefreshSeconds: number;
   weatherRefreshSeconds: number;
-  theme: "light" | "dark";
+  theme: ThemePalette;
+  mode: ThemeMode;
 }
 
 export interface SnowDay {

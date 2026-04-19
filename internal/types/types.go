@@ -25,6 +25,7 @@ type Display struct {
 	CalendarRefreshSeconds int    `json:"calendarRefreshSeconds"`
 	WeatherRefreshSeconds  int    `json:"weatherRefreshSeconds"`
 	Theme                  string `json:"theme"`
+	Mode                   string `json:"mode"`
 }
 
 type SnowDay struct {
@@ -124,7 +125,8 @@ func DefaultConfig() Config {
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
-			Theme:                  "light",
+			Theme:                  "default",
+			Mode:                   "light",
 		},
 	}
 }

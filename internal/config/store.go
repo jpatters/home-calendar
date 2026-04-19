@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -108,10 +109,43 @@ func normalize(c types.Config) types.Config {
 	if c.Display.WeatherRefreshSeconds <= 0 {
 		c.Display.WeatherRefreshSeconds = d.Display.WeatherRefreshSeconds
 	}
-	if c.Display.Theme == "" {
-		c.Display.Theme = d.Display.Theme
-	}
+	c.Display = normalizeDisplayTheme(c.Display, d.Display)
 	return c
+}
+
+var validPalettes = map[string]struct{}{
+	"default": {},
+	"ocean":   {},
+	"sunset":  {},
+	"forest":  {},
+}
+
+var validModes = map[string]struct{}{
+	"light": {},
+	"dark":  {},
+	"auto":  {},
+}
+
+func normalizeDisplayTheme(cur, def types.Display) types.Display {
+	if cur.Theme == "light" || cur.Theme == "dark" {
+		if cur.Mode == "" {
+			cur.Mode = cur.Theme
+		}
+		cur.Theme = "default"
+	}
+	if _, ok := validPalettes[cur.Theme]; !ok {
+		if cur.Theme != "" {
+			log.Printf("config: unknown theme %q, falling back to %q", cur.Theme, def.Theme)
+		}
+		cur.Theme = def.Theme
+	}
+	if _, ok := validModes[cur.Mode]; !ok {
+		if cur.Mode != "" {
+			log.Printf("config: unknown mode %q, falling back to %q", cur.Mode, def.Mode)
+		}
+		cur.Mode = def.Mode
+	}
+	return cur
 }
 
 func cloneConfig(c types.Config) types.Config {
