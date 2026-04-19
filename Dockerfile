@@ -9,7 +9,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- Stage 2: build the Go binary with the frontend embedded ----------------
-FROM golang:1.24-alpine AS gobuild
+FROM golang:1.26-alpine AS gobuild
 WORKDIR /src
 
 COPY go.mod go.sum ./

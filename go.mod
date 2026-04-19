@@ -1,6 +1,6 @@
 module github.com/jpatters/home-calendar
 
-go 1.24
+go 1.26
 
 require (
 	github.com/arran4/golang-ical v0.3.2
