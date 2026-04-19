@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 # --- Stage 1: build the Vite frontend ---------------------------------------
 FROM node:24-alpine AS web
 WORKDIR /web
