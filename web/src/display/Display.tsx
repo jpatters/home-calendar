@@ -4,6 +4,7 @@ import type { LiveData } from "../useLiveData";
 import CalendarView from "./CalendarView";
 import ClockWidget from "./ClockWidget";
 import WeatherWidget from "./WeatherWidget";
+import SnowDayWidget from "./SnowDayWidget";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 
@@ -36,6 +37,7 @@ export default function Display({ live }: Props) {
       <aside className="widget-pane">
         <ClockWidget />
         <WeatherWidget weather={live.weather} config={live.config?.weather} />
+        <SnowDayWidget snowday={live.snowday} config={live.config?.snowDay} />
         <div className="connection-indicator">
           <span className={live.connected ? "dot ok" : "dot bad"} />
           {live.connected ? "live" : "reconnecting…"}

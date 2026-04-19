@@ -23,9 +23,14 @@ type Display struct {
 	Theme                  string `json:"theme"`
 }
 
+type SnowDay struct {
+	URL string `json:"url"`
+}
+
 type Config struct {
 	Calendars []Calendar `json:"calendars"`
 	Weather   Weather    `json:"weather"`
+	SnowDay   SnowDay    `json:"snowDay"`
 	Display   Display    `json:"display"`
 }
 
@@ -69,6 +74,17 @@ type WeatherSnapshot struct {
 	Timezone  string         `json:"timezone"`
 	Current   WeatherCurrent `json:"current"`
 	Daily     []WeatherDaily `json:"daily"`
+}
+
+type SnowDaySnapshot struct {
+	UpdatedAt   time.Time `json:"updatedAt"`
+	URL         string    `json:"url"`
+	Location    string    `json:"location"`
+	RegionName  string    `json:"regionName"`
+	MorningTime time.Time `json:"morningTime"`
+	Probability int       `json:"probability"`
+	Score       int       `json:"score"`
+	Category    string    `json:"category"`
 }
 
 func DefaultConfig() Config {

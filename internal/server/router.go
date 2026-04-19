@@ -8,16 +8,18 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/ical"
+	"github.com/jpatters/home-calendar/internal/snowday"
 	"github.com/jpatters/home-calendar/internal/types"
 	"github.com/jpatters/home-calendar/internal/weather"
 )
 
 type Server struct {
-	cfg      *config.Store
-	ical     *ical.Fetcher
-	weather  *weather.Fetcher
-	hub      *Hub
-	rootCtx  context.Context
+	cfg     *config.Store
+	ical    *ical.Fetcher
+	weather *weather.Fetcher
+	snowday *snowday.Fetcher
+	hub     *Hub
+	rootCtx context.Context
 }
 
 func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) {
@@ -33,10 +35,14 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.weather = weather.New(func(snap *types.WeatherSnapshot) {
 		hub.Broadcast(Frame{Type: "weather", Weather: snap})
 	})
+	s.snowday = snowday.New(func(snap *types.SnowDaySnapshot) {
+		hub.Broadcast(Frame{Type: "snowday", SnowDay: snap})
+	})
 
 	current := cfg.Get()
 	s.ical.Start(ctx, current.Calendars, time.Duration(current.Display.CalendarRefreshSeconds)*time.Second)
 	s.weather.Start(ctx, current.Weather, time.Duration(current.Display.WeatherRefreshSeconds)*time.Second)
+	s.snowday.Start(ctx, current.SnowDay, 0)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/config", s.handleGetConfig)
@@ -45,6 +51,8 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("POST /api/calendar/refresh", s.handleCalendarRefresh)
 	mux.HandleFunc("GET /api/weather", s.handleGetWeather)
 	mux.HandleFunc("POST /api/weather/refresh", s.handleWeatherRefresh)
+	mux.HandleFunc("GET /api/snowday", s.handleGetSnowDay)
+	mux.HandleFunc("POST /api/snowday/refresh", s.handleSnowDayRefresh)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()
@@ -60,11 +68,13 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 func (s *Server) Shutdown() {
 	s.ical.Stop()
 	s.weather.Stop()
+	s.snowday.Stop()
 }
 
 func (s *Server) restartFetchers(c types.Config) {
 	s.ical.Start(s.rootCtx, c.Calendars, time.Duration(c.Display.CalendarRefreshSeconds)*time.Second)
 	s.weather.Start(s.rootCtx, c.Weather, time.Duration(c.Display.WeatherRefreshSeconds)*time.Second)
+	s.snowday.Start(s.rootCtx, c.SnowDay, 0)
 }
 
 func logging(h http.Handler) http.Handler {

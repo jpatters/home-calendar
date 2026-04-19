@@ -29,6 +29,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		Config:  &cfg,
 		Events:  s.ical.Events(),
 		Weather: s.weather.Snapshot(),
+		SnowDay: s.snowday.Snapshot(),
 	}
 	if data, err := json.Marshal(snap); err == nil {
 		if err := conn.Write(r.Context(), websocket.MessageText, data); err != nil {

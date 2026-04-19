@@ -12,6 +12,7 @@ type Frame struct {
 	Config  *types.Config          `json:"config,omitempty"`
 	Events  []types.Event          `json:"events,omitempty"`
 	Weather *types.WeatherSnapshot `json:"weather,omitempty"`
+	SnowDay *types.SnowDaySnapshot `json:"snowday,omitempty"`
 }
 
 // Hub fans out frames to every connected WebSocket client. Each client owns a
