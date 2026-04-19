@@ -60,6 +60,9 @@ export default function WeatherWidget({ weather, config }: Props) {
   return (
     <div className="widget weather-widget">
       <div className="weather-current">
+        {config?.location && (
+          <div className="weather-location">{config.location}</div>
+        )}
         <span className="weather-icon" aria-hidden>{cur.icon}</span>
         <div className="weather-temp">
           {Math.round(weather.current.temperatureC)}

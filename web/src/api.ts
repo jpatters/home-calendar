@@ -1,4 +1,4 @@
-import type { Config } from "./types";
+import type { Config, GeoResult } from "./types";
 
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
@@ -26,4 +26,11 @@ export async function refreshWeather(): Promise<void> {
 
 export async function refreshSnowDay(): Promise<void> {
   await fetch("/api/snowday/refresh", { method: "POST" });
+}
+
+export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {
+  const res = await fetch(`/api/weather/geocode?q=${encodeURIComponent(query)}`, { signal });
+  if (!res.ok) throw new Error(`GET /api/weather/geocode ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }

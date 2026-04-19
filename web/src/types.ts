@@ -10,6 +10,16 @@ export interface Weather {
   longitude: number;
   units: "metric" | "imperial";
   timezone: string;
+  location: string;
+}
+
+export interface GeoResult {
+  name: string;
+  admin1?: string;
+  country?: string;
+  timezone?: string;
+  latitude: number;
+  longitude: number;
 }
 
 export interface Display {
