@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Config } from "../types";
 import type { LiveData } from "../useLiveData";
-import { putConfig, refreshCalendars, refreshSnowDay, refreshWeather } from "../api";
+import { putConfig, refreshCalendars, refreshSnowDay, refreshTide, refreshWeather } from "../api";
 import CalendarsPanel from "./CalendarsPanel";
 import WeatherPanel from "./WeatherPanel";
 import SnowDayPanel from "./SnowDayPanel";
+import TidePanel from "./TidePanel";
 import DisplayPanel from "./DisplayPanel";
 
 interface Props {
   live: LiveData;
 }
 
-type Tab = "calendars" | "weather" | "snowday" | "display";
+type Tab = "calendars" | "weather" | "tide" | "snowday" | "display";
 
 export default function Admin({ live }: Props) {
   const [draft, setDraft] = useState<Config | null>(live.config);
@@ -57,6 +58,7 @@ export default function Admin({ live }: Props) {
       <div className="admin-tabs">
         <button className={tab === "calendars" ? "active" : ""} onClick={() => setTab("calendars")}>Calendars</button>
         <button className={tab === "weather" ? "active" : ""} onClick={() => setTab("weather")}>Weather</button>
+        <button className={tab === "tide" ? "active" : ""} onClick={() => setTab("tide")}>Tide</button>
         <button className={tab === "snowday" ? "active" : ""} onClick={() => setTab("snowday")}>Snow Day</button>
         <button className={tab === "display" ? "active" : ""} onClick={() => setTab("display")}>Display</button>
       </div>
@@ -72,6 +74,12 @@ export default function Admin({ live }: Props) {
           <WeatherPanel
             value={draft.weather}
             onChange={(weather) => setDraft({ ...draft, weather })}
+          />
+        )}
+        {tab === "tide" && (
+          <TidePanel
+            value={draft.tide ?? { latitude: 0, longitude: 0, units: "metric", timezone: "auto", location: "" }}
+            onChange={(tide) => setDraft({ ...draft, tide })}
           />
         )}
         {tab === "snowday" && (
@@ -93,6 +101,7 @@ export default function Admin({ live }: Props) {
         <div className="actions">
           <button onClick={() => void refreshCalendars()}>Refresh calendars now</button>
           <button onClick={() => void refreshWeather()}>Refresh weather now</button>
+          <button onClick={() => void refreshTide()}>Refresh tide now</button>
           <button onClick={() => void refreshSnowDay()}>Refresh snow day now</button>
         </div>
         <div className="save">

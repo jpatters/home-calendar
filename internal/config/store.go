@@ -100,6 +100,12 @@ func normalize(c types.Config) types.Config {
 	if c.Weather.Timezone == "" {
 		c.Weather.Timezone = d.Weather.Timezone
 	}
+	if c.Tide.Units == "" {
+		c.Tide.Units = d.Tide.Units
+	}
+	if c.Tide.Timezone == "" {
+		c.Tide.Timezone = d.Tide.Timezone
+	}
 	if c.Display.DefaultView == "" {
 		c.Display.DefaultView = d.Display.DefaultView
 	}
@@ -108,6 +114,9 @@ func normalize(c types.Config) types.Config {
 	}
 	if c.Display.WeatherRefreshSeconds <= 0 {
 		c.Display.WeatherRefreshSeconds = d.Display.WeatherRefreshSeconds
+	}
+	if c.Display.TideRefreshSeconds <= 0 {
+		c.Display.TideRefreshSeconds = d.Display.TideRefreshSeconds
 	}
 	c.Display = normalizeDisplayTheme(c.Display, d.Display)
 	return c
