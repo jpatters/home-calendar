@@ -17,6 +17,9 @@ private network.
   touch), React Router.
 - **Calendars**: Google Calendar "Secret address in iCal format" URLs.
 - **Weather**: [Open-Meteo](https://open-meteo.com/) — no API key.
+- **Snow day predictor**: optional widget backed by
+  [snowdaypredictor.com](https://www.snowdaypredictor.com/) — paste a location
+  page URL.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 
@@ -90,6 +93,9 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "units": "metric",
     "timezone": "auto"
   },
+  "snowDay": {
+    "url": "https://www.snowdaypredictor.com/prediction/canoe-cove-pe"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
@@ -112,14 +118,17 @@ assigns IDs, and triggers an immediate refresh.
 | POST   | `/api/calendar/refresh`       | Force an iCal refresh                     |
 | GET    | `/api/weather`                | Current weather snapshot                  |
 | POST   | `/api/weather/refresh`        | Force a weather refresh                   |
+| GET    | `/api/snowday`                | Current snow day prediction snapshot      |
+| POST   | `/api/snowday/refresh`        | Force a snow day refresh                  |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
+{ "type": "snowday",  "snowday": {...} }
 { "type": "config",   "config": {...} }
 ```
 

@@ -2,16 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Config } from "../types";
 import type { LiveData } from "../useLiveData";
-import { putConfig, refreshCalendars, refreshWeather } from "../api";
+import { putConfig, refreshCalendars, refreshSnowDay, refreshWeather } from "../api";
 import CalendarsPanel from "./CalendarsPanel";
 import WeatherPanel from "./WeatherPanel";
+import SnowDayPanel from "./SnowDayPanel";
 import DisplayPanel from "./DisplayPanel";
 
 interface Props {
   live: LiveData;
 }
 
-type Tab = "calendars" | "weather" | "display";
+type Tab = "calendars" | "weather" | "snowday" | "display";
 
 export default function Admin({ live }: Props) {
   const [draft, setDraft] = useState<Config | null>(live.config);
@@ -56,6 +57,7 @@ export default function Admin({ live }: Props) {
       <div className="admin-tabs">
         <button className={tab === "calendars" ? "active" : ""} onClick={() => setTab("calendars")}>Calendars</button>
         <button className={tab === "weather" ? "active" : ""} onClick={() => setTab("weather")}>Weather</button>
+        <button className={tab === "snowday" ? "active" : ""} onClick={() => setTab("snowday")}>Snow Day</button>
         <button className={tab === "display" ? "active" : ""} onClick={() => setTab("display")}>Display</button>
       </div>
 
@@ -72,6 +74,12 @@ export default function Admin({ live }: Props) {
             onChange={(weather) => setDraft({ ...draft, weather })}
           />
         )}
+        {tab === "snowday" && (
+          <SnowDayPanel
+            value={draft.snowDay ?? { url: "" }}
+            onChange={(snowDay) => setDraft({ ...draft, snowDay })}
+          />
+        )}
         {tab === "display" && (
           <DisplayPanel
             value={draft.display}
@@ -84,6 +92,7 @@ export default function Admin({ live }: Props) {
         <div className="actions">
           <button onClick={() => void refreshCalendars()}>Refresh calendars now</button>
           <button onClick={() => void refreshWeather()}>Refresh weather now</button>
+          <button onClick={() => void refreshSnowDay()}>Refresh snow day now</button>
         </div>
         <div className="save">
           {error && <span className="error">{error}</span>}
