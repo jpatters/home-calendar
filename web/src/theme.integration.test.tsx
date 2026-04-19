@@ -22,6 +22,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
     config: {
       calendars: [],
       weather: {
+        enabled: true,
         latitude: 0,
         longitude: 0,
         units: "metric",
@@ -29,13 +30,14 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         location: "",
       },
       tide: {
+        enabled: true,
         latitude: 0,
         longitude: 0,
         units: "metric",
         timezone: "UTC",
         location: "",
       },
-      snowDay: { url: "" },
+      snowDay: { enabled: true, url: "" },
       display: {
         defaultView: "week",
         calendarRefreshSeconds: 300,
@@ -43,6 +45,8 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         tideRefreshSeconds: 3600,
         theme,
         mode,
+        calendarEnabled: true,
+        clockEnabled: true,
       },
     },
   };

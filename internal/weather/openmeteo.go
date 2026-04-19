@@ -62,6 +62,10 @@ func (f *Fetcher) Stop() {
 		f.doneWG.Wait()
 		f.cancel = nil
 	}
+	f.mu.Lock()
+	f.snapshot = nil
+	f.lastErr = nil
+	f.mu.Unlock()
 }
 
 func (f *Fetcher) RefreshNow(ctx context.Context, w types.Weather) {

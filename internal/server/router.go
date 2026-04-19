@@ -49,10 +49,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	}
 
 	current := cfg.Get()
-	s.ical.Start(ctx, current.Calendars, time.Duration(current.Display.CalendarRefreshSeconds)*time.Second)
-	s.weather.Start(ctx, current.Weather, time.Duration(current.Display.WeatherRefreshSeconds)*time.Second)
-	s.snowday.Start(ctx, current.SnowDay, 0)
-	s.tide.Start(ctx, current.Tide, time.Duration(current.Display.TideRefreshSeconds)*time.Second)
+	s.applyFetcherConfig(ctx, current, false)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/config", s.handleGetConfig)
@@ -86,10 +83,45 @@ func (s *Server) Shutdown() {
 }
 
 func (s *Server) restartFetchers(c types.Config) {
-	s.ical.Start(s.rootCtx, c.Calendars, time.Duration(c.Display.CalendarRefreshSeconds)*time.Second)
-	s.weather.Start(s.rootCtx, c.Weather, time.Duration(c.Display.WeatherRefreshSeconds)*time.Second)
-	s.snowday.Start(s.rootCtx, c.SnowDay, 0)
-	s.tide.Start(s.rootCtx, c.Tide, time.Duration(c.Display.TideRefreshSeconds)*time.Second)
+	s.applyFetcherConfig(s.rootCtx, c, true)
+}
+
+// applyFetcherConfig starts fetchers whose widgets are enabled and stops ones
+// whose widgets are disabled. When broadcastClears is true, disabled widgets
+// also emit a clearing frame so any connected clients drop stale snapshots.
+func (s *Server) applyFetcherConfig(ctx context.Context, c types.Config, broadcastClears bool) {
+	if c.Display.CalendarEnabled {
+		s.ical.Start(ctx, c.Calendars, time.Duration(c.Display.CalendarRefreshSeconds)*time.Second)
+	} else {
+		s.ical.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "calendar", Events: []types.Event{}})
+		}
+	}
+	if c.Weather.Enabled {
+		s.weather.Start(ctx, c.Weather, time.Duration(c.Display.WeatherRefreshSeconds)*time.Second)
+	} else {
+		s.weather.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "weather", Weather: nil})
+		}
+	}
+	if c.SnowDay.Enabled {
+		s.snowday.Start(ctx, c.SnowDay, 0)
+	} else {
+		s.snowday.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "snowday", SnowDay: nil})
+		}
+	}
+	if c.Tide.Enabled {
+		s.tide.Start(ctx, c.Tide, time.Duration(c.Display.TideRefreshSeconds)*time.Second)
+	} else {
+		s.tide.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "tide", Tide: nil})
+		}
+	}
 }
 
 func logging(h http.Handler) http.Handler {

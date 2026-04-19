@@ -6,6 +6,7 @@ import type { Tide, TideSnapshot } from "../types";
 afterEach(() => cleanup());
 
 const config: Tide = {
+  enabled: true,
   latitude: 48.42,
   longitude: -123.36,
   units: "metric",

@@ -41,8 +41,49 @@ func (s *Store) load() error {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return fmt.Errorf("parse config: %w", err)
 	}
+	backfillEnabledFlags(data, &c)
 	s.cfg = normalize(c)
 	return nil
+}
+
+// backfillEnabledFlags preserves the default-on behaviour for widgets on
+// configs written before the enabled flags existed. Go's zero-value for bool is
+// false, so a JSON file missing these keys would otherwise parse as "every
+// widget disabled" and give a returning user a blank dashboard.
+func backfillEnabledFlags(raw []byte, c *types.Config) {
+	var probe struct {
+		Weather *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"weather"`
+		Tide *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"tide"`
+		SnowDay *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"snowDay"`
+		Display *struct {
+			CalendarEnabled *bool `json:"calendarEnabled"`
+			ClockEnabled    *bool `json:"clockEnabled"`
+		} `json:"display"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return
+	}
+	if probe.Weather == nil || probe.Weather.Enabled == nil {
+		c.Weather.Enabled = true
+	}
+	if probe.Tide == nil || probe.Tide.Enabled == nil {
+		c.Tide.Enabled = true
+	}
+	if probe.SnowDay == nil || probe.SnowDay.Enabled == nil {
+		c.SnowDay.Enabled = true
+	}
+	if probe.Display == nil || probe.Display.CalendarEnabled == nil {
+		c.Display.CalendarEnabled = true
+	}
+	if probe.Display == nil || probe.Display.ClockEnabled == nil {
+		c.Display.ClockEnabled = true
+	}
 }
 
 func (s *Store) Get() types.Config {
