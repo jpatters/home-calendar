@@ -102,10 +102,19 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
-    "theme": "light"
+    "theme": "default",
+    "mode": "light"
   }
 }
 ```
+
+`theme` is the colour palette — one of `default`, `ocean`, `sunset`, `forest`.
+`mode` is one of `light`, `dark`, or `auto`. `auto` flips between light and dark
+based on the configured weather location's sunrise/sunset (so the display
+follows your local sun). Configs from earlier versions that used
+`"theme": "light"` or `"theme": "dark"` are migrated automatically the first
+time the server reads them — they become `"theme": "default"` with the
+corresponding `mode`.
 
 Edit via `/admin` rather than by hand — the admin UI performs validation,
 assigns IDs, and triggers an immediate refresh.

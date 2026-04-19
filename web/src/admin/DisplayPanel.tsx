@@ -1,11 +1,13 @@
 import type { Display } from "../types";
+import { MODE_LABELS, MODES, PALETTE_LABELS, PALETTES } from "../theme";
 
 interface Props {
   value: Display;
   onChange: (d: Display) => void;
+  autoAvailable: boolean;
 }
 
-export default function DisplayPanel({ value, onChange }: Props) {
+export default function DisplayPanel({ value, onChange, autoAvailable }: Props) {
   return (
     <div className="panel">
       <h2>Display</h2>
@@ -27,8 +29,22 @@ export default function DisplayPanel({ value, onChange }: Props) {
             value={value.theme}
             onChange={(e) => onChange({ ...value, theme: e.target.value as Display["theme"] })}
           >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            {PALETTES.map((p) => (
+              <option key={p} value={p}>{PALETTE_LABELS[p]}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Mode{!autoAvailable && " (set weather location for auto)"}</span>
+          <select
+            value={value.mode}
+            onChange={(e) => onChange({ ...value, mode: e.target.value as Display["mode"] })}
+          >
+            {MODES.map((m) => (
+              <option key={m} value={m} disabled={m === "auto" && !autoAvailable}>
+                {MODE_LABELS[m]}
+              </option>
+            ))}
           </select>
         </label>
         <label>

@@ -84,6 +84,7 @@ export default function Admin({ live }: Props) {
           <DisplayPanel
             value={draft.display}
             onChange={(display) => setDraft({ ...draft, display })}
+            autoAvailable={Boolean(draft.weather.location) && (draft.weather.latitude !== 0 || draft.weather.longitude !== 0)}
           />
         )}
       </div>
