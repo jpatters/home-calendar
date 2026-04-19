@@ -19,9 +19,14 @@ export interface Display {
   theme: "light" | "dark";
 }
 
+export interface SnowDay {
+  url: string;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
+  snowDay: SnowDay;
   display: Display;
 }
 
@@ -67,8 +72,26 @@ export interface WeatherSnapshot {
   daily: WeatherDaily[];
 }
 
+export interface SnowDaySnapshot {
+  updatedAt: string;
+  url: string;
+  location: string;
+  regionName: string;
+  morningTime: string;
+  probability: number;
+  score: number;
+  category: string;
+}
+
 export type WSFrame =
-  | { type: "snapshot"; config: Config; events: CalendarEvent[]; weather: WeatherSnapshot | null }
+  | {
+      type: "snapshot";
+      config: Config;
+      events: CalendarEvent[];
+      weather: WeatherSnapshot | null;
+      snowday: SnowDaySnapshot | null;
+    }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
+  | { type: "snowday"; snowday: SnowDaySnapshot | null }
   | { type: "config"; config: Config };

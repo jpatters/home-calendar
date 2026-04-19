@@ -59,6 +59,23 @@ func (s *Server) handleWeatherRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleGetSnowDay(w http.ResponseWriter, r *http.Request) {
+	snap := s.snowday.Snapshot()
+	if snap == nil {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
+}
+
+func (s *Server) handleSnowDayRefresh(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	s.snowday.RefreshNow(ctx, cfg.SnowDay)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

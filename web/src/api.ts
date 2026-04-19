@@ -23,3 +23,7 @@ export async function refreshCalendars(): Promise<void> {
 export async function refreshWeather(): Promise<void> {
   await fetch("/api/weather/refresh", { method: "POST" });
 }
+
+export async function refreshSnowDay(): Promise<void> {
+  await fetch("/api/snowday/refresh", { method: "POST" });
+}
