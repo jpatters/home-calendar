@@ -1,0 +1,10 @@
+services:
+  home-calendar:
+    build: .
+    image: home-calendar:latest
+    container_name: home-calendar
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

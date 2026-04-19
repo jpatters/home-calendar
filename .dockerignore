@@ -1,0 +1,10 @@
+.git
+.gitignore
+.github
+README.md
+LICENSE
+data/
+web/node_modules/
+web/dist/
+internal/server/dist/assets/
+*.log
