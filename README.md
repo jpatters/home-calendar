@@ -37,6 +37,25 @@ Open:
 - `http://<host>:8080/` — touchscreen display
 - `http://<host>:8080/admin` — configuration page
 
+### Pulling the prebuilt image from GHCR
+
+Every push to `main` and every `v*.*.*` tag publishes a container image to the
+GitHub Container Registry via `.github/workflows/docker-publish.yml`. After the
+first successful run you'll need to flip the package from private to public
+**once** (this can't be automated with `GITHUB_TOKEN`):
+
+1. Open `https://github.com/users/jpatters/packages/container/home-calendar/settings`
+2. Scroll to **Danger Zone** → **Change visibility** → **Public**
+
+From then on you can pull without auth:
+
+```bash
+docker pull ghcr.io/jpatters/home-calendar:latest  # tracks main
+docker pull ghcr.io/jpatters/home-calendar:v1.2.3  # pinned release
+```
+
+Images are `linux/amd64` only.
+
 On first run the app seeds an empty config at `./data/config.json`. Go to
 `/admin`, add your Google Calendar iCal URLs, search for your city in the
 **Weather** tab, and save. Changes are broadcast to the display instantly over

@@ -23,6 +23,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/home-calendar ./c
 
 # --- Stage 3: minimal runtime image -----------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/jpatters/home-calendar"
+LABEL org.opencontainers.image.description="Touchscreen calendar dashboard for a homelab display"
+LABEL org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 COPY --from=gobuild /out/home-calendar /app/home-calendar
 VOLUME ["/data"]
