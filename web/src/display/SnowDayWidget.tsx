@@ -1,3 +1,4 @@
+import { BsSnow3 } from "react-icons/bs";
 import type { SnowDay, SnowDaySnapshot } from "../types";
 
 interface Props {
@@ -28,7 +29,9 @@ export default function SnowDayWidget({ snowday, config }: Props) {
 
   return (
     <div className="widget snowday-widget">
-      <div className="snowday-icon" aria-hidden>❄</div>
+      <span className="snowday-icon" aria-hidden>
+        <BsSnow3 />
+      </span>
       <div className="snowday-percent">{snowday.probability}%</div>
       <div className="snowday-label">chance of snow day</div>
       {snowday.category && <div className="snowday-category">{snowday.category}</div>}

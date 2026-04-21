@@ -314,7 +314,7 @@ input, select {
 .weather-widget { display: flex; flex-direction: column; gap: 12px; }
 .weather-current { text-align: center; }
 .weather-location { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 4px; }
-.weather-icon { font-size: 3.5rem; line-height: 1; }
+.weather-icon { font-size: 3.5rem; line-height: 1; display: inline-flex; justify-content: center; }
 .weather-temp {
   font-size: 2.5rem;
   font-weight: 400;
@@ -324,13 +324,13 @@ input, select {
 .weather-meta { color: var(--fg-muted); font-size: 0.9rem; margin-top: 4px; }
 .weather-daily { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .daily-row { display: grid; grid-template-columns: 60px 40px 1fr; align-items: center; gap: 12px; }
-.daily-icon { font-size: 1.5rem; }
+.daily-icon { font-size: 1.5rem; display: inline-flex; justify-content: center; }
 .daily-range { color: var(--fg-muted); }
 .weather-empty { color: var(--fg-muted); text-align: center; }
 
 /* -------- snow day -------- */
 .snowday-widget { text-align: center; display: flex; flex-direction: column; gap: 2px; }
-.snowday-icon { font-size: 2.75rem; line-height: 1; color: var(--snow-icon); }
+.snowday-icon { font-size: 2.75rem; line-height: 1; color: var(--snow-icon); display: inline-flex; justify-content: center; }
 .snowday-percent { font-size: 2.5rem; font-weight: 500; line-height: 1.1; }
 .snowday-label { color: var(--fg-muted); font-size: 0.95rem; }
 .snowday-category {
