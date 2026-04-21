@@ -295,6 +295,21 @@ input, select {
 .fc .fc-event { padding: 2px 4px; font-size: 0.95rem; cursor: pointer; }
 .fc .fc-daygrid-day-number { font-size: 1rem; padding: 6px; }
 .fc .fc-col-header-cell-cushion { padding: 8px 4px; font-weight: 600; }
+.fc-custom-day-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+.calendar-day-weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+.calendar-day-icon { display: inline-flex; font-size: 1rem; line-height: 1; }
 
 /* -------- clock -------- */
 .clock-widget { text-align: center; }

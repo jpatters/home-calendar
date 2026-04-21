@@ -43,6 +43,8 @@ export default function Display({ live }: Props) {
             defaultView={display?.defaultView ?? "week"}
             onEventClick={setSelectedEvent}
             onDayClick={setSelectedDay}
+            weather={live.weather}
+            weatherConfig={live.config?.weather}
           />
         </main>
       )}
