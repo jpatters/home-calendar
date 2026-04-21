@@ -98,6 +98,7 @@ describe("useTheme", () => {
           sunrise: "2026-04-19T06:00",
           sunset: "2026-04-19T20:00",
           precipMM: 0,
+          windSpeedMax: 0,
         },
       ],
     };

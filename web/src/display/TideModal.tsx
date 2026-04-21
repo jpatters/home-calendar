@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Tide, TideEvent, TideSnapshot } from "../types";
 import { formatHeight, formatTime } from "./tideFormat";
+import { useSwipe } from "./useSwipe";
 
 interface Props {
   tide: TideSnapshot;
@@ -38,8 +40,16 @@ function groupByDay(events: TideEvent[]): Array<{ key: string; sample: string; e
 }
 
 export default function TideModal({ tide, config, onClose }: Props) {
+  const [index, setIndex] = useState(0);
   const units = config?.units ?? tide.units;
-  const grouped = groupByDay(tide.events);
+  const groups = groupByDay(tide.events);
+
+  const last = Math.max(0, groups.length - 1);
+  const go = (delta: number) => setIndex((i) => Math.min(last, Math.max(0, i + delta)));
+  const swipe = useSwipe({ onNext: () => go(1), onPrev: () => go(-1) });
+
+  const group = groups[index];
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -47,9 +57,30 @@ export default function TideModal({ tide, config, onClose }: Props) {
         role="dialog"
         aria-label="Tide forecast"
         onClick={(e) => e.stopPropagation()}
+        {...swipe}
       >
-        <div className="modal-header">
-          <h2>Tides{config?.location ? ` · ${config.location}` : ""}</h2>
+        <div className="modal-header tide-modal-header">
+          <button
+            type="button"
+            className="modal-nav-btn"
+            aria-label="Previous day"
+            onClick={() => go(-1)}
+            disabled={index === 0}
+          >
+            ‹
+          </button>
+          <h2 className="tide-modal-title">
+            {group ? dayLabel(group.sample) : `Tides${config?.location ? ` · ${config.location}` : ""}`}
+          </h2>
+          <button
+            type="button"
+            className="modal-nav-btn"
+            aria-label="Next day"
+            onClick={() => go(1)}
+            disabled={index >= last}
+          >
+            ›
+          </button>
           <button
             type="button"
             className="close-btn"
@@ -60,27 +91,26 @@ export default function TideModal({ tide, config, onClose }: Props) {
           </button>
         </div>
         <div className="modal-body tide-modal-body">
-          {grouped.map((g) => (
-            <section key={g.key} className="tide-day">
-              <h3 className="tide-day-label">{dayLabel(g.sample)}</h3>
-              <ul className="tide-day-events">
-                {g.events.map((ev) => (
-                  <li key={`${ev.time}-${ev.type}`} className="tide-event">
-                    <span className="tide-icon" aria-hidden>
-                      {ev.type === "high" ? "↑" : "↓"}
-                    </span>
-                    <span className="tide-type">
-                      {ev.type === "high" ? "High" : "Low"}
-                    </span>
-                    <span className="tide-time">{formatTime(ev.time)}</span>
-                    <span className="tide-height">
-                      {formatHeight(ev.heightMeters, units)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+          {group ? (
+            <ul className="tide-day-events">
+              {group.events.map((ev) => (
+                <li key={`${ev.time}-${ev.type}`} className="tide-event">
+                  <span className="tide-icon" aria-hidden>
+                    {ev.type === "high" ? "↑" : "↓"}
+                  </span>
+                  <span className="tide-type">
+                    {ev.type === "high" ? "High" : "Low"}
+                  </span>
+                  <span className="tide-time">{formatTime(ev.time)}</span>
+                  <span className="tide-height">
+                    {formatHeight(ev.heightMeters, units)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div>No tide data</div>
+          )}
         </div>
       </div>
     </div>
