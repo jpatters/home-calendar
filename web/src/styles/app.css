@@ -326,7 +326,19 @@ input, select {
 }
 
 /* -------- weather -------- */
-.weather-widget { display: flex; flex-direction: column; gap: 12px; }
+.weather-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-widget);
+  border: none;
+  cursor: pointer;
+  width: 100%;
+}
+.weather-widget:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .weather-current { text-align: center; }
 .weather-location { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 4px; }
 .weather-icon { font-size: 3.5rem; line-height: 1; display: inline-flex; justify-content: center; }
@@ -441,6 +453,71 @@ input, select {
   background: transparent;
   font-size: 1.75rem;
   line-height: 1;
+}
+.modal-nav-btn {
+  min-width: 48px;
+  min-height: 48px;
+  border: none;
+  background: transparent;
+  font-size: 2rem;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+.modal-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.weather-modal-header h2,
+.tide-modal-header h2 {
+  text-align: center;
+  flex: 1;
+}
+.weather-modal-body,
+.tide-modal-body {
+  touch-action: pan-y;
+}
+.weather-modal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 16px;
+}
+.weather-modal-icon {
+  font-size: 4rem;
+  line-height: 1;
+}
+.weather-modal-label {
+  font-size: 1.1rem;
+  color: var(--fg-muted);
+}
+.weather-modal-temps {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+.weather-modal-sep { color: var(--fg-muted); }
+.weather-modal-stats {
+  margin: 8px 0 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+}
+.weather-modal-stats > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.weather-modal-stats dt {
+  color: var(--fg-muted);
+  margin: 0;
+}
+.weather-modal-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .swatch { width: 16px; height: 16px; border-radius: 4px; flex: none; }
 .modal-body {

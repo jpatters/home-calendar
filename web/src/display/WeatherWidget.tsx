@@ -1,17 +1,11 @@
 import type { Weather, WeatherSnapshot } from "../types";
 import { labelForCode, WeatherIcon } from "./weatherIcons";
+import { speedUnit, tempUnit } from "./weatherFormat";
 
 interface Props {
   weather: WeatherSnapshot | null;
   config: Weather | undefined;
-}
-
-function tempUnit(units: string | undefined): string {
-  return units === "imperial" ? "°F" : "°C";
-}
-
-function speedUnit(units: string | undefined): string {
-  return units === "imperial" ? "mph" : "km/h";
+  onOpen: () => void;
 }
 
 function dayLabel(iso: string): string {
@@ -19,7 +13,7 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString([], { weekday: "short" });
 }
 
-export default function WeatherWidget({ weather, config }: Props) {
+export default function WeatherWidget({ weather, config, onOpen }: Props) {
   if (!weather) {
     return (
       <div className="widget weather-widget">
@@ -29,7 +23,12 @@ export default function WeatherWidget({ weather, config }: Props) {
   }
   const units = config?.units ?? weather.units;
   return (
-    <div className="widget weather-widget">
+    <button
+      type="button"
+      className="widget weather-widget"
+      aria-label="Weather details"
+      onClick={onOpen}
+    >
       <div className="weather-current">
         {config?.location && (
           <div className="weather-location">{config.location}</div>
@@ -56,6 +55,6 @@ export default function WeatherWidget({ weather, config }: Props) {
           </div>
         ))}
       </div>
-    </div>
+    </button>
   );
 }
