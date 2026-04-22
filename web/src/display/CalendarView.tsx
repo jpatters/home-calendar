@@ -87,14 +87,14 @@ export default function CalendarView({
   const renderDayHeader = (arg: DayHeaderContentArg) => {
     const viewType = arg.view.type;
     if (viewType !== "timeGridWeek" && viewType !== "timeGridDay") {
-      return undefined;
+      return true;
     }
     // Assumes the browser's local timezone matches weather.timezone.
     // True for a wall display configured for its own location; may drift
     // by a day otherwise.
     const key = localDateKey(arg.date);
     const day = dailyByDate.get(key);
-    if (!day) return undefined;
+    if (!day) return true;
     const high = `${Math.round(day.maxC)}${tempUnit(units)}`;
     const label = `${labelForCode(day.weatherCode)}, high ${high}`;
     return (
