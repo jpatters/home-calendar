@@ -35,6 +35,7 @@ type Display struct {
 	CalendarRefreshSeconds int    `json:"calendarRefreshSeconds"`
 	WeatherRefreshSeconds  int    `json:"weatherRefreshSeconds"`
 	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
+	BaseballRefreshSeconds int    `json:"baseballRefreshSeconds"`
 	Theme                  string `json:"theme"`
 	Mode                   string `json:"mode"`
 	CalendarEnabled        bool   `json:"calendarEnabled"`
@@ -46,11 +47,19 @@ type SnowDay struct {
 	URL     string `json:"url"`
 }
 
+type Baseball struct {
+	Enabled  bool   `json:"enabled"`
+	TeamID   int    `json:"teamId"`
+	TeamName string `json:"teamName"`
+	TeamAbbr string `json:"teamAbbr"`
+}
+
 type Config struct {
 	Calendars []Calendar `json:"calendars"`
 	Weather   Weather    `json:"weather"`
 	Tide      Tide       `json:"tide"`
 	SnowDay   SnowDay    `json:"snowDay"`
+	Baseball  Baseball   `json:"baseball"`
 	Display   Display    `json:"display"`
 }
 
@@ -141,6 +150,28 @@ type SnowDaySnapshot struct {
 	Category    string    `json:"category"`
 }
 
+type BaseballGame struct {
+	GameTime      time.Time `json:"gameTime"`
+	Opponent      string    `json:"opponent"`
+	OpponentAbbr  string    `json:"opponentAbbr"`
+	HomeAway      string    `json:"homeAway"`
+	Venue         string    `json:"venue,omitempty"`
+	Status        string    `json:"status"`
+	IsFinal       bool      `json:"isFinal"`
+	TeamScore     int       `json:"teamScore"`
+	OpponentScore int       `json:"opponentScore"`
+	GameType      string    `json:"gameType"`
+}
+
+type BaseballSnapshot struct {
+	UpdatedAt  time.Time     `json:"updatedAt"`
+	TeamID     int           `json:"teamId"`
+	TeamName   string        `json:"teamName"`
+	TeamAbbr   string        `json:"teamAbbr"`
+	LatestGame *BaseballGame `json:"latestGame"`
+	NextGame   *BaseballGame `json:"nextGame"`
+}
+
 func DefaultConfig() Config {
 	return Config{
 		Calendars: []Calendar{},
@@ -160,11 +191,15 @@ func DefaultConfig() Config {
 		SnowDay: SnowDay{
 			Enabled: true,
 		},
+		Baseball: Baseball{
+			Enabled: true,
+		},
 		Display: Display{
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
 			TideRefreshSeconds:     3600,
+			BaseballRefreshSeconds: 600,
 			Theme:                  "default",
 			Mode:                   "light",
 			CalendarEnabled:        true,

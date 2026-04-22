@@ -8,12 +8,13 @@ import (
 )
 
 type Frame struct {
-	Type    string                 `json:"type"`
-	Config  *types.Config          `json:"config,omitempty"`
-	Events  []types.Event          `json:"events,omitempty"`
-	Weather *types.WeatherSnapshot `json:"weather,omitempty"`
-	SnowDay *types.SnowDaySnapshot `json:"snowday,omitempty"`
-	Tide    *types.TideSnapshot    `json:"tide,omitempty"`
+	Type     string                  `json:"type"`
+	Config   *types.Config           `json:"config,omitempty"`
+	Events   []types.Event           `json:"events,omitempty"`
+	Weather  *types.WeatherSnapshot  `json:"weather,omitempty"`
+	SnowDay  *types.SnowDaySnapshot  `json:"snowday,omitempty"`
+	Tide     *types.TideSnapshot     `json:"tide,omitempty"`
+	Baseball *types.BaseballSnapshot `json:"baseball,omitempty"`
 }
 
 // Hub fans out frames to every connected WebSocket client. Each client owns a

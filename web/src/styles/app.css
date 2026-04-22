@@ -405,6 +405,46 @@ input, select {
 .tide-day-label { margin: 0 0 8px; font-size: 1rem; font-weight: 500; color: var(--fg-muted); }
 .tide-day-events { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 
+/* -------- baseball -------- */
+.baseball-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-widget);
+}
+.baseball-section { display: flex; flex-direction: column; gap: 4px; }
+.baseball-section-label {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.baseball-scoreline,
+.baseball-matchup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+}
+.baseball-team { font-weight: 500; }
+.baseball-winner { color: var(--accent); }
+.baseball-score {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.baseball-scoreline-sep { color: var(--fg-muted); }
+.baseball-vs { color: var(--fg-muted); font-size: 0.9rem; }
+.baseball-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+.baseball-status { text-transform: uppercase; letter-spacing: 0.05em; }
+.baseball-empty { color: var(--fg-muted); font-size: 0.9rem; }
+
 /* -------- connection dot -------- */
 .connection-indicator {
   display: flex;

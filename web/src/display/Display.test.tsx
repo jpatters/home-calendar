@@ -17,6 +17,7 @@ function buildConfig(
     weatherEnabled: boolean;
     tideEnabled: boolean;
     snowDayEnabled: boolean;
+    baseballEnabled: boolean;
     calendarEnabled: boolean;
     clockEnabled: boolean;
   }> = {},
@@ -43,11 +44,18 @@ function buildConfig(
       url: "https://example.com",
       enabled: overrides.snowDayEnabled ?? true,
     },
+    baseball: {
+      enabled: overrides.baseballEnabled ?? true,
+      teamId: 0,
+      teamName: "",
+      teamAbbr: "",
+    },
     display: {
       defaultView: "week",
       calendarRefreshSeconds: 300,
       weatherRefreshSeconds: 900,
       tideRefreshSeconds: 3600,
+      baseballRefreshSeconds: 600,
       theme: "default",
       mode: "light",
       calendarEnabled: overrides.calendarEnabled ?? true,
@@ -65,6 +73,7 @@ function buildLive(config: Config): LiveData {
     weather: null,
     snowday: null,
     tide: null,
+    baseball: null,
   };
 }
 

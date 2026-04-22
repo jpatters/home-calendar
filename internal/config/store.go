@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -61,6 +62,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 		SnowDay *struct {
 			Enabled *bool `json:"enabled"`
 		} `json:"snowDay"`
+		Baseball *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"baseball"`
 		Display *struct {
 			CalendarEnabled *bool `json:"calendarEnabled"`
 			ClockEnabled    *bool `json:"clockEnabled"`
@@ -77,6 +81,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 	}
 	if probe.SnowDay == nil || probe.SnowDay.Enabled == nil {
 		c.SnowDay.Enabled = true
+	}
+	if probe.Baseball == nil || probe.Baseball.Enabled == nil {
+		c.Baseball.Enabled = true
 	}
 	if probe.Display == nil || probe.Display.CalendarEnabled == nil {
 		c.Display.CalendarEnabled = true
@@ -159,6 +166,11 @@ func normalize(c types.Config) types.Config {
 	if c.Display.TideRefreshSeconds <= 0 {
 		c.Display.TideRefreshSeconds = d.Display.TideRefreshSeconds
 	}
+	if c.Display.BaseballRefreshSeconds <= 0 {
+		c.Display.BaseballRefreshSeconds = d.Display.BaseballRefreshSeconds
+	}
+	c.Baseball.TeamName = strings.TrimSpace(c.Baseball.TeamName)
+	c.Baseball.TeamAbbr = strings.TrimSpace(c.Baseball.TeamAbbr)
 	c.Display = normalizeDisplayTheme(c.Display, d.Display)
 	return c
 }

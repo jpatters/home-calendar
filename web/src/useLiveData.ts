@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { CalendarEvent, Config, SnowDaySnapshot, TideSnapshot, WSFrame, WeatherSnapshot } from "./types";
+import type {
+  BaseballSnapshot,
+  CalendarEvent,
+  Config,
+  SnowDaySnapshot,
+  TideSnapshot,
+  WSFrame,
+  WeatherSnapshot,
+} from "./types";
 
 export interface LiveData {
   ready: boolean;
@@ -9,6 +17,7 @@ export interface LiveData {
   weather: WeatherSnapshot | null;
   snowday: SnowDaySnapshot | null;
   tide: TideSnapshot | null;
+  baseball: BaseballSnapshot | null;
 }
 
 const INITIAL: LiveData = {
@@ -19,6 +28,7 @@ const INITIAL: LiveData = {
   weather: null,
   snowday: null,
   tide: null,
+  baseball: null,
 };
 
 export function useLiveData(): LiveData {
@@ -60,6 +70,7 @@ export function useLiveData(): LiveData {
                 weather: frame.weather,
                 snowday: frame.snowday ?? null,
                 tide: frame.tide ?? null,
+                baseball: frame.baseball ?? null,
               };
             case "calendar":
               return { ...s, events: frame.events ?? [] };
@@ -69,6 +80,8 @@ export function useLiveData(): LiveData {
               return { ...s, snowday: frame.snowday ?? null };
             case "tide":
               return { ...s, tide: frame.tide ?? null };
+            case "baseball":
+              return { ...s, baseball: frame.baseball ?? null };
             case "config":
               return { ...s, config: frame.config };
             default:

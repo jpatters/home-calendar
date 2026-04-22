@@ -131,6 +131,48 @@ func (s *Server) handleTideRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleGetBaseball(w http.ResponseWriter, r *http.Request) {
+	snap := s.baseball.Snapshot()
+	if snap == nil {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
+}
+
+func (s *Server) handleBaseballRefresh(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.Baseball.Enabled || cfg.Baseball.TeamID == 0 {
+		http.Error(w, "baseball widget is disabled or no team selected", http.StatusConflict)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	s.baseball.RefreshNow(ctx, cfg.Baseball)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleBaseballTeamSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		http.Error(w, "query parameter q is required", http.StatusBadRequest)
+		return
+	}
+	if len(q) > 100 {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	results, err := s.teamSearch(ctx, q)
+	if err != nil {
+		log.Printf("baseball team search: %v", err)
+		http.Error(w, "team search failed", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

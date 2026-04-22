@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -162,5 +163,119 @@ func TestWeatherGeocodeRejectsOverlongQuery(t *testing.T) {
 	s.handleWeatherGeocode(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestBaseballRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Baseball.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, baseball: baseball.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/baseball/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleBaseballRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBaseballRefreshReturns409WhenTeamUnset(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Baseball.Enabled = true
+		cfg.Baseball.TeamID = 0
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, baseball: baseball.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/baseball/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleBaseballRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when team not chosen, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBaseballTeamSearchRejectsEmptyQuery(t *testing.T) {
+	s := &Server{teamSearch: func(context.Context, string) ([]baseball.TeamResult, error) {
+		t.Fatal("teamSearch should not be called on empty query")
+		return nil, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/baseball/teams?q=", nil)
+	rec := httptest.NewRecorder()
+	s.handleBaseballTeamSearch(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestBaseballTeamSearchReturnsResults(t *testing.T) {
+	want := []baseball.TeamResult{
+		{ID: 147, Name: "New York Yankees", TeamName: "Yankees", Abbreviation: "NYY", LocationName: "New York"},
+	}
+	s := &Server{teamSearch: func(_ context.Context, q string) ([]baseball.TeamResult, error) {
+		if q != "yank" {
+			t.Errorf("expected q=yank, got %q", q)
+		}
+		return want, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/baseball/teams?q=yank", nil)
+	rec := httptest.NewRecorder()
+	s.handleBaseballTeamSearch(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	var got []baseball.TeamResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, rec.Body.String())
+	}
+	if len(got) != 1 || got[0].ID != 147 || got[0].Abbreviation != "NYY" {
+		t.Fatalf("unexpected body: %+v", got)
+	}
+}
+
+func TestBaseballTeamSearchSurfacesUpstreamErrorAsBadGateway(t *testing.T) {
+	s := &Server{teamSearch: func(context.Context, string) ([]baseball.TeamResult, error) {
+		return nil, errors.New("upstream: http://secret-host/internal")
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/baseball/teams?q=yank", nil)
+	rec := httptest.NewRecorder()
+	s.handleBaseballTeamSearch(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "secret-host") {
+		t.Errorf("response body leaked upstream error: %q", rec.Body.String())
+	}
+}
+
+func TestGetBaseballReturnsNoDataSentinelBeforeSnapshot(t *testing.T) {
+	// Contract with the frontend: when no snapshot is available yet, the
+	// endpoint responds with a body that decodes to a nil BaseballSnapshot
+	// (matching TypeScript's `BaseballSnapshot | null`).
+	b := baseball.New(nil)
+	srv := &Server{baseball: b}
+	req := httptest.NewRequest(http.MethodGet, "/api/baseball", nil)
+	rec := httptest.NewRecorder()
+	srv.handleGetBaseball(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var got *struct {
+		TeamID int `json:"teamId"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not valid JSON: %v; body=%s", err, rec.Body.String())
+	}
+	if got != nil {
+		t.Errorf("expected nil snapshot body, got %+v", got)
 	}
 }

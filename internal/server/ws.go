@@ -25,12 +25,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	cfg := s.cfg.Get()
 	snap := Frame{
-		Type:    "snapshot",
-		Config:  &cfg,
-		Events:  s.ical.Events(),
-		Weather: s.weather.Snapshot(),
-		SnowDay: s.snowday.Snapshot(),
-		Tide:    s.tide.Snapshot(),
+		Type:     "snapshot",
+		Config:   &cfg,
+		Events:   s.ical.Events(),
+		Weather:  s.weather.Snapshot(),
+		SnowDay:  s.snowday.Snapshot(),
+		Tide:     s.tide.Snapshot(),
+		Baseball: s.baseball.Snapshot(),
 	}
 	if data, err := json.Marshal(snap); err == nil {
 		if err := conn.Write(r.Context(), websocket.MessageText, data); err != nil {
