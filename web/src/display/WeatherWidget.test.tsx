@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import WeatherWidget from "./WeatherWidget";
 import type { WeatherSnapshot } from "../types";
 
@@ -27,10 +27,10 @@ function makeSnapshot(
       precipitation: 0,
     },
     daily: [
-      { date: "2026-01-01", maxC: 20, minC: 10, weatherCode: currentCode, sunrise: "", sunset: "", precipMM: 0 },
-      { date: "2026-01-02", maxC: 22, minC: 12, weatherCode: dailyCodes[0], sunrise: "", sunset: "", precipMM: 0 },
-      { date: "2026-01-03", maxC: 18, minC: 8, weatherCode: dailyCodes[1], sunrise: "", sunset: "", precipMM: 0 },
-      { date: "2026-01-04", maxC: 15, minC: 5, weatherCode: dailyCodes[2], sunrise: "", sunset: "", precipMM: 0 },
+      { date: "2026-01-01", maxC: 20, minC: 10, weatherCode: currentCode, sunrise: "", sunset: "", precipMM: 0, windSpeedMax: 10 },
+      { date: "2026-01-02", maxC: 22, minC: 12, weatherCode: dailyCodes[0], sunrise: "", sunset: "", precipMM: 0, windSpeedMax: 12 },
+      { date: "2026-01-03", maxC: 18, minC: 8, weatherCode: dailyCodes[1], sunrise: "", sunset: "", precipMM: 0, windSpeedMax: 14 },
+      { date: "2026-01-04", maxC: 15, minC: 5, weatherCode: dailyCodes[2], sunrise: "", sunset: "", precipMM: 0, windSpeedMax: 16 },
     ],
   };
 }
@@ -38,7 +38,7 @@ function makeSnapshot(
 describe("WeatherWidget icons", () => {
   test("renders an svg for the current weather icon slot", () => {
     const snap = makeSnapshot({ currentCode: 0 });
-    const { container } = render(<WeatherWidget weather={snap} config={undefined} />);
+    const { container } = render(<WeatherWidget weather={snap} config={undefined} onOpen={() => {}} />);
     const iconEl = container.querySelector(".weather-icon");
     expect(iconEl).not.toBeNull();
     expect(iconEl!.querySelector("svg")).not.toBeNull();
@@ -46,10 +46,10 @@ describe("WeatherWidget icons", () => {
 
   test("renders distinct icons for clearly different weather codes", () => {
     const clear = render(
-      <WeatherWidget weather={makeSnapshot({ currentCode: 0 })} config={undefined} />,
+      <WeatherWidget weather={makeSnapshot({ currentCode: 0 })} config={undefined} onOpen={() => {}} />,
     );
     const thunder = render(
-      <WeatherWidget weather={makeSnapshot({ currentCode: 95 })} config={undefined} />,
+      <WeatherWidget weather={makeSnapshot({ currentCode: 95 })} config={undefined} onOpen={() => {}} />,
     );
     const clearSvg = clear.container.querySelector(".weather-icon svg")?.outerHTML;
     const thunderSvg = thunder.container.querySelector(".weather-icon svg")?.outerHTML;
@@ -60,14 +60,14 @@ describe("WeatherWidget icons", () => {
 
   test("renders one svg per day in the 3-day daily forecast", () => {
     const snap = makeSnapshot({ dailyCodes: [1, 3, 65] });
-    const { container } = render(<WeatherWidget weather={snap} config={undefined} />);
+    const { container } = render(<WeatherWidget weather={snap} config={undefined} onOpen={() => {}} />);
     const dailySvgs = container.querySelectorAll(".weather-daily svg");
     expect(dailySvgs.length).toBe(3);
   });
 
   test("does not render emoji weather characters anywhere in the widget", () => {
     const snap = makeSnapshot({ currentCode: 0, dailyCodes: [3, 65, 95] });
-    const { container } = render(<WeatherWidget weather={snap} config={undefined} />);
+    const { container } = render(<WeatherWidget weather={snap} config={undefined} onOpen={() => {}} />);
     const text = container.textContent ?? "";
     const bannedChars = ["☀", "🌤", "⛅", "☁", "🌫", "🌦", "🌧", "🌨", "❄", "⛈"];
     for (const ch of bannedChars) {
@@ -77,14 +77,32 @@ describe("WeatherWidget icons", () => {
 
   test("renders an svg fallback for unknown weather codes", () => {
     const snap = makeSnapshot({ currentCode: 9999 });
-    const { container } = render(<WeatherWidget weather={snap} config={undefined} />);
+    const { container } = render(<WeatherWidget weather={snap} config={undefined} onOpen={() => {}} />);
     const iconEl = container.querySelector(".weather-icon");
     expect(iconEl!.querySelector("svg")).not.toBeNull();
   });
 
   test("displays the human-readable label for known codes", () => {
     const snap = makeSnapshot({ currentCode: 0 });
-    const { getByText } = render(<WeatherWidget weather={snap} config={undefined} />);
+    const { getByText } = render(<WeatherWidget weather={snap} config={undefined} onOpen={() => {}} />);
     expect(getByText("Clear")).not.toBeNull();
+  });
+});
+
+describe("WeatherWidget interaction", () => {
+  test("is activatable as a button and fires onOpen when clicked", () => {
+    let called = 0;
+    const snap = makeSnapshot();
+    render(
+      <WeatherWidget
+        weather={snap}
+        config={undefined}
+        onOpen={() => {
+          called += 1;
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /weather details/i }));
+    expect(called).toBe(1);
   });
 });

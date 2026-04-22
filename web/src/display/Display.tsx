@@ -4,6 +4,7 @@ import type { LiveData } from "../useLiveData";
 import CalendarView from "./CalendarView";
 import ClockWidget from "./ClockWidget";
 import WeatherWidget from "./WeatherWidget";
+import WeatherModal from "./WeatherModal";
 import SnowDayWidget from "./SnowDayWidget";
 import TideWidget from "./TideWidget";
 import TideModal from "./TideModal";
@@ -19,6 +20,7 @@ export default function Display({ live }: Props) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [tideOpen, setTideOpen] = useState(false);
+  const [weatherOpen, setWeatherOpen] = useState(false);
 
   if (!live.ready) {
     return <div className="loading">Loading…</div>;
@@ -45,6 +47,8 @@ export default function Display({ live }: Props) {
             defaultView={display?.defaultView ?? "week"}
             onEventClick={setSelectedEvent}
             onDayClick={setSelectedDay}
+            weather={live.weather}
+            weatherConfig={live.config?.weather}
           />
         </main>
       )}
@@ -52,7 +56,11 @@ export default function Display({ live }: Props) {
       <aside className="widget-pane">
         {clockEnabled && <ClockWidget />}
         {weatherEnabled && (
-          <WeatherWidget weather={live.weather} config={live.config?.weather} />
+          <WeatherWidget
+            weather={live.weather}
+            config={live.config?.weather}
+            onOpen={() => setWeatherOpen(true)}
+          />
         )}
         {snowDayEnabled && (
           <SnowDayWidget snowday={live.snowday} config={live.config?.snowDay} />
@@ -78,6 +86,13 @@ export default function Display({ live }: Props) {
           tide={live.tide}
           config={live.config?.tide}
           onClose={() => setTideOpen(false)}
+        />
+      )}
+      {weatherOpen && live.weather && (
+        <WeatherModal
+          weather={live.weather}
+          config={live.config?.weather}
+          onClose={() => setWeatherOpen(false)}
         />
       )}
       {selectedEvent && (

@@ -26,6 +26,7 @@ function weatherWith(date: string, sunrise: string, sunset: string): WeatherSnap
         sunrise,
         sunset,
         precipMM: 0,
+        windSpeedMax: 0,
       },
     ],
   };

@@ -108,6 +108,7 @@ export interface WeatherDaily {
   sunrise: string;
   sunset: string;
   precipMM: number;
+  windSpeedMax: number;
 }
 
 export interface WeatherSnapshot {

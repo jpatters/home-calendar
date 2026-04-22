@@ -107,13 +107,14 @@ type WeatherCurrent struct {
 }
 
 type WeatherDaily struct {
-	Date        string  `json:"date"`
-	MaxC        float64 `json:"maxC"`
-	MinC        float64 `json:"minC"`
-	WeatherCode int     `json:"weatherCode"`
-	Sunrise     string  `json:"sunrise"`
-	Sunset      string  `json:"sunset"`
-	PrecipMM    float64 `json:"precipMM"`
+	Date         string  `json:"date"`
+	MaxC         float64 `json:"maxC"`
+	MinC         float64 `json:"minC"`
+	WeatherCode  int     `json:"weatherCode"`
+	Sunrise      string  `json:"sunrise"`
+	Sunset       string  `json:"sunset"`
+	PrecipMM     float64 `json:"precipMM"`
+	WindSpeedMax float64 `json:"windSpeedMax"`
 }
 
 type WeatherSnapshot struct {

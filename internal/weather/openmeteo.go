@@ -110,6 +110,7 @@ type openMeteoResponse struct {
 		Sunrise          []string  `json:"sunrise"`
 		Sunset           []string  `json:"sunset"`
 		PrecipitationSum []float64 `json:"precipitation_sum"`
+		WindSpeed10mMax  []float64 `json:"wind_speed_10m_max"`
 	} `json:"daily"`
 }
 
@@ -119,8 +120,8 @@ func (f *Fetcher) fetch(ctx context.Context, w types.Weather) {
 	q.Set("latitude", strconv.FormatFloat(w.Latitude, 'f', 4, 64))
 	q.Set("longitude", strconv.FormatFloat(w.Longitude, 'f', 4, 64))
 	q.Set("current", "temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day,precipitation")
-	q.Set("daily", "temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset,precipitation_sum")
-	q.Set("forecast_days", "4")
+	q.Set("daily", "temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset,precipitation_sum,wind_speed_10m_max")
+	q.Set("forecast_days", "7")
 	q.Set("timezone", defaultString(w.Timezone, "auto"))
 	if w.Units == "imperial" {
 		q.Set("temperature_unit", "fahrenheit")
@@ -204,6 +205,9 @@ func toSnapshot(r openMeteoResponse, w types.Weather) *types.WeatherSnapshot {
 		}
 		if i < len(r.Daily.PrecipitationSum) {
 			d.PrecipMM = r.Daily.PrecipitationSum[i]
+		}
+		if i < len(r.Daily.WindSpeed10mMax) {
+			d.WindSpeedMax = r.Daily.WindSpeed10mMax[i]
 		}
 		snap.Daily = append(snap.Daily, d)
 	}
