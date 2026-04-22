@@ -202,6 +202,29 @@ describe("CalendarView weather in day header", () => {
     expect(queryAllByLabelText(/high \d+°/i).length).toBe(0);
   });
 
+  test("week view shows day-of-week/date labels even when no weather matches", () => {
+    const weather = makeWeather({
+      daily: [{ date: "2099-12-25", maxC: 20, weatherCode: 0 }],
+    });
+    const { container } = render(
+      <CalendarView
+        events={[]}
+        defaultView="week"
+        weather={weather}
+        weatherConfig={makeWeatherConfig()}
+        onEventClick={noop}
+        onDayClick={noop}
+      />,
+    );
+    const headerCells = container.querySelectorAll(
+      ".fc-col-header-cell-cushion",
+    );
+    expect(headerCells.length).toBe(7);
+    headerCells.forEach((cell) => {
+      expect((cell.textContent ?? "").trim().length).toBeGreaterThan(0);
+    });
+  });
+
   test("day view renders exactly one weather cell when data matches today", () => {
     const weather = makeWeather({
       daily: [{ date: dateKey(TODAY), maxC: 18, weatherCode: 1 }],
