@@ -58,6 +58,7 @@ function makeWeather(
       sunrise: "",
       sunset: "",
       precipMM: 0,
+      windSpeedMax: 0,
     })),
   };
 }
