@@ -23,6 +23,11 @@ private network.
 - **Snow day predictor**: optional widget backed by
   [snowdaypredictor.com](https://www.snowdaypredictor.com/) — paste a location
   page URL.
+- **Baseball**: optional widget showing the most recent completed MLB game's
+  score and the date/time/opponent of the next upcoming game. Powered by the
+  free, no-auth MLB Stats API (`statsapi.mlb.com`). Pick a team via type-ahead
+  search in admin. Regular season + playoffs only; spring training and
+  exhibition games are filtered out.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 
@@ -130,11 +135,18 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "enabled": true,
     "url": "https://www.snowdaypredictor.com/prediction/canoe-cove-pe"
   },
+  "baseball": {
+    "enabled": true,
+    "teamId": 147,
+    "teamName": "New York Yankees",
+    "teamAbbr": "NYY"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
     "tideRefreshSeconds": 3600,
+    "baseballRefreshSeconds": 600,
     "theme": "default",
     "mode": "light",
     "calendarEnabled": true,
@@ -143,13 +155,17 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
 }
 ```
 
-Each widget has an `enabled` flag. Weather, Tide, and Snow Day each carry their
-own `enabled` field; the calendar and clock live under `display.calendarEnabled`
-and `display.clockEnabled`. When a widget is disabled the server stops its
-background fetcher (so no API calls are made) and the display hides it. You can
-toggle widgets from the admin page — look for the "Show …" checkbox at the top
-of each panel. Configs written before these flags existed are treated as
-all-enabled when loaded.
+Each widget has an `enabled` flag. Weather, Tide, Snow Day, and Baseball each
+carry their own `enabled` field; the calendar and clock live under
+`display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
+the server stops its background fetcher (so no API calls are made) and the
+display hides it. You can toggle widgets from the admin page — look for the
+"Show …" checkbox at the top of each panel. Configs written before these flags
+existed are treated as all-enabled when loaded.
+
+The baseball widget additionally stays dormant while no team is selected
+(`teamId: 0`); no polling happens until you pick a team from the admin
+type-ahead search.
 
 `theme` is the colour palette — one of `default`, `ocean`, `sunset`, `forest`.
 `mode` is one of `light`, `dark`, or `auto`. `auto` flips between light and dark

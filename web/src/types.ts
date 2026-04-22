@@ -40,6 +40,7 @@ export interface Display {
   calendarRefreshSeconds: number;
   weatherRefreshSeconds: number;
   tideRefreshSeconds: number;
+  baseballRefreshSeconds: number;
   theme: ThemePalette;
   mode: ThemeMode;
   calendarEnabled: boolean;
@@ -51,11 +52,27 @@ export interface SnowDay {
   url: string;
 }
 
+export interface Baseball {
+  enabled: boolean;
+  teamId: number;
+  teamName: string;
+  teamAbbr: string;
+}
+
+export interface BaseballTeam {
+  id: number;
+  name: string;
+  teamName: string;
+  abbreviation: string;
+  locationName: string;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
   tide: Tide;
   snowDay: SnowDay;
+  baseball: Baseball;
   display: Display;
 }
 
@@ -126,6 +143,28 @@ export interface SnowDaySnapshot {
   category: string;
 }
 
+export interface BaseballGame {
+  gameTime: string;
+  opponent: string;
+  opponentAbbr: string;
+  homeAway: "home" | "away";
+  venue?: string;
+  status: string;
+  isFinal: boolean;
+  teamScore: number;
+  opponentScore: number;
+  gameType: string;
+}
+
+export interface BaseballSnapshot {
+  updatedAt: string;
+  teamId: number;
+  teamName: string;
+  teamAbbr: string;
+  latestGame: BaseballGame | null;
+  nextGame: BaseballGame | null;
+}
+
 export type WSFrame =
   | {
       type: "snapshot";
@@ -134,9 +173,11 @@ export type WSFrame =
       weather: WeatherSnapshot | null;
       snowday: SnowDaySnapshot | null;
       tide: TideSnapshot | null;
+      baseball: BaseballSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
   | { type: "snowday"; snowday: SnowDaySnapshot | null }
   | { type: "tide"; tide: TideSnapshot | null }
+  | { type: "baseball"; baseball: BaseballSnapshot | null }
   | { type: "config"; config: Config };

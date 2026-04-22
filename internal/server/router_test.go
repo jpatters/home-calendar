@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -25,6 +26,7 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	cfg.Weather.Enabled = false
 	cfg.Tide.Enabled = false
 	cfg.SnowDay.Enabled = false
+	cfg.Baseball.Enabled = false
 	cfg.Display.CalendarEnabled = false
 	if _, err := store.Replace(cfg); err != nil {
 		t.Fatalf("Replace: %v", err)
@@ -47,13 +49,16 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	srv.tide = tide.New(func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
 	})
+	srv.baseball = baseball.New(func(snap *types.BaseballSnapshot) {
+		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
+	})
 
 	client := hub.register()
 	defer hub.unregister(client)
 
 	srv.restartFetchers(cfg)
 
-	got := collectFrameTypes(t, client, 4, 500*time.Millisecond)
+	got := collectFrameTypes(t, client, 5, 500*time.Millisecond)
 	if !got["weather"] {
 		t.Errorf("missing clearing frame for weather")
 	}
@@ -65,6 +70,9 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	}
 	if !got["calendar"] {
 		t.Errorf("missing clearing frame for calendar")
+	}
+	if !got["baseball"] {
+		t.Errorf("missing clearing frame for baseball")
 	}
 }
 
@@ -99,6 +107,9 @@ func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
 	})
 	srv.tide = tide.New(func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
+	})
+	srv.baseball = baseball.New(func(snap *types.BaseballSnapshot) {
+		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
 
 	client := hub.register()

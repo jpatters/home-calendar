@@ -39,6 +39,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			CalendarRefreshSeconds: 120,
 			WeatherRefreshSeconds:  600,
 			TideRefreshSeconds:     1800,
+			BaseballRefreshSeconds: 900,
 			Theme:                  "ocean",
 			Mode:                   "dark",
 		},
