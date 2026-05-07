@@ -18,6 +18,7 @@ function snapshot(partial: Partial<BaseballSnapshot>): BaseballSnapshot {
     teamId: 147,
     teamName: "New York Yankees",
     teamAbbr: "NYY",
+    liveGame: null,
     latestGame: null,
     nextGame: null,
     ...partial,
@@ -141,4 +142,82 @@ describe("BaseballWidget", () => {
     );
     expect(screen.getByText(/no recent game/i)).toBeTruthy();
   });
+
+  test("renders live game with LIVE pill, score, inning, and outs", () => {
+    render(
+      <BaseballWidget
+        baseball={snapshot({
+          liveGame: {
+            gameTime: "2026-04-22T23:00:00Z",
+            opponent: "Boston Red Sox",
+            opponentAbbr: "BOS",
+            homeAway: "home",
+            venue: "Yankee Stadium",
+            status: "In Progress",
+            isFinal: false,
+            isLive: true,
+            teamScore: 3,
+            opponentScore: 1,
+            gameType: "R",
+            inning: 5,
+            inningHalf: "top",
+            outs: 2,
+          },
+        })}
+        config={config}
+      />,
+    );
+    expect(screen.getByText(/live/i)).toBeTruthy();
+    // Both teams visible.
+    expect(screen.getByText("NYY")).toBeTruthy();
+    expect(screen.getByText("BOS")).toBeTruthy();
+    // Both scores visible.
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.getByText("1")).toBeTruthy();
+    // Inning + half displayed (e.g. "Top 5th").
+    expect(screen.getByText(/top.*5th/i)).toBeTruthy();
+    // Outs displayed.
+    expect(screen.getByText(/2 out/i)).toBeTruthy();
+  });
+
+  test("hides Latest section when a live game is in progress", () => {
+    render(
+      <BaseballWidget
+        baseball={snapshot({
+          liveGame: {
+            gameTime: "2026-04-22T23:00:00Z",
+            opponent: "Boston Red Sox",
+            opponentAbbr: "BOS",
+            homeAway: "home",
+            status: "In Progress",
+            isFinal: false,
+            isLive: true,
+            teamScore: 1,
+            opponentScore: 0,
+            gameType: "R",
+            inning: 2,
+            inningHalf: "bottom",
+            outs: 0,
+          },
+          latestGame: {
+            gameTime: "2026-04-20T23:05:00Z",
+            opponent: "Tampa Bay Rays",
+            opponentAbbr: "TB",
+            homeAway: "away",
+            status: "Final",
+            isFinal: true,
+            isLive: false,
+            teamScore: 7,
+            opponentScore: 4,
+            gameType: "R",
+          },
+        })}
+        config={config}
+      />,
+    );
+    // Latest opponent must NOT be rendered while live game is showing.
+    expect(screen.queryByText(/tampa bay/i)).toBeNull();
+    expect(screen.queryByText("TB")).toBeNull();
+  });
+
 });

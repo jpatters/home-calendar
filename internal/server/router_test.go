@@ -49,7 +49,7 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	srv.tide = tide.New(func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
 	})
-	srv.baseball = baseball.New(func(snap *types.BaseballSnapshot) {
+	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
 
@@ -108,7 +108,7 @@ func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
 	srv.tide = tide.New(func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
 	})
-	srv.baseball = baseball.New(func(snap *types.BaseballSnapshot) {
+	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
 

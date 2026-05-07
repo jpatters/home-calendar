@@ -152,9 +152,13 @@ export interface BaseballGame {
   venue?: string;
   status: string;
   isFinal: boolean;
+  isLive?: boolean;
   teamScore: number;
   opponentScore: number;
   gameType: string;
+  inning?: number;
+  inningHalf?: "top" | "bottom" | "middle" | "end" | "";
+  outs?: number;
 }
 
 export interface BaseballSnapshot {
@@ -162,6 +166,7 @@ export interface BaseballSnapshot {
   teamId: number;
   teamName: string;
   teamAbbr: string;
+  liveGame: BaseballGame | null;
   latestGame: BaseballGame | null;
   nextGame: BaseballGame | null;
 }

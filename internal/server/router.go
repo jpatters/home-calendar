@@ -47,7 +47,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.tide = tide.New(func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
 	})
-	s.baseball = baseball.New(func(snap *types.BaseballSnapshot) {
+	s.baseball = baseball.New(baseball.DefaultScheduleURL, func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
 	s.geocode = func(ctx context.Context, q string) ([]weather.GeoResult, error) {
@@ -141,7 +141,7 @@ func (s *Server) applyFetcherConfig(ctx context.Context, c types.Config, broadca
 		if broadcastClears {
 			s.hub.Broadcast(Frame{Type: "baseball", Baseball: nil})
 		}
-		s.baseball.Start(ctx, c.Baseball, time.Duration(c.Display.BaseballRefreshSeconds)*time.Second)
+		s.baseball.Start(ctx, c.Baseball, time.Duration(c.Display.BaseballRefreshSeconds)*time.Second, 30*time.Second)
 	} else {
 		s.baseball.Stop()
 		if broadcastClears {

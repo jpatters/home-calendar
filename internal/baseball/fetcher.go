@@ -10,8 +10,11 @@ import (
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
+const defaultLiveInterval = 30 * time.Second
+
 type Fetcher struct {
-	client *http.Client
+	client      *http.Client
+	scheduleURL string
 
 	mu       sync.RWMutex
 	snapshot *types.BaseballSnapshot
@@ -22,10 +25,13 @@ type Fetcher struct {
 	onUpdate func(*types.BaseballSnapshot)
 }
 
-func New(onUpdate func(*types.BaseballSnapshot)) *Fetcher {
+// New constructs a Fetcher that polls scheduleURL. Pass DefaultScheduleURL in
+// production; tests pass an httptest server URL.
+func New(scheduleURL string, onUpdate func(*types.BaseballSnapshot)) *Fetcher {
 	return &Fetcher{
-		client:   &http.Client{Timeout: 20 * time.Second},
-		onUpdate: onUpdate,
+		client:      &http.Client{Timeout: 20 * time.Second},
+		scheduleURL: scheduleURL,
+		onUpdate:    onUpdate,
 	}
 }
 
@@ -40,6 +46,10 @@ func (f *Fetcher) Snapshot() *types.BaseballSnapshot {
 		return nil
 	}
 	s := *f.snapshot
+	if f.snapshot.LiveGame != nil {
+		g := *f.snapshot.LiveGame
+		s.LiveGame = &g
+	}
 	if f.snapshot.LatestGame != nil {
 		g := *f.snapshot.LatestGame
 		s.LatestGame = &g
@@ -51,7 +61,9 @@ func (f *Fetcher) Snapshot() *types.BaseballSnapshot {
 	return &s
 }
 
-func (f *Fetcher) Start(parent context.Context, b types.Baseball, interval time.Duration) {
+// Start begins polling the schedule API. The fetcher uses normalInterval for
+// routine polling and liveInterval (faster) while the team has a live game.
+func (f *Fetcher) Start(parent context.Context, b types.Baseball, normalInterval, liveInterval time.Duration) {
 	f.Stop()
 	if b.TeamID == 0 {
 		return
@@ -59,7 +71,7 @@ func (f *Fetcher) Start(parent context.Context, b types.Baseball, interval time.
 	ctx, cancel := context.WithCancel(parent)
 	f.cancel = cancel
 	f.doneWG.Add(1)
-	go f.loop(ctx, b, interval)
+	go f.loop(ctx, b, normalInterval, liveInterval)
 }
 
 func (f *Fetcher) Stop() {
@@ -78,22 +90,37 @@ func (f *Fetcher) RefreshNow(ctx context.Context, b types.Baseball) {
 	f.fetch(ctx, b)
 }
 
-func (f *Fetcher) loop(ctx context.Context, b types.Baseball, interval time.Duration) {
+func (f *Fetcher) loop(ctx context.Context, b types.Baseball, normalInterval, liveInterval time.Duration) {
 	defer f.doneWG.Done()
-	f.fetch(ctx, b)
-	if interval <= 0 {
-		interval = 10 * time.Minute
+	if normalInterval <= 0 {
+		normalInterval = 10 * time.Minute
 	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	if liveInterval <= 0 {
+		liveInterval = defaultLiveInterval
+	}
+	f.fetch(ctx, b)
+	timer := time.NewTimer(f.nextInterval(normalInterval, liveInterval))
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			f.fetch(ctx, b)
+			timer.Reset(f.nextInterval(normalInterval, liveInterval))
 		}
 	}
+}
+
+// nextInterval returns the live interval when the most recent snapshot has a
+// live game, otherwise the normal interval.
+func (f *Fetcher) nextInterval(normalInterval, liveInterval time.Duration) time.Duration {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if f.snapshot != nil && f.snapshot.LiveGame != nil {
+		return liveInterval
+	}
+	return normalInterval
 }
 
 func (f *Fetcher) fetch(ctx context.Context, b types.Baseball) {
@@ -107,7 +134,7 @@ func (f *Fetcher) fetch(ctx context.Context, b types.Baseball) {
 		}
 		return
 	}
-	snap, err := Search(ctx, f.client, DefaultScheduleURL, b, time.Now())
+	snap, err := Search(ctx, f.client, f.scheduleURL, b, time.Now())
 	if err != nil {
 		log.Printf("baseball: %v", err)
 		f.mu.Lock()
