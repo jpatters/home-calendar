@@ -174,7 +174,7 @@ func TestBaseballRefreshReturns409WhenDisabled(t *testing.T) {
 			t.Fatalf("Replace: %v", err)
 		}
 	})
-	srv := &Server{cfg: store, baseball: baseball.New(nil)}
+	srv := &Server{cfg: store, baseball: baseball.New("", nil)}
 	req := httptest.NewRequest(http.MethodPost, "/api/baseball/refresh", nil)
 	rec := httptest.NewRecorder()
 	srv.handleBaseballRefresh(rec, req)
@@ -192,7 +192,7 @@ func TestBaseballRefreshReturns409WhenTeamUnset(t *testing.T) {
 			t.Fatalf("Replace: %v", err)
 		}
 	})
-	srv := &Server{cfg: store, baseball: baseball.New(nil)}
+	srv := &Server{cfg: store, baseball: baseball.New("", nil)}
 	req := httptest.NewRequest(http.MethodPost, "/api/baseball/refresh", nil)
 	rec := httptest.NewRecorder()
 	srv.handleBaseballRefresh(rec, req)
@@ -261,7 +261,7 @@ func TestGetBaseballReturnsNoDataSentinelBeforeSnapshot(t *testing.T) {
 	// Contract with the frontend: when no snapshot is available yet, the
 	// endpoint responds with a body that decodes to a nil BaseballSnapshot
 	// (matching TypeScript's `BaseballSnapshot | null`).
-	b := baseball.New(nil)
+	b := baseball.New("", nil)
 	srv := &Server{baseball: b}
 	req := httptest.NewRequest(http.MethodGet, "/api/baseball", nil)
 	rec := httptest.NewRecorder()

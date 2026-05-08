@@ -35,17 +35,25 @@ type scheduleDate struct {
 }
 
 type scheduleGame struct {
-	GamePk   int64          `json:"gamePk"`
-	GameDate string         `json:"gameDate"`
-	GameType string         `json:"gameType"`
-	Status   scheduleStatus `json:"status"`
-	Teams    scheduleTeams  `json:"teams"`
-	Venue    scheduleVenue  `json:"venue"`
+	GamePk    int64             `json:"gamePk"`
+	GameDate  string            `json:"gameDate"`
+	GameType  string            `json:"gameType"`
+	Status    scheduleStatus    `json:"status"`
+	Teams     scheduleTeams     `json:"teams"`
+	Venue     scheduleVenue     `json:"venue"`
+	Linescore scheduleLinescore `json:"linescore"`
 }
 
 type scheduleStatus struct {
 	AbstractGameState string `json:"abstractGameState"`
 	DetailedState     string `json:"detailedState"`
+}
+
+type scheduleLinescore struct {
+	CurrentInning int    `json:"currentInning"`
+	InningHalf    string `json:"inningHalf"`
+	InningState   string `json:"inningState"`
+	Outs          int    `json:"outs"`
 }
 
 type scheduleTeams struct {
@@ -113,16 +121,16 @@ func Search(ctx context.Context, client *http.Client, baseURL string, b types.Ba
 		TeamName:  b.TeamName,
 		TeamAbbr:  b.TeamAbbr,
 	}
-	latest, next := pickGames(body, b.TeamID, now)
+	live, latest, next := pickGames(body, b.TeamID, now)
+	snap.LiveGame = live
 	snap.LatestGame = latest
 	snap.NextGame = next
 	return snap, nil
 }
 
-func pickGames(body scheduleResponse, teamID int, now time.Time) (*types.BaseballGame, *types.BaseballGame) {
-	var latest, next *types.BaseballGame
-	var latestTime time.Time
-	var nextTime time.Time
+func pickGames(body scheduleResponse, teamID int, now time.Time) (*types.BaseballGame, *types.BaseballGame, *types.BaseballGame) {
+	var live, latest, next *types.BaseballGame
+	var liveTime, latestTime, nextTime time.Time
 
 	for _, d := range body.Dates {
 		for _, g := range d.Games {
@@ -137,12 +145,18 @@ func pickGames(body scheduleResponse, teamID int, now time.Time) (*types.Basebal
 			if converted == nil {
 				continue
 			}
-			if isCompleted(g.Status) {
+			switch {
+			case isLive(g.Status):
+				if live == nil || gameTime.After(liveTime) {
+					live = converted
+					liveTime = gameTime
+				}
+			case isCompleted(g.Status):
 				if latest == nil || gameTime.After(latestTime) {
 					latest = converted
 					latestTime = gameTime
 				}
-			} else if isUpcoming(g.Status, gameTime, now) {
+			case isUpcoming(g.Status, gameTime, now):
 				if next == nil || gameTime.Before(nextTime) {
 					next = converted
 					nextTime = gameTime
@@ -150,7 +164,7 @@ func pickGames(body scheduleResponse, teamID int, now time.Time) (*types.Basebal
 			}
 		}
 	}
-	return latest, next
+	return live, latest, next
 }
 
 func isCompleted(s scheduleStatus) bool {
@@ -162,6 +176,10 @@ func isCompleted(s scheduleStatus) bool {
 		return false
 	}
 	return true
+}
+
+func isLive(s scheduleStatus) bool {
+	return s.AbstractGameState == "Live"
 }
 
 func isUpcoming(s scheduleStatus, gameTime, now time.Time) bool {
@@ -194,8 +212,28 @@ func convertGame(g scheduleGame, gameTime time.Time, teamID int) *types.Baseball
 		Venue:         g.Venue.Name,
 		Status:        g.Status.DetailedState,
 		IsFinal:       isCompleted(g.Status),
+		IsLive:        isLive(g.Status),
 		TeamScore:     us.Score,
 		OpponentScore: them.Score,
 		GameType:      g.GameType,
+		Inning:        g.Linescore.CurrentInning,
+		InningHalf:    normalizeInningHalf(g.Linescore.InningHalf, g.Linescore.InningState),
+		Outs:          g.Linescore.Outs,
 	}
+}
+
+// normalizeInningHalf returns lowercase "top"/"bottom"/"middle"/"end" — MLB
+// returns title-case and sometimes only inningState for between-half states.
+func normalizeInningHalf(half, state string) string {
+	switch {
+	case state == "Middle":
+		return "middle"
+	case state == "End":
+		return "end"
+	case half == "Top":
+		return "top"
+	case half == "Bottom":
+		return "bottom"
+	}
+	return ""
 }

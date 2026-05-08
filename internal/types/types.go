@@ -158,9 +158,13 @@ type BaseballGame struct {
 	Venue         string    `json:"venue,omitempty"`
 	Status        string    `json:"status"`
 	IsFinal       bool      `json:"isFinal"`
+	IsLive        bool      `json:"isLive"`
 	TeamScore     int       `json:"teamScore"`
 	OpponentScore int       `json:"opponentScore"`
 	GameType      string    `json:"gameType"`
+	Inning        int       `json:"inning,omitempty"`
+	InningHalf    string    `json:"inningHalf,omitempty"`
+	Outs          int       `json:"outs,omitempty"`
 }
 
 type BaseballSnapshot struct {
@@ -168,6 +172,7 @@ type BaseballSnapshot struct {
 	TeamID     int           `json:"teamId"`
 	TeamName   string        `json:"teamName"`
 	TeamAbbr   string        `json:"teamAbbr"`
+	LiveGame   *BaseballGame `json:"liveGame"`
 	LatestGame *BaseballGame `json:"latestGame"`
 	NextGame   *BaseballGame `json:"nextGame"`
 }

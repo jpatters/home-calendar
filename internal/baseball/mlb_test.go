@@ -19,12 +19,21 @@ type stubDate struct {
 }
 
 type stubGame struct {
-	GamePk   int64      `json:"gamePk"`
-	GameDate string     `json:"gameDate"`
-	GameType string     `json:"gameType"`
-	Status   stubStatus `json:"status"`
-	Teams    stubTeams  `json:"teams"`
-	Venue    stubVenue  `json:"venue"`
+	GamePk    int64         `json:"gamePk"`
+	GameDate  string        `json:"gameDate"`
+	GameType  string        `json:"gameType"`
+	Status    stubStatus    `json:"status"`
+	Teams     stubTeams     `json:"teams"`
+	Venue     stubVenue     `json:"venue"`
+	Linescore stubLinescore `json:"linescore"`
+}
+
+type stubLinescore struct {
+	CurrentInning        int    `json:"currentInning"`
+	CurrentInningOrdinal string `json:"currentInningOrdinal"`
+	InningState          string `json:"inningState"`
+	InningHalf           string `json:"inningHalf"`
+	Outs                 int    `json:"outs"`
 }
 
 type stubStatus struct {
@@ -465,10 +474,9 @@ func TestSearchReturnsNilNextWhenNoUpcoming(t *testing.T) {
 	}
 }
 
-func TestSearchDoesNotSurfaceLiveGameAsNext(t *testing.T) {
-	// A game currently in progress (status "Live") is neither "latest" (not
-	// Final) nor "next" (already started). Widget should report no upcoming
-	// game instead of pretending the live game hasn't started yet.
+func TestSearchSurfacesLiveGame(t *testing.T) {
+	// A game currently in progress should populate snap.LiveGame with the
+	// current score, inning, and outs from the linescore hydration.
 	dates := []stubDate{
 		{
 			Date: "2026-04-22",
@@ -476,27 +484,116 @@ func TestSearchDoesNotSurfaceLiveGameAsNext(t *testing.T) {
 				GamePk: 1, GameDate: "2026-04-22T23:00:00Z", GameType: "R",
 				Status: stubStatus{AbstractGameState: "Live", DetailedState: "In Progress"},
 				Teams: stubTeams{
-					Home: stubSide{Team: stubTeam{ID: yankeesID, Name: "New York Yankees", Abbreviation: "NYY"}, Score: 2},
+					Home: stubSide{Team: stubTeam{ID: yankeesID, Name: "New York Yankees", Abbreviation: "NYY"}, Score: 3},
 					Away: stubSide{Team: stubTeam{ID: 111, Name: "Boston Red Sox", Abbreviation: "BOS"}, Score: 1},
+				},
+				Venue: stubVenue{Name: "Yankee Stadium"},
+				Linescore: stubLinescore{
+					CurrentInning: 5, CurrentInningOrdinal: "5th",
+					InningState: "Top", InningHalf: "Top", Outs: 2,
 				},
 			}},
 		},
 	}
 	stub := newScheduleStub(t, dates)
 	defer stub.Close()
-	// "now" is before the game's gameDate so the naive gameTime.Before(now)
-	// guard wouldn't reject it — only the Live-vs-Preview check should.
-	now := rfcTime(t, "2026-04-22T22:00:00Z")
+	now := rfcTime(t, "2026-04-22T23:30:00Z")
 
 	snap, err := baseball.Search(context.Background(), stub.Client(), stub.URL(), yankeesConfig(), now)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if snap.NextGame != nil {
-		t.Errorf("Live game should not be surfaced as NextGame, got %+v", snap.NextGame)
+	if snap.LiveGame == nil {
+		t.Fatalf("expected LiveGame, got nil")
 	}
-	if snap.LatestGame != nil {
-		t.Errorf("Live game should not be surfaced as LatestGame, got %+v", snap.LatestGame)
+	got := snap.LiveGame
+	if !got.IsLive {
+		t.Errorf("LiveGame.IsLive = false, want true")
+	}
+	if got.IsFinal {
+		t.Errorf("LiveGame.IsFinal = true, want false")
+	}
+	if got.TeamScore != 3 {
+		t.Errorf("LiveGame.TeamScore = %d, want 3", got.TeamScore)
+	}
+	if got.OpponentScore != 1 {
+		t.Errorf("LiveGame.OpponentScore = %d, want 1", got.OpponentScore)
+	}
+	if got.Inning != 5 {
+		t.Errorf("LiveGame.Inning = %d, want 5", got.Inning)
+	}
+	if got.InningHalf != "top" {
+		t.Errorf("LiveGame.InningHalf = %q, want top", got.InningHalf)
+	}
+	if got.Outs != 2 {
+		t.Errorf("LiveGame.Outs = %d, want 2", got.Outs)
+	}
+}
+
+func TestSearchLiveGameNotDuplicatedAsLatestOrNext(t *testing.T) {
+	// When a live game is also present alongside a recent Final and an upcoming
+	// Preview, each must occupy its own snapshot slot. The live game must not
+	// also appear as Latest or Next.
+	dates := []stubDate{
+		{
+			Date: "2026-04-20",
+			Games: []stubGame{{
+				GamePk: 1, GameDate: "2026-04-20T23:05:00Z", GameType: "R",
+				Status: stubStatus{AbstractGameState: "Final", DetailedState: "Final"},
+				Teams: stubTeams{
+					Home: stubSide{Team: stubTeam{ID: yankeesID, Name: "New York Yankees", Abbreviation: "NYY"}, Score: 5},
+					Away: stubSide{Team: stubTeam{ID: 111, Name: "Boston Red Sox", Abbreviation: "BOS"}, Score: 3},
+				},
+			}},
+		},
+		{
+			Date: "2026-04-22",
+			Games: []stubGame{{
+				GamePk: 2, GameDate: "2026-04-22T23:00:00Z", GameType: "R",
+				Status: stubStatus{AbstractGameState: "Live", DetailedState: "In Progress"},
+				Teams: stubTeams{
+					Home: stubSide{Team: stubTeam{ID: yankeesID, Name: "New York Yankees", Abbreviation: "NYY"}, Score: 2},
+					Away: stubSide{Team: stubTeam{ID: 111, Name: "Boston Red Sox", Abbreviation: "BOS"}, Score: 1},
+				},
+				Linescore: stubLinescore{CurrentInning: 4, InningHalf: "Bottom", Outs: 1},
+			}},
+		},
+		{
+			Date: "2026-04-24",
+			Games: []stubGame{{
+				GamePk: 3, GameDate: "2026-04-24T23:05:00Z", GameType: "R",
+				Status: stubStatus{AbstractGameState: "Preview", DetailedState: "Scheduled"},
+				Teams: stubTeams{
+					Home: stubSide{Team: stubTeam{ID: 121, Name: "New York Mets", Abbreviation: "NYM"}},
+					Away: stubSide{Team: stubTeam{ID: yankeesID, Name: "New York Yankees", Abbreviation: "NYY"}},
+				},
+				Venue: stubVenue{Name: "Citi Field"},
+			}},
+		},
+	}
+	stub := newScheduleStub(t, dates)
+	defer stub.Close()
+	now := rfcTime(t, "2026-04-22T23:30:00Z")
+
+	snap, err := baseball.Search(context.Background(), stub.Client(), stub.URL(), yankeesConfig(), now)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if snap.LiveGame == nil {
+		t.Fatalf("expected LiveGame populated")
+	}
+	if snap.LatestGame == nil || snap.LatestGame.TeamScore != 5 {
+		t.Errorf("LatestGame should be the 5-3 Final, got %+v", snap.LatestGame)
+	}
+	if snap.NextGame == nil || snap.NextGame.Opponent != "New York Mets" {
+		t.Errorf("NextGame should be the Mets Preview, got %+v", snap.NextGame)
+	}
+	// The live game must not also appear as latest or next.
+	if snap.LatestGame != nil && snap.LatestGame.IsLive {
+		t.Errorf("Live game leaked into LatestGame: %+v", snap.LatestGame)
+	}
+	if snap.NextGame != nil && snap.NextGame.IsLive {
+		t.Errorf("Live game leaked into NextGame: %+v", snap.NextGame)
 	}
 }
 

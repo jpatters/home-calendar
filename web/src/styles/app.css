@@ -444,6 +444,27 @@ input, select {
 }
 .baseball-status { text-transform: uppercase; letter-spacing: 0.05em; }
 .baseball-empty { color: var(--fg-muted); font-size: 0.9rem; }
+.baseball-live-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d33;
+  font-weight: 600;
+}
+.baseball-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d33;
+  display: inline-block;
+  animation: baseball-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes baseball-live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+.baseball-inning { font-variant-numeric: tabular-nums; }
+.baseball-outs   { font-variant-numeric: tabular-nums; }
 
 /* -------- connection dot -------- */
 .connection-indicator {

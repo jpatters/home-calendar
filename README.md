@@ -24,10 +24,14 @@ private network.
   [snowdaypredictor.com](https://www.snowdaypredictor.com/) — paste a location
   page URL.
 - **Baseball**: optional widget showing the most recent completed MLB game's
-  score and the date/time/opponent of the next upcoming game. Powered by the
-  free, no-auth MLB Stats API (`statsapi.mlb.com`). Pick a team via type-ahead
-  search in admin. Regular season + playoffs only; spring training and
-  exhibition games are filtered out.
+  score and the date/time/opponent of the next upcoming game. When the team is
+  currently playing, the widget shows a "LIVE" pill with the running score,
+  inning, and outs in place of the latest-final section, and the server polls
+  the schedule API every 30 seconds while the game is live (10-minute cadence
+  otherwise). Powered by the free, no-auth MLB Stats API
+  (`statsapi.mlb.com`). Pick a team via type-ahead search in admin. Regular
+  season + playoffs only; spring training and exhibition games are filtered
+  out.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 
@@ -193,6 +197,9 @@ assigns IDs, and triggers an immediate refresh.
 | POST   | `/api/snowday/refresh`        | Force a snow day refresh                  |
 | GET    | `/api/tide`                   | Current tide snapshot                     |
 | POST   | `/api/tide/refresh`           | Force a tide refresh                      |
+| GET    | `/api/baseball`               | Current baseball snapshot                 |
+| POST   | `/api/baseball/refresh`       | Force a baseball refresh                  |
+| GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
@@ -201,11 +208,12 @@ widget is disabled.
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
 { "type": "snowday",  "snowday": {...} }
 { "type": "tide",     "tide": {...} }
+{ "type": "baseball", "baseball": {...} }
 { "type": "config",   "config": {...} }
 ```
 
