@@ -29,6 +29,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         units: "metric",
         timezone: "UTC",
         location: "",
+        ecowittUrl: "",
       },
       tide: {
         enabled: true,

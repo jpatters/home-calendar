@@ -13,12 +13,13 @@ type Calendar struct {
 }
 
 type Weather struct {
-	Enabled   bool    `json:"enabled"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Units     string  `json:"units"`
-	Timezone  string  `json:"timezone"`
-	Location  string  `json:"location"`
+	Enabled    bool    `json:"enabled"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Units      string  `json:"units"`
+	Timezone   string  `json:"timezone"`
+	Location   string  `json:"location"`
+	EcowittURL string  `json:"ecowittUrl"`
 }
 
 type Tide struct {
@@ -118,11 +119,30 @@ type WeatherDaily struct {
 }
 
 type WeatherSnapshot struct {
-	UpdatedAt time.Time      `json:"updatedAt"`
-	Units     string         `json:"units"`
-	Timezone  string         `json:"timezone"`
-	Current   WeatherCurrent `json:"current"`
-	Daily     []WeatherDaily `json:"daily"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+	Units     string          `json:"units"`
+	Timezone  string          `json:"timezone"`
+	Current   WeatherCurrent  `json:"current"`
+	Daily     []WeatherDaily  `json:"daily"`
+	Station   *WeatherStation `json:"station,omitempty"`
+}
+
+type WeatherStation struct {
+	UpdatedAt      time.Time `json:"updatedAt"`
+	HasOutdoor     bool      `json:"hasOutdoor"`
+	HasIndoor      bool      `json:"hasIndoor"`
+	IndoorTempC    float64   `json:"indoorTempC"`
+	IndoorHumidity int       `json:"indoorHumidity"`
+	PressureHPa    float64   `json:"pressureHPa"`
+	WindGust       float64   `json:"windGust"`
+	WindDirection  int       `json:"windDirection"`
+	SolarWM2       float64   `json:"solarWM2"`
+	RainRate       float64   `json:"rainRate"`
+	RainEvent      float64   `json:"rainEvent"`
+	RainDaily      float64   `json:"rainDaily"`
+	RainWeekly     float64   `json:"rainWeekly"`
+	RainMonthly    float64   `json:"rainMonthly"`
+	RainYearly     float64   `json:"rainYearly"`
 }
 
 type TideEvent struct {

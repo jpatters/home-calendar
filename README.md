@@ -16,7 +16,14 @@ private network.
 - **Frontend**: React 18 + Vite + TypeScript, FullCalendar (day/week/month +
   touch), React Router.
 - **Calendars**: Google Calendar "Secret address in iCal format" URLs.
-- **Weather**: [Open-Meteo](https://open-meteo.com/) — no API key.
+- **Weather**: [Open-Meteo](https://open-meteo.com/) — no API key. Optionally
+  overlay live readings from a local
+  [Ecowitt](https://www.ecowitt.com/) gateway by pasting its
+  `/get_livedata_info` URL into the admin Weather panel. When set, the widget
+  refreshes current temperature, humidity, wind, and rain rate every 60
+  seconds from your own station; the modal grows a "Live Station" page with
+  full detail (pressure, gust + direction, indoor temp/humidity, solar, rain
+  totals). Open-Meteo still drives the forecast and weather-code icons.
 - **Tides**: [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) —
   no API key. Derives next high/low tide events from hourly sea-level heights.
   Modelled at 8 km resolution — not suitable for navigation.
@@ -125,7 +132,8 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "longitude": -79.38,
     "units": "metric",
     "timezone": "auto",
-    "location": "Toronto, Ontario, Canada"
+    "location": "Toronto, Ontario, Canada",
+    "ecowittUrl": ""
   },
   "tide": {
     "enabled": true,

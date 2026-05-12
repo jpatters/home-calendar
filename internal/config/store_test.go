@@ -280,6 +280,27 @@ func TestReplacePreservesExplicitlyDisabledFlags(t *testing.T) {
 	}
 }
 
+func TestEcowittURLRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	in := s.Get()
+	in.Weather.EcowittURL = "http://192.0.2.42/get_livedata_info"
+	if _, err := s.Replace(in); err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if got := reopened.Get().Weather.EcowittURL; got != in.Weather.EcowittURL {
+		t.Errorf("EcowittURL = %q, want %q", got, in.Weather.EcowittURL)
+	}
+}
+
 func TestNormalizeFallsBackOnUnknownMode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

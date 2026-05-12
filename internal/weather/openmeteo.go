@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -17,9 +18,12 @@ import (
 type Fetcher struct {
 	client *http.Client
 
-	mu       sync.RWMutex
-	snapshot *types.WeatherSnapshot
-	lastErr  error
+	mu               sync.RWMutex
+	snapshot         *types.WeatherSnapshot
+	openMeteoSnap    *types.WeatherSnapshot
+	ecowittReading   *EcowittReading
+	ecowittUpdatedAt time.Time
+	lastErr          error
 
 	cancel   context.CancelFunc
 	doneWG   sync.WaitGroup
@@ -45,6 +49,10 @@ func (f *Fetcher) Snapshot() *types.WeatherSnapshot {
 	}
 	s := *f.snapshot
 	s.Daily = append([]types.WeatherDaily(nil), f.snapshot.Daily...)
+	if f.snapshot.Station != nil {
+		st := *f.snapshot.Station
+		s.Station = &st
+	}
 	return &s
 }
 
@@ -54,6 +62,10 @@ func (f *Fetcher) Start(parent context.Context, w types.Weather, interval time.D
 	f.cancel = cancel
 	f.doneWG.Add(1)
 	go f.loop(ctx, w, interval)
+	if w.EcowittURL != "" {
+		f.doneWG.Add(1)
+		go f.loopEcowitt(ctx, w)
+	}
 }
 
 func (f *Fetcher) Stop() {
@@ -64,6 +76,9 @@ func (f *Fetcher) Stop() {
 	}
 	f.mu.Lock()
 	f.snapshot = nil
+	f.openMeteoSnap = nil
+	f.ecowittReading = nil
+	f.ecowittUpdatedAt = time.Time{}
 	f.lastErr = nil
 	f.mu.Unlock()
 }
@@ -153,12 +168,87 @@ func (f *Fetcher) fetch(ctx context.Context, w types.Weather) {
 	snap := toSnapshot(body, w)
 
 	f.mu.Lock()
-	f.snapshot = snap
+	f.openMeteoSnap = snap
+	merged := f.mergedLocked(w)
+	f.snapshot = merged
 	f.lastErr = nil
 	f.mu.Unlock()
 	if f.onUpdate != nil {
-		f.onUpdate(snap)
+		f.onUpdate(merged)
 	}
+}
+
+func (f *Fetcher) loopEcowitt(ctx context.Context, w types.Weather) {
+	defer f.doneWG.Done()
+	f.fetchEcowitt(ctx, w)
+	t := time.NewTicker(ecowittInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			f.fetchEcowitt(ctx, w)
+		}
+	}
+}
+
+func (f *Fetcher) fetchEcowitt(ctx context.Context, w types.Weather) {
+	if w.EcowittURL == "" {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, w.EcowittURL, nil)
+	if err != nil {
+		log.Printf("ecowitt: %v", err)
+		return
+	}
+	resp, err := f.client.Do(req)
+	if err != nil {
+		log.Printf("ecowitt: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ecowitt: http %d", resp.StatusCode)
+		return
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("ecowitt: read body: %v", err)
+		return
+	}
+	reading, err := parseEcowittLiveData(body)
+	if err != nil {
+		log.Printf("ecowitt: %v", err)
+		return
+	}
+	if !reading.HasOutdoor && !reading.HasIndoor {
+		log.Printf("ecowitt: response had no recognised sensor blocks")
+		return
+	}
+	f.mu.Lock()
+	f.ecowittReading = &reading
+	f.ecowittUpdatedAt = time.Now()
+	merged := f.mergedLocked(w)
+	f.snapshot = merged
+	f.mu.Unlock()
+	if merged != nil && f.onUpdate != nil {
+		f.onUpdate(merged)
+	}
+}
+
+// mergedLocked returns a snapshot combining the latest Open-Meteo result with
+// any cached Ecowitt reading. Caller must hold f.mu.
+func (f *Fetcher) mergedLocked(w types.Weather) *types.WeatherSnapshot {
+	if f.openMeteoSnap == nil {
+		return nil
+	}
+	base := *f.openMeteoSnap
+	base.Daily = append([]types.WeatherDaily(nil), f.openMeteoSnap.Daily...)
+	if f.ecowittReading == nil {
+		return &base
+	}
+	return mergeEcowitt(&base, *f.ecowittReading, f.ecowittUpdatedAt, w.Units)
 }
 
 func (f *Fetcher) setErr(err error) {

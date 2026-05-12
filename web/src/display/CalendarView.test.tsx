@@ -71,6 +71,7 @@ function makeWeatherConfig(overrides: Partial<Weather> = {}): Weather {
     units: overrides.units ?? "metric",
     timezone: "UTC",
     location: "Test",
+    ecowittUrl: "",
   };
 }
 

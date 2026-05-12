@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { Weather, WeatherDaily, WeatherSnapshot } from "../types";
+import type { Weather, WeatherDaily, WeatherSnapshot, WeatherStation } from "../types";
 import { labelForCode, WeatherIcon } from "./weatherIcons";
-import { precipUnit, speedUnit, tempUnit } from "./weatherFormat";
+import { compassFromDegrees, precipUnit, speedUnit, tempUnit } from "./weatherFormat";
 import { useSwipe } from "./useSwipe";
 
 interface Props {
@@ -32,6 +32,84 @@ function formatPrecip(mm: number, units: string | undefined): string {
     return `${inches.toFixed(2)} ${precipUnit(units)}`;
   }
   return `${mm.toFixed(1)} ${precipUnit(units)}`;
+}
+
+function formatStationUpdatedAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function StationPage({ station, units }: { station: WeatherStation; units: string | undefined }) {
+  const imperial = units === "imperial";
+  const rainPerHr = imperial ? "in/h" : "mm/h";
+  const rainUnit = imperial ? "in" : "mm";
+  const fmt = (n: number, digits = 1) => n.toFixed(digits);
+  return (
+    <div className="weather-modal-day">
+      <div className="weather-modal-label">
+        Local Ecowitt gateway · updated {formatStationUpdatedAt(station.updatedAt)}
+      </div>
+      <dl className="weather-modal-stats">
+        {station.hasIndoor && (
+          <>
+            <div>
+              <dt>Indoor temp</dt>
+              <dd>{fmt(station.indoorTempC)} {tempUnit(units)}</dd>
+            </div>
+            <div>
+              <dt>Indoor humidity</dt>
+              <dd>{station.indoorHumidity} %</dd>
+            </div>
+            <div>
+              <dt>Pressure</dt>
+              <dd>{fmt(station.pressureHPa)} hPa</dd>
+            </div>
+          </>
+        )}
+        {station.hasOutdoor && (
+          <>
+            <div>
+              <dt>Wind gust</dt>
+              <dd>{fmt(station.windGust)} {speedUnit(units)}</dd>
+            </div>
+            <div>
+              <dt>Wind direction</dt>
+              <dd>{station.windDirection}° {compassFromDegrees(station.windDirection)}</dd>
+            </div>
+            <div>
+              <dt>Solar</dt>
+              <dd>{fmt(station.solarWM2)} W/m²</dd>
+            </div>
+            <div>
+              <dt>Rain rate</dt>
+              <dd>{fmt(station.rainRate, 2)} {rainPerHr}</dd>
+            </div>
+            <div>
+              <dt>Rain event</dt>
+              <dd>{fmt(station.rainEvent, 2)} {rainUnit}</dd>
+            </div>
+            <div>
+              <dt>Rain today</dt>
+              <dd>{fmt(station.rainDaily, 2)} {rainUnit}</dd>
+            </div>
+            <div>
+              <dt>Rain week</dt>
+              <dd>{fmt(station.rainWeekly, 2)} {rainUnit}</dd>
+            </div>
+            <div>
+              <dt>Rain month</dt>
+              <dd>{fmt(station.rainMonthly, 2)} {rainUnit}</dd>
+            </div>
+            <div>
+              <dt>Rain year</dt>
+              <dd>{fmt(station.rainYearly, 1)} {rainUnit}</dd>
+            </div>
+          </>
+        )}
+      </dl>
+    </div>
+  );
 }
 
 function DayPage({ day, units }: { day: WeatherDaily; units: string | undefined }) {
@@ -67,15 +145,27 @@ function DayPage({ day, units }: { day: WeatherDaily; units: string | undefined 
 }
 
 export default function WeatherModal({ weather, config, onClose }: Props) {
-  const [index, setIndex] = useState(0);
   const units = config?.units ?? weather.units;
   const days = weather.daily;
+  const station = weather.station ?? null;
+  // When a station is present it becomes page 0 so the user lands on the
+  // live readings; the daily forecast follows.
+  const stationOffset = station ? 1 : 0;
+  const totalPages = days.length + stationOffset;
+  const [index, setIndex] = useState(0);
 
-  const last = Math.max(0, days.length - 1);
+  const last = Math.max(0, totalPages - 1);
   const go = (delta: number) => setIndex((i) => Math.min(last, Math.max(0, i + delta)));
   const swipe = useSwipe({ onNext: () => go(1), onPrev: () => go(-1) });
 
-  const day = days[index];
+  const isStationPage = station != null && index === 0;
+  const dayIndex = index - stationOffset;
+  const day = isStationPage ? undefined : days[dayIndex];
+  const heading = isStationPage
+    ? "Live Station"
+    : day
+      ? dayHeading(day.date, dayIndex)
+      : "Weather";
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -96,9 +186,7 @@ export default function WeatherModal({ weather, config, onClose }: Props) {
           >
             ‹
           </button>
-          <h2 className="weather-modal-title">
-            {day ? dayHeading(day.date, index) : "Weather"}
-          </h2>
+          <h2 className="weather-modal-title">{heading}</h2>
           <button
             type="button"
             className="modal-nav-btn"
@@ -118,7 +206,13 @@ export default function WeatherModal({ weather, config, onClose }: Props) {
           </button>
         </div>
         <div className="modal-body weather-modal-body">
-          {day ? <DayPage day={day} units={units} /> : <div>No forecast available</div>}
+          {isStationPage && station ? (
+            <StationPage station={station} units={units} />
+          ) : day ? (
+            <DayPage day={day} units={units} />
+          ) : (
+            <div>No forecast available</div>
+          )}
         </div>
       </div>
     </div>
