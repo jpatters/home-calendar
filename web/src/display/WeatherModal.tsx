@@ -145,23 +145,26 @@ function DayPage({ day, units }: { day: WeatherDaily; units: string | undefined 
 }
 
 export default function WeatherModal({ weather, config, onClose }: Props) {
-  const [index, setIndex] = useState(0);
   const units = config?.units ?? weather.units;
   const days = weather.daily;
   const station = weather.station ?? null;
-  const stationIndex = station ? days.length : -1;
-  const totalPages = days.length + (station ? 1 : 0);
+  // When a station is present it becomes page 0 so the user lands on the
+  // live readings; the daily forecast follows.
+  const stationOffset = station ? 1 : 0;
+  const totalPages = days.length + stationOffset;
+  const [index, setIndex] = useState(0);
 
   const last = Math.max(0, totalPages - 1);
   const go = (delta: number) => setIndex((i) => Math.min(last, Math.max(0, i + delta)));
   const swipe = useSwipe({ onNext: () => go(1), onPrev: () => go(-1) });
 
-  const isStationPage = station != null && index === stationIndex;
-  const day = isStationPage ? undefined : days[index];
+  const isStationPage = station != null && index === 0;
+  const dayIndex = index - stationOffset;
+  const day = isStationPage ? undefined : days[dayIndex];
   const heading = isStationPage
     ? "Live Station"
     : day
-      ? dayHeading(day.date, index)
+      ? dayHeading(day.date, dayIndex)
       : "Weather";
 
   return (

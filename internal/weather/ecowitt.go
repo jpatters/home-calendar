@@ -215,10 +215,17 @@ func parsePressureHPa(val string) float64 {
 	if !ok {
 		return 0
 	}
-	if strings.EqualFold(strings.TrimSpace(unit), "inHg") {
+	u := strings.TrimSpace(unit)
+	switch {
+	case strings.EqualFold(u, "inHg"):
 		return n * 33.8639
+	case strings.EqualFold(u, "mmHg"):
+		return n * 1.33322
+	case strings.EqualFold(u, "kPa"):
+		return n * 10
+	default: // hPa or unknown — assume already in hPa
+		return n
 	}
-	return n
 }
 
 // mergeEcowitt overlays a live Ecowitt reading onto the Open-Meteo snapshot.

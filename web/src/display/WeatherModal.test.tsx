@@ -181,21 +181,21 @@ describe("WeatherModal", () => {
     expect(screen.queryByText(/pressure/i)).toBeNull();
   });
 
-  test("appends a Live Station page after the daily forecast when station is set", () => {
+  test("opens on the Live Station page when a station is present", () => {
     const snap = { ...buildSevenDaySnapshot(), station: stationFixture() };
     render(<WeatherModal weather={snap} config={metricConfig} onClose={() => {}} />);
-    const next = screen.getByRole("button", { name: /next day/i });
-    // 7 days + 1 station = 8 pages, so 7 clicks to reach the station page.
-    for (let i = 0; i < 7; i++) fireEvent.click(next);
     expect(screen.getByRole("heading", { name: /live station/i })).toBeTruthy();
-    expect((next as HTMLButtonElement).disabled).toBe(true);
+    // Prev is disabled on first page; next advances to the forecast pages.
+    expect((screen.getByRole("button", { name: /previous day/i }) as HTMLButtonElement).disabled).toBe(true);
+    const next = screen.getByRole("button", { name: /next day/i });
+    fireEvent.click(next);
+    expect(screen.getByRole("heading", { name: /today/i })).toBeTruthy();
   });
 
   test("Live Station page surfaces indoor temp, humidity, pressure, gust, direction, solar, rain totals", () => {
     const snap = { ...buildSevenDaySnapshot(), station: stationFixture() };
     render(<WeatherModal weather={snap} config={metricConfig} onClose={() => {}} />);
-    const next = screen.getByRole("button", { name: /next day/i });
-    for (let i = 0; i < 7; i++) fireEvent.click(next);
+    // Station is page 0 -- already visible on render.
     const body = document.body.textContent ?? "";
     expect(body).toMatch(/21\.5\s*°C/); // indoor temp
     expect(body).toMatch(/44\s*%/); // indoor humidity

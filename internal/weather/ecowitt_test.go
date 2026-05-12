@@ -141,6 +141,22 @@ func TestParseLiveData_RainInchesPerHourConvertsToMm(t *testing.T) {
 	approxEqual(t, "RainDailyMM", r.RainDailyMM, 12.7, 0.001)
 }
 
+func TestParseLiveData_MillimetersOfMercuryConvertsToHpa(t *testing.T) {
+	// Some Ecowitt firmware (observed on a real GW1100) reports pressure in
+	// mmHg rather than hPa or inHg. Standard sea-level is ~760 mmHg / 1013 hPa.
+	body := `{
+  "wh25": [
+    {"intemp": "20.0", "unit": "C", "inhumi": "50%", "abs": "755.25 mmHg", "rel": "755.25 mmHg"}
+  ]
+}`
+	r, err := parseEcowittLiveData([]byte(body))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	// 755.25 mmHg * 1.33322 = ~1006.91 hPa
+	approxEqual(t, "PressureHPa", r.PressureHPa, 1006.91, 0.05)
+}
+
 func TestParseLiveData_InchOfMercuryConvertsToHpa(t *testing.T) {
 	body := `{
   "wh25": [

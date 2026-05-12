@@ -22,6 +22,7 @@ export default function WeatherWidget({ weather, config, onOpen }: Props) {
     );
   }
   const units = config?.units ?? weather.units;
+  const hasStation = weather.station != null;
   return (
     <button
       type="button"
@@ -31,7 +32,10 @@ export default function WeatherWidget({ weather, config, onOpen }: Props) {
     >
       <div className="weather-current">
         {config?.location && (
-          <div className="weather-location">{config.location}</div>
+          <div className="weather-location">
+            {config.location}
+            {hasStation && <span className="weather-live-pill" aria-label="Live station data">LIVE</span>}
+          </div>
         )}
         <WeatherIcon code={weather.current.weatherCode} className="weather-icon" />
         <div className="weather-temp">
