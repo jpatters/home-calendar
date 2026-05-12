@@ -12,7 +12,28 @@ const metricConfig: Weather = {
   units: "metric",
   timezone: "America/Toronto",
   location: "Toronto, ON",
+  ecowittUrl: "",
 };
+
+function stationFixture() {
+  return {
+    updatedAt: "2026-04-21T12:00:00Z",
+    hasOutdoor: true,
+    hasIndoor: true,
+    indoorTempC: 21.5,
+    indoorHumidity: 44,
+    pressureHPa: 1014.0,
+    windGust: 4.1,
+    windDirection: 207,
+    solarWM2: 120.0,
+    rainRate: 0.4,
+    rainEvent: 0.8,
+    rainDaily: 2.5,
+    rainWeekly: 7.0,
+    rainMonthly: 30.0,
+    rainYearly: 150.0,
+  };
+}
 
 function buildSevenDaySnapshot(): WeatherSnapshot {
   return {
@@ -152,6 +173,38 @@ describe("WeatherModal", () => {
     expect(screen.getAllByText(/°F/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/mph/).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(/°C/).length).toBe(0);
+  });
+
+  test("does not render a Live Station section when station is null", () => {
+    render(<WeatherModal weather={buildSevenDaySnapshot()} config={metricConfig} onClose={() => {}} />);
+    expect(screen.queryByText(/live station/i)).toBeNull();
+    expect(screen.queryByText(/pressure/i)).toBeNull();
+  });
+
+  test("appends a Live Station page after the daily forecast when station is set", () => {
+    const snap = { ...buildSevenDaySnapshot(), station: stationFixture() };
+    render(<WeatherModal weather={snap} config={metricConfig} onClose={() => {}} />);
+    const next = screen.getByRole("button", { name: /next day/i });
+    // 7 days + 1 station = 8 pages, so 7 clicks to reach the station page.
+    for (let i = 0; i < 7; i++) fireEvent.click(next);
+    expect(screen.getByRole("heading", { name: /live station/i })).toBeTruthy();
+    expect((next as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("Live Station page surfaces indoor temp, humidity, pressure, gust, direction, solar, rain totals", () => {
+    const snap = { ...buildSevenDaySnapshot(), station: stationFixture() };
+    render(<WeatherModal weather={snap} config={metricConfig} onClose={() => {}} />);
+    const next = screen.getByRole("button", { name: /next day/i });
+    for (let i = 0; i < 7; i++) fireEvent.click(next);
+    const body = document.body.textContent ?? "";
+    expect(body).toMatch(/21\.5\s*°C/); // indoor temp
+    expect(body).toMatch(/44\s*%/); // indoor humidity
+    expect(body).toMatch(/1014\.0\s*hPa/); // pressure
+    expect(body).toMatch(/207°/); // wind direction degrees
+    expect(body).toMatch(/SSW/); // compass label for 207°
+    expect(body).toMatch(/120\.0\s*W\/m²/); // solar
+    expect(body).toMatch(/2\.50\s*mm/); // rain daily
+    expect(body).toMatch(/150\.0\s*mm/); // rain yearly
   });
 
   test("header shows Today / Tomorrow / weekday labels", () => {

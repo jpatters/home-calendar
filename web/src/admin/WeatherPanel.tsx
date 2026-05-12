@@ -124,6 +124,24 @@ export default function WeatherPanel({ value, onChange }: Props) {
           ? `(${value.latitude.toFixed(2)}, ${value.longitude.toFixed(2)})`
           : null}
       </div>
+
+      <div className="form-grid">
+        <label style={{ gridColumn: "1 / -1" }}>
+          <span>Ecowitt URL</span>
+          <input
+            type="url"
+            autoComplete="off"
+            placeholder="http://192.168.1.10/get_livedata_info"
+            value={value.ecowittUrl}
+            onChange={(e) => onChange({ ...value, ecowittUrl: e.target.value })}
+          />
+        </label>
+      </div>
+      <p className="hint">
+        Optional. If set, the widget overlays real-time readings from a local Ecowitt
+        gateway and refreshes every 60 seconds. Tap the widget to see the full live
+        station detail. Leave blank to use Open-Meteo only.
+      </p>
     </div>
   );
 }

@@ -31,6 +31,7 @@ function buildConfig(
       timezone: "UTC",
       location: "Test",
       enabled: overrides.weatherEnabled ?? true,
+      ecowittUrl: "",
     },
     tide: {
       latitude: 0,

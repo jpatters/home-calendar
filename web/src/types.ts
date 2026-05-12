@@ -12,6 +12,7 @@ export interface Weather {
   units: "metric" | "imperial";
   timezone: string;
   location: string;
+  ecowittUrl: string;
 }
 
 export interface Tide {
@@ -111,12 +112,31 @@ export interface WeatherDaily {
   windSpeedMax: number;
 }
 
+export interface WeatherStation {
+  updatedAt: string;
+  hasOutdoor: boolean;
+  hasIndoor: boolean;
+  indoorTempC: number;
+  indoorHumidity: number;
+  pressureHPa: number;
+  windGust: number;
+  windDirection: number;
+  solarWM2: number;
+  rainRate: number;
+  rainEvent: number;
+  rainDaily: number;
+  rainWeekly: number;
+  rainMonthly: number;
+  rainYearly: number;
+}
+
 export interface WeatherSnapshot {
   updatedAt: string;
   units: string;
   timezone: string;
   current: WeatherCurrent;
   daily: WeatherDaily[];
+  station?: WeatherStation | null;
 }
 
 export interface TideEvent {
