@@ -21,13 +21,14 @@ type Weather struct {
 	Location  string  `json:"location"`
 }
 
+// Tide identifies a CHS tide station by its five-character station code
+// (e.g. "01710" for Canoe Cove). Location holds the station's official name.
 type Tide struct {
-	Enabled   bool    `json:"enabled"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Units     string  `json:"units"`
-	Timezone  string  `json:"timezone"`
-	Location  string  `json:"location"`
+	Enabled     bool   `json:"enabled"`
+	StationCode string `json:"stationCode"`
+	Units       string `json:"units"`
+	Timezone    string `json:"timezone"`
+	Location    string `json:"location"`
 }
 
 type Display struct {

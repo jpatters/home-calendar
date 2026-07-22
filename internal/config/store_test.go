@@ -27,11 +27,10 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			Location:  "Vancouver, BC, Canada",
 		},
 		Tide: types.Tide{
-			Latitude:  48.4284,
-			Longitude: -123.3656,
-			Units:     "imperial",
-			Timezone:  "America/Vancouver",
-			Location:  "Victoria, BC, Canada",
+			StationCode: "07120",
+			Units:       "imperial",
+			Timezone:    "America/Vancouver",
+			Location:    "Victoria",
 		},
 		SnowDay: types.SnowDay{URL: "https://example.com/snow"},
 		Display: types.Display{
@@ -304,5 +303,41 @@ func TestNormalizeFallsBackOnUnknownMode(t *testing.T) {
 	}
 	if got.Mode != "light" {
 		t.Errorf("Mode = %q, want %q", got.Mode, "light")
+	}
+}
+
+func TestOpenAcceptsConfigWrittenBeforeStationCodes(t *testing.T) {
+	// Configs written against the old coordinate-based tide source must still
+	// load. The widget stays dormant until a station is chosen rather than
+	// failing to start or guessing a station from the coordinates.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	legacy := `{
+	  "tide": {
+	    "enabled": true,
+	    "latitude": 46.15012,
+	    "longitude": -63.29869,
+	    "units": "metric",
+	    "timezone": "America/Halifax",
+	    "location": "Canoe Cove, Prince Edward Island, Canada"
+	  }
+	}`
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cfg := s.Get()
+	if !cfg.Tide.Enabled {
+		t.Errorf("Tide.Enabled = false, want the saved value to survive")
+	}
+	if cfg.Tide.StationCode != "" {
+		t.Errorf("Tide.StationCode = %q, want empty; coordinates must not be guessed into a station", cfg.Tide.StationCode)
+	}
+	if cfg.Tide.Units != "metric" {
+		t.Errorf("Tide.Units = %q, want metric", cfg.Tide.Units)
 	}
 }

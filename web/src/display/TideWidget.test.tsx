@@ -7,11 +7,10 @@ afterEach(() => cleanup());
 
 const config: Tide = {
   enabled: true,
-  latitude: 48.42,
-  longitude: -123.36,
+  stationCode: "07120",
   units: "metric",
   timezone: "America/Vancouver",
-  location: "Victoria, BC",
+  location: "Victoria",
 };
 
 function snapshotWith(events: TideSnapshot["events"]): TideSnapshot {

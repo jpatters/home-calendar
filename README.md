@@ -17,9 +17,11 @@ private network.
   touch), React Router.
 - **Calendars**: Google Calendar "Secret address in iCal format" URLs.
 - **Weather**: [Open-Meteo](https://open-meteo.com/) — no API key.
-- **Tides**: [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) —
-  no API key. Derives next high/low tide events from hourly sea-level heights.
-  Modelled at 8 km resolution — not suitable for navigation.
+- **Tides**: [CHS IWLS](https://api-iwls.dfo-mpo.gc.ca/swagger-ui/index.html),
+  the Canadian Hydrographic Service tide-station service — no API key. Reports
+  the harmonic high/low predictions published for a chosen station, so heights
+  and times match Canadian tide tables. Heights are metres above chart datum.
+  **Canadian stations only.**
 - **Snow day predictor**: optional widget backed by
   [snowdaypredictor.com](https://www.snowdaypredictor.com/) — paste a location
   page URL.
@@ -129,11 +131,10 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
   },
   "tide": {
     "enabled": true,
-    "latitude": 48.42,
-    "longitude": -123.36,
+    "stationCode": "07120",
     "units": "metric",
     "timezone": "auto",
-    "location": "Victoria, BC"
+    "location": "Victoria"
   },
   "snowDay": {
     "enabled": true,
@@ -171,6 +172,13 @@ The baseball widget additionally stays dormant while no team is selected
 (`teamId: 0`); no polling happens until you pick a team from the admin
 type-ahead search.
 
+The tide widget behaves the same way while `stationCode` is empty. Pick a
+station from the admin type-ahead, which searches CHS stations by name or code
+and offers only those publishing both the high/low and continuous prediction
+series. Coordinates are not used: the nearest station by distance is often the
+wrong one across a headland or on the far side of a strait, so the station is
+always chosen explicitly.
+
 `theme` is the colour palette — one of `default`, `ocean`, `sunset`, `forest`.
 `mode` is one of `light`, `dark`, or `auto`. `auto` flips between light and dark
 based on the configured weather location's sunrise/sunset (so the display
@@ -197,6 +205,7 @@ assigns IDs, and triggers an immediate refresh.
 | POST   | `/api/snowday/refresh`        | Force a snow day refresh                  |
 | GET    | `/api/tide`                   | Current tide snapshot                     |
 | POST   | `/api/tide/refresh`           | Force a tide refresh                      |
+| GET    | `/api/tide/stations?q=`       | Tide station type-ahead search (CHS)      |
 | GET    | `/api/baseball`               | Current baseball snapshot                 |
 | POST   | `/api/baseball/refresh`       | Force a baseball refresh                  |
 | GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |

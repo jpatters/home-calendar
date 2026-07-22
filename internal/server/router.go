@@ -16,16 +16,17 @@ import (
 )
 
 type Server struct {
-	cfg        *config.Store
-	ical       *ical.Fetcher
-	weather    *weather.Fetcher
-	snowday    *snowday.Fetcher
-	tide       *tide.Fetcher
-	baseball   *baseball.Fetcher
-	hub        *Hub
-	rootCtx    context.Context
-	geocode    func(ctx context.Context, query string) ([]weather.GeoResult, error)
-	teamSearch func(ctx context.Context, query string) ([]baseball.TeamResult, error)
+	cfg           *config.Store
+	ical          *ical.Fetcher
+	weather       *weather.Fetcher
+	snowday       *snowday.Fetcher
+	tide          *tide.Fetcher
+	baseball      *baseball.Fetcher
+	hub           *Hub
+	rootCtx       context.Context
+	geocode       func(ctx context.Context, query string) ([]weather.GeoResult, error)
+	teamSearch    func(ctx context.Context, query string) ([]baseball.TeamResult, error)
+	stationSearch func(ctx context.Context, query string) ([]tide.StationResult, error)
 }
 
 func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) {
@@ -56,6 +57,8 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.teamSearch = func(ctx context.Context, q string) ([]baseball.TeamResult, error) {
 		return baseball.SearchTeams(ctx, s.baseball.HTTPClient(), baseball.DefaultTeamsURL, q)
 	}
+	stations := tide.NewDirectory(s.tide.HTTPClient(), tide.DefaultBaseURL)
+	s.stationSearch = stations.Search
 
 	current := cfg.Get()
 	s.applyFetcherConfig(ctx, current, false)
@@ -72,6 +75,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("POST /api/snowday/refresh", s.handleSnowDayRefresh)
 	mux.HandleFunc("GET /api/tide", s.handleGetTide)
 	mux.HandleFunc("POST /api/tide/refresh", s.handleTideRefresh)
+	mux.HandleFunc("GET /api/tide/stations", s.handleTideStationSearch)
 	mux.HandleFunc("GET /api/baseball", s.handleGetBaseball)
 	mux.HandleFunc("POST /api/baseball/refresh", s.handleBaseballRefresh)
 	mux.HandleFunc("GET /api/baseball/teams", s.handleBaseballTeamSearch)

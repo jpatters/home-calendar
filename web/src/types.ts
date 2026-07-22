@@ -16,11 +16,15 @@ export interface Weather {
 
 export interface Tide {
   enabled: boolean;
-  latitude: number;
-  longitude: number;
+  stationCode: string;
   units: "metric" | "imperial";
   timezone: string;
   location: string;
+}
+
+export interface TideStation {
+  code: string;
+  name: string;
 }
 
 export interface GeoResult {
