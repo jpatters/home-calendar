@@ -56,7 +56,7 @@ func TestTideRefreshReturns409WhenDisabled(t *testing.T) {
 			t.Fatalf("Replace: %v", err)
 		}
 	})
-	srv := &Server{cfg: store, tide: tide.New(nil)}
+	srv := &Server{cfg: store, tide: tide.New("", nil)}
 	req := httptest.NewRequest(http.MethodPost, "/api/tide/refresh", nil)
 	rec := httptest.NewRecorder()
 	srv.handleTideRefresh(rec, req)
@@ -277,5 +277,77 @@ func TestGetBaseballReturnsNoDataSentinelBeforeSnapshot(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected nil snapshot body, got %+v", got)
+	}
+}
+
+func TestTideStationSearchRejectsEmptyQuery(t *testing.T) {
+	s := &Server{stationSearch: func(context.Context, string) ([]tide.StationResult, error) {
+		t.Fatal("stationSearch should not be called on empty query")
+		return nil, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/tide/stations?q=", nil)
+	rec := httptest.NewRecorder()
+	s.handleTideStationSearch(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestTideStationSearchReturnsResults(t *testing.T) {
+	s := &Server{stationSearch: func(_ context.Context, q string) ([]tide.StationResult, error) {
+		if q != "canoe" {
+			t.Errorf("expected q=canoe, got %q", q)
+		}
+		return []tide.StationResult{{Code: "01710", Name: "Canoe Cove"}}, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/tide/stations?q=canoe", nil)
+	rec := httptest.NewRecorder()
+	s.handleTideStationSearch(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	// Decoded loosely rather than back into StationResult: this is the one
+	// place the Go and TypeScript sides meet, so the wire keys the admin
+	// panel reads are what needs pinning, not the Go field names.
+	var got []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, rec.Body.String())
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 station, got %d: %v", len(got), got)
+	}
+	if got[0]["code"] != "01710" || got[0]["name"] != "Canoe Cove" {
+		t.Fatalf("body keys do not match what the admin panel reads: %v", got[0])
+	}
+}
+
+func TestTideStationSearchRejectsOverlongQuery(t *testing.T) {
+	s := &Server{stationSearch: func(context.Context, string) ([]tide.StationResult, error) {
+		t.Fatal("stationSearch should not be called for overlong query")
+		return nil, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/tide/stations?q="+strings.Repeat("a", 101), nil)
+	rec := httptest.NewRecorder()
+	s.handleTideStationSearch(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestTideStationSearchSurfacesUpstreamErrorAsBadGateway(t *testing.T) {
+	s := &Server{stationSearch: func(context.Context, string) ([]tide.StationResult, error) {
+		return nil, errors.New("upstream: http://secret-host/internal")
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/tide/stations?q=canoe", nil)
+	rec := httptest.NewRecorder()
+	s.handleTideStationSearch(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "secret-host") {
+		t.Errorf("response body leaked upstream error: %q", rec.Body.String())
 	}
 }

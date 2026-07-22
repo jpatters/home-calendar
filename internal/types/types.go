@@ -21,13 +21,13 @@ type Weather struct {
 	Location  string  `json:"location"`
 }
 
+// Tide identifies a CHS tide station by its five-character station code
+// (e.g. "01710" for Canoe Cove). Location holds the station's official name.
 type Tide struct {
-	Enabled   bool    `json:"enabled"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Units     string  `json:"units"`
-	Timezone  string  `json:"timezone"`
-	Location  string  `json:"location"`
+	Enabled     bool   `json:"enabled"`
+	StationCode string `json:"stationCode"`
+	Units       string `json:"units"`
+	Location    string `json:"location"`
 }
 
 type Display struct {
@@ -134,7 +134,6 @@ type TideEvent struct {
 type TideSnapshot struct {
 	UpdatedAt     time.Time   `json:"updatedAt"`
 	Units         string      `json:"units"`
-	Timezone      string      `json:"timezone"`
 	CurrentMeters float64     `json:"currentMeters"`
 	Events        []TideEvent `json:"events"`
 }
@@ -189,9 +188,8 @@ func DefaultConfig() Config {
 			Location:  "Toronto, Ontario, Canada",
 		},
 		Tide: Tide{
-			Enabled:  true,
-			Units:    "metric",
-			Timezone: "auto",
+			Enabled: true,
+			Units:   "metric",
 		},
 		SnowDay: SnowDay{
 			Enabled: true,
@@ -203,7 +201,7 @@ func DefaultConfig() Config {
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
-			TideRefreshSeconds:     3600,
+			TideRefreshSeconds:     600,
 			BaseballRefreshSeconds: 600,
 			Theme:                  "default",
 			Mode:                   "light",

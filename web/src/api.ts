@@ -1,4 +1,4 @@
-import type { BaseballTeam, Config, GeoResult } from "./types";
+import type { BaseballTeam, Config, GeoResult, TideStation } from "./types";
 
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
@@ -39,6 +39,13 @@ export async function refreshBaseball(): Promise<void> {
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {
   const res = await fetch(`/api/weather/geocode?q=${encodeURIComponent(query)}`, { signal });
   if (!res.ok) throw new Error(`GET /api/weather/geocode ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function tideStationSearch(query: string, signal?: AbortSignal): Promise<TideStation[]> {
+  const res = await fetch(`/api/tide/stations?q=${encodeURIComponent(query)}`, { signal });
+  if (!res.ok) throw new Error(`GET /api/tide/stations ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
