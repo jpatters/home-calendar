@@ -34,7 +34,6 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         enabled: true,
         stationCode: "",
         units: "metric",
-        timezone: "UTC",
         location: "",
       },
       snowDay: { enabled: true, url: "" },

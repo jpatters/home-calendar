@@ -45,7 +45,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.snowday = snowday.New(func(snap *types.SnowDaySnapshot) {
 		hub.Broadcast(Frame{Type: "snowday", SnowDay: snap})
 	})
-	s.tide = tide.New(func(snap *types.TideSnapshot) {
+	s.tide = tide.New(tide.DefaultBaseURL, func(snap *types.TideSnapshot) {
 		hub.Broadcast(Frame{Type: "tide", Tide: snap})
 	})
 	s.baseball = baseball.New(baseball.DefaultScheduleURL, func(snap *types.BaseballSnapshot) {
@@ -132,6 +132,12 @@ func (s *Server) applyFetcherConfig(ctx context.Context, c types.Config, broadca
 		}
 	}
 	if c.Tide.Enabled {
+		// The config frame reaches the display immediately, so a stale
+		// snapshot would be relabelled with the newly chosen station's name
+		// until the first fetch lands — or indefinitely, if it fails.
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "tide", Tide: nil})
+		}
 		s.tide.Start(ctx, c.Tide, time.Duration(c.Display.TideRefreshSeconds)*time.Second)
 	} else {
 		s.tide.Stop()

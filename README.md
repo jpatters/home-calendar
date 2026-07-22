@@ -133,7 +133,6 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "enabled": true,
     "stationCode": "07120",
     "units": "metric",
-    "timezone": "auto",
     "location": "Victoria"
   },
   "snowDay": {
@@ -150,7 +149,7 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
-    "tideRefreshSeconds": 3600,
+    "tideRefreshSeconds": 600,
     "baseballRefreshSeconds": 600,
     "theme": "default",
     "mode": "light",

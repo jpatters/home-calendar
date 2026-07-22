@@ -25,9 +25,9 @@ const (
 	// seriesPredictions carries a continuous predicted water level.
 	seriesPredictions = "wlp"
 
-	// horizon is how far ahead events are reported. classifyPad extends the
-	// query either side of it so the first and last events in the horizon each
-	// have a neighbour to be classified against.
+	// horizon is how far ahead events are reported. classifyPad widens the
+	// query either side of it so turning points at the edges of the horizon
+	// can be compared against both neighbours rather than just one.
 	horizon     = 8 * 24 * time.Hour
 	classifyPad = 24 * time.Hour
 
@@ -36,7 +36,8 @@ const (
 )
 
 type Fetcher struct {
-	client *http.Client
+	client  *http.Client
+	baseURL string
 
 	mu       sync.RWMutex
 	snapshot *types.TideSnapshot
@@ -47,9 +48,10 @@ type Fetcher struct {
 	onUpdate func(*types.TideSnapshot)
 }
 
-func New(onUpdate func(*types.TideSnapshot)) *Fetcher {
+func New(baseURL string, onUpdate func(*types.TideSnapshot)) *Fetcher {
 	return &Fetcher{
 		client:   &http.Client{Timeout: 20 * time.Second},
+		baseURL:  baseURL,
 		onUpdate: onUpdate,
 	}
 }
@@ -120,7 +122,7 @@ func (f *Fetcher) fetch(ctx context.Context, t types.Tide) {
 		}
 		return
 	}
-	snap, err := Search(ctx, f.client, DefaultBaseURL, t, time.Now())
+	snap, err := Search(ctx, f.client, f.baseURL, t, time.Now())
 	if err != nil {
 		log.Printf("tide: %v", err)
 		f.mu.Lock()
@@ -137,8 +139,9 @@ func (f *Fetcher) fetch(ctx context.Context, t types.Tide) {
 	}
 }
 
-// dataPoint is one entry of an IWLS time series. qcFlagCode is a string enum
-// ("1" good, "2" not evaluated, "3" questionable), not a number.
+// dataPoint is one entry of an IWLS time series. The quality-control and
+// provenance fields IWLS also returns describe observations, not harmonic
+// predictions, so they are not decoded.
 type dataPoint struct {
 	EventDate time.Time `json:"eventDate"`
 	Value     float64   `json:"value"`
@@ -162,13 +165,15 @@ func Search(ctx context.Context, client *http.Client, baseURL string, t types.Ti
 		return nil, err
 	}
 
-	// Query wider than the horizon: a turning point is identified by
-	// comparing it with the points either side, so the events at both ends of
-	// the horizon need neighbours beyond it.
 	extrema, err := fetchSeries(ctx, client, baseURL, st.ID, seriesHiLo, url.Values{},
 		now.Add(-classifyPad), now.Add(horizon+classifyPad))
 	if err != nil {
 		return nil, err
+	}
+	// Publishing an empty series would replace a good snapshot with "Tide
+	// unavailable"; failing instead leaves the previous one in place.
+	if len(extrema) == 0 {
+		return nil, fmt.Errorf("tide: station %s has no high/low predictions near %s", t.StationCode, now.Format(time.RFC3339))
 	}
 
 	levels, err := fetchSeries(ctx, client, baseURL, st.ID, seriesPredictions,
@@ -177,6 +182,7 @@ func Search(ctx context.Context, client *http.Client, baseURL string, t types.Ti
 	if err != nil {
 		return nil, err
 	}
+	// Likewise: a missing level would read on screen as a real height of zero.
 	if len(levels) == 0 {
 		return nil, fmt.Errorf("tide: station %s has no predicted water level for %s", t.StationCode, now.Format(time.RFC3339))
 	}
@@ -184,7 +190,6 @@ func Search(ctx context.Context, client *http.Client, baseURL string, t types.Ti
 	return &types.TideSnapshot{
 		UpdatedAt:     time.Now(),
 		Units:         defaultString(t.Units, "metric"),
-		Timezone:      t.Timezone,
 		CurrentMeters: currentHeight(levels, now),
 		Events:        detectEvents(extrema, now, now.Add(horizon)),
 	}, nil
@@ -200,11 +205,16 @@ func resolveStation(ctx context.Context, client *http.Client, baseURL, code stri
 	if err := getJSON(ctx, client, baseURL, "/stations", url.Values{"code": []string{code}}, &found); err != nil {
 		return station{}, err
 	}
-	// An unknown code answers 200 with an empty list rather than 404.
-	if len(found) == 0 {
-		return station{}, fmt.Errorf("tide: no CHS station with code %q", code)
+	// An unknown code answers 200 with an empty list rather than 404. Match the
+	// code here rather than trusting the upstream filter: showing another
+	// harbour's tides under this station's name is the failure this whole
+	// change exists to remove.
+	for _, s := range found {
+		if s.Code == code {
+			return s, nil
+		}
 	}
-	return found[0], nil
+	return station{}, fmt.Errorf("tide: no CHS station with code %q", code)
 }
 
 func fetchSeries(ctx context.Context, client *http.Client, baseURL, stationID, seriesCode string, extra url.Values, from, to time.Time) ([]dataPoint, error) {
@@ -246,23 +256,16 @@ func getJSON(ctx context.Context, client *http.Client, baseURL, path string, q u
 	return nil
 }
 
-// detectEvents labels each turning point as a high or a low. CHS returns the
-// times and heights of the turning points but does not say which is which, so
-// each point is compared with its immediate neighbours. The first and last
-// points have only one neighbour and are therefore dropped — callers query a
-// wider window than they report so nothing visible is lost. Results are
-// trimmed to [now, until].
+// detectEvents labels each turning point as a high or a low. CHS gives the
+// time and height of every turning point but never says which is which, so
+// each is compared against its neighbours. Callers query wider than they
+// report, so the padding points supply neighbours and results are trimmed back
+// to [now, until].
 func detectEvents(points []dataPoint, now, until time.Time) []types.TideEvent {
 	events := []types.TideEvent{}
-	for i := 1; i < len(points)-1; i++ {
-		prev, cur, next := points[i-1].Value, points[i].Value, points[i+1].Value
-		var kind string
-		switch {
-		case cur > prev && cur > next:
-			kind = "high"
-		case cur < prev && cur < next:
-			kind = "low"
-		default:
+	for i := range points {
+		kind := classify(points, i)
+		if kind == "" {
 			continue
 		}
 		at := points[i].EventDate
@@ -272,10 +275,39 @@ func detectEvents(points []dataPoint, now, until time.Time) []types.TideEvent {
 		events = append(events, types.TideEvent{
 			Time:         at,
 			Type:         kind,
-			HeightMeters: cur,
+			HeightMeters: points[i].Value,
 		})
 	}
 	return events
+}
+
+// classify names the turning point at i. Interior points are compared against
+// both neighbours. Every point in the series is already a turning point, so
+// where only one neighbour exists — at the ends of a station's published
+// coverage — that one settles it; without this the final event a discontinued
+// station publishes would be dropped. Returns "" for a point that is neither,
+// which a strictly alternating series never produces.
+func classify(points []dataPoint, i int) string {
+	cur := points[i].Value
+	var higher, lower bool
+	switch {
+	case i > 0 && i < len(points)-1:
+		higher = cur > points[i-1].Value && cur > points[i+1].Value
+		lower = cur < points[i-1].Value && cur < points[i+1].Value
+	case i > 0:
+		higher, lower = cur > points[i-1].Value, cur < points[i-1].Value
+	case i < len(points)-1:
+		higher, lower = cur > points[i+1].Value, cur < points[i+1].Value
+	}
+	switch {
+	case higher:
+		return "high"
+	case lower:
+		return "low"
+	}
+	log.Printf("tide: skipping unclassifiable turning point at %s (%.3f m)",
+		points[i].EventDate.Format(time.RFC3339), cur)
+	return ""
 }
 
 // currentHeight linearly interpolates between the two samples bracketing

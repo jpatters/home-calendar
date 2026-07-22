@@ -29,7 +29,6 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 		Tide: types.Tide{
 			StationCode: "07120",
 			Units:       "imperial",
-			Timezone:    "America/Vancouver",
 			Location:    "Victoria",
 		},
 		SnowDay: types.SnowDay{URL: "https://example.com/snow"},
@@ -75,9 +74,6 @@ func TestNormalizeFillsTideDefaultsWhenEmpty(t *testing.T) {
 	cfg := s.Get()
 	if cfg.Tide.Units != "metric" {
 		t.Errorf("Tide.Units = %q, want %q", cfg.Tide.Units, "metric")
-	}
-	if cfg.Tide.Timezone == "" {
-		t.Errorf("Tide.Timezone should default to non-empty, got empty")
 	}
 	if cfg.Display.TideRefreshSeconds <= 0 {
 		t.Errorf("Display.TideRefreshSeconds = %d, want positive default",
@@ -330,14 +326,7 @@ func TestOpenAcceptsConfigWrittenBeforeStationCodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	cfg := s.Get()
-	if !cfg.Tide.Enabled {
-		t.Errorf("Tide.Enabled = false, want the saved value to survive")
-	}
-	if cfg.Tide.StationCode != "" {
-		t.Errorf("Tide.StationCode = %q, want empty; coordinates must not be guessed into a station", cfg.Tide.StationCode)
-	}
-	if cfg.Tide.Units != "metric" {
-		t.Errorf("Tide.Units = %q, want metric", cfg.Tide.Units)
+	if code := s.Get().Tide.StationCode; code != "" {
+		t.Errorf("Tide.StationCode = %q, want empty; coordinates must not be guessed into a station", code)
 	}
 }

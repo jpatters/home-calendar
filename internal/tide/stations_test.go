@@ -15,20 +15,18 @@ import (
 )
 
 type stubStation struct {
-	Code      string
-	Name      string
-	Series    []string
-	Type      string
-	Operating bool
+	Code   string
+	Name   string
+	Series []string
 }
 
 // stationsStub serves the CHS station listing. The live listing carries no
 // per-station series array — that lives on the separate metadata endpoint — so
 // the only way to narrow by series is the time-series-code query parameter,
-// and this reproduces exactly that. Stations are emitted with their lifecycle
-// fields so a filter on those has something to catch on.
-func stationsStub(t *testing.T, stations []stubStation, reqs *atomic.Int32) *httptest.Server {
+// and this reproduces exactly that.
+func stationsStub(t *testing.T, stations []stubStation) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
+	reqs := &atomic.Int32{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /stations", func(w http.ResponseWriter, r *http.Request) {
 		reqs.Add(1)
@@ -42,14 +40,12 @@ func stationsStub(t *testing.T, stations []stubStation, reqs *atomic.Int32) *htt
 				"id":           fmt.Sprintf("%024d", i),
 				"code":         s.Code,
 				"officialName": s.Name,
-				"type":         s.Type,
-				"operating":    s.Operating,
 			})
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	})
-	return httptest.NewServer(mux)
+	return httptest.NewServer(mux), reqs
 }
 
 func hasSeries(s stubStation, code string) bool {
@@ -58,9 +54,8 @@ func hasSeries(s stubStation, code string) bool {
 
 func bothSeries() []string { return []string{"wlp", "wlp-hilo"} }
 
-// active describes a permanent, currently-operating station.
 func active(code, name string) stubStation {
-	return stubStation{Code: code, Name: name, Series: bothSeries(), Type: "PERMANENT", Operating: true}
+	return stubStation{Code: code, Name: name, Series: bothSeries()}
 }
 
 func codesOf(results []tide.StationResult) []string {
@@ -72,12 +67,11 @@ func codesOf(results []tide.StationResult) []string {
 }
 
 func TestStationSearchMatchesOnNameAndCode(t *testing.T) {
-	var reqs atomic.Int32
-	srv := stationsStub(t, []stubStation{
+	srv, _ := stationsStub(t, []stubStation{
 		active("01710", "Canoe Cove"),
 		active("01700", "Charlottetown"),
 		active("07735", "Vancouver"),
-	}, &reqs)
+	})
 	defer srv.Close()
 
 	dir := tide.NewDirectory(srv.Client(), srv.URL)
@@ -102,12 +96,11 @@ func TestStationSearchMatchesOnNameAndCode(t *testing.T) {
 func TestStationSearchExcludesStationsMissingEitherSeries(t *testing.T) {
 	// The widget needs high/low events *and* a current height, so a station
 	// that publishes only one of the two must never be offered.
-	var reqs atomic.Int32
-	srv := stationsStub(t, []stubStation{
+	srv, _ := stationsStub(t, []stubStation{
 		active("01710", "Canoe Cove"),
-		{Code: "09999", Name: "Canoe Rapids", Series: []string{"wlp-hilo"}, Type: "PERMANENT", Operating: true},
-		{Code: "09998", Name: "Canoe Narrows", Series: []string{"wlp"}, Type: "PERMANENT", Operating: true},
-	}, &reqs)
+		{Code: "09999", Name: "Canoe Rapids", Series: []string{"wlp-hilo"}},
+		{Code: "09998", Name: "Canoe Narrows", Series: []string{"wlp"}},
+	})
 	defer srv.Close()
 
 	dir := tide.NewDirectory(srv.Client(), srv.URL)
@@ -120,38 +113,36 @@ func TestStationSearchExcludesStationsMissingEitherSeries(t *testing.T) {
 	}
 }
 
-func TestStationSearchOffersDiscontinuedStations(t *testing.T) {
-	// Canoe Cove is flagged DISCONTINUED and non-operating, yet publishes
-	// predictions years into the future. Those flags describe the physical
-	// gauge, not the prediction coverage, so filtering on them would hide the
-	// correct station. Only the discontinued station matches the query here,
-	// so a filter on either flag makes this fail.
-	var reqs atomic.Int32
-	srv := stationsStub(t, []stubStation{
-		{Code: "01710", Name: "Canoe Cove", Series: bothSeries(), Type: "DISCONTINUED", Operating: false},
-		active("01700", "Charlottetown"),
-	}, &reqs)
+func TestStationSearchDoesNotCacheAnEmptyCatalogue(t *testing.T) {
+	// If CHS is mid-outage, or renames a series code, the intersection comes
+	// back empty. Caching that would mean "No matches found" for a whole day,
+	// recoverable only by restarting the server.
+	srv, reqs := stationsStub(t, []stubStation{
+		{Code: "01710", Name: "Canoe Cove", Series: []string{"some-renamed-series"}},
+	})
 	defer srv.Close()
 
 	dir := tide.NewDirectory(srv.Client(), srv.URL)
-	got, err := dir.Search(context.Background(), "canoe cove")
-	if err != nil {
-		t.Fatalf("Search: %v", err)
+	if _, err := dir.Search(context.Background(), "canoe"); err == nil {
+		t.Fatalf("expected an error when no station publishes both series")
 	}
-	if len(got) != 1 || got[0].Code != "01710" {
-		t.Fatalf("got %v, want the discontinued Canoe Cove to still be offered", codesOf(got))
+	before := reqs.Load()
+	if _, err := dir.Search(context.Background(), "canoe"); err == nil {
+		t.Fatalf("expected an error on the retry too")
+	}
+	if reqs.Load() == before {
+		t.Errorf("second search served an empty catalogue from cache instead of retrying upstream")
 	}
 }
 
 func TestStationSearchBoundsResultCount(t *testing.T) {
 	// A broad query matches hundreds of the ~1,500 stations; the type-ahead
 	// must not try to render them all.
-	var reqs atomic.Int32
 	stations := make([]stubStation, 300)
 	for i := range stations {
 		stations[i] = active(fmt.Sprintf("%05d", i), fmt.Sprintf("Harbour %d", i))
 	}
-	srv := stationsStub(t, stations, &reqs)
+	srv, _ := stationsStub(t, stations)
 	defer srv.Close()
 
 	dir := tide.NewDirectory(srv.Client(), srv.URL)
@@ -168,11 +159,10 @@ func TestStationSearchDoesNotRefetchListPerQuery(t *testing.T) {
 	// The full listing is ~830 KB. Typing in the admin panel fires a query per
 	// keystroke, so repeats have to be served from what we already hold — and
 	// must still return real results, not an emptied cache.
-	var reqs atomic.Int32
-	srv := stationsStub(t, []stubStation{
+	srv, reqs := stationsStub(t, []stubStation{
 		active("01710", "Canoe Cove"),
 		active("01700", "Charlottetown"),
-	}, &reqs)
+	})
 	defer srv.Close()
 
 	dir := tide.NewDirectory(srv.Client(), srv.URL)

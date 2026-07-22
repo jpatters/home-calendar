@@ -35,7 +35,6 @@ function buildConfig(
     tide: {
       stationCode: "01710",
       units: "metric",
-      timezone: "UTC",
       location: "Test",
       enabled: overrides.tideEnabled ?? true,
     },

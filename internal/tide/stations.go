@@ -2,6 +2,7 @@ package tide
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -72,21 +73,30 @@ func matchesStation(s StationResult, needle string) bool {
 
 func (d *Directory) list(ctx context.Context) ([]StationResult, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.stations != nil && time.Since(d.fetchedAt) < listTTL {
+		defer d.mu.Unlock()
 		return d.stations, nil
 	}
+	d.mu.Unlock()
+
+	// Fetched outside the lock so concurrent type-ahead queries do not
+	// serialise behind a multi-megabyte download, and on a context detached
+	// from the caller's: the admin panel aborts the previous request on every
+	// keystroke, which would otherwise discard a nearly-complete fetch and
+	// leave the catalogue never cached.
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+	defer cancel()
 
 	// The widget needs high/low events and a present water level, so only
 	// stations publishing both series are usable. IWLS can filter by one
 	// series code per request, so ask twice and keep the intersection.
 	// Discontinued and non-operating stations are kept: many still publish
 	// predictions years ahead, including Canoe Cove.
-	withEvents, err := d.listWithSeries(ctx, seriesHiLo)
+	withEvents, err := d.listWithSeries(fetchCtx, seriesHiLo)
 	if err != nil {
 		return nil, err
 	}
-	withLevels, err := d.listWithSeries(ctx, seriesPredictions)
+	withLevels, err := d.listWithSeries(fetchCtx, seriesPredictions)
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +110,17 @@ func (d *Directory) list(ctx context.Context) ([]StationResult, error) {
 			out = append(out, s)
 		}
 	}
+	// Never cache an empty catalogue: an upstream outage or a renamed series
+	// code would otherwise mean "no matches" for a whole day, recoverable only
+	// by restarting.
+	if len(out) == 0 {
+		return nil, fmt.Errorf("tide: CHS returned no stations publishing both %s and %s", seriesHiLo, seriesPredictions)
+	}
 
+	d.mu.Lock()
 	d.stations = out
 	d.fetchedAt = time.Now()
+	d.mu.Unlock()
 	return out, nil
 }
 

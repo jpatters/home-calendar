@@ -27,7 +27,6 @@ type Tide struct {
 	Enabled     bool   `json:"enabled"`
 	StationCode string `json:"stationCode"`
 	Units       string `json:"units"`
-	Timezone    string `json:"timezone"`
 	Location    string `json:"location"`
 }
 
@@ -135,7 +134,6 @@ type TideEvent struct {
 type TideSnapshot struct {
 	UpdatedAt     time.Time   `json:"updatedAt"`
 	Units         string      `json:"units"`
-	Timezone      string      `json:"timezone"`
 	CurrentMeters float64     `json:"currentMeters"`
 	Events        []TideEvent `json:"events"`
 }
@@ -190,9 +188,8 @@ func DefaultConfig() Config {
 			Location:  "Toronto, Ontario, Canada",
 		},
 		Tide: Tide{
-			Enabled:  true,
-			Units:    "metric",
-			Timezone: "auto",
+			Enabled: true,
+			Units:   "metric",
 		},
 		SnowDay: SnowDay{
 			Enabled: true,
@@ -204,7 +201,7 @@ func DefaultConfig() Config {
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
-			TideRefreshSeconds:     3600,
+			TideRefreshSeconds:     600,
 			BaseballRefreshSeconds: 600,
 			Theme:                  "default",
 			Mode:                   "light",

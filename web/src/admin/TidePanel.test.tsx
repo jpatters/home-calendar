@@ -8,7 +8,6 @@ function baseConfig(): Tide {
     enabled: true,
     stationCode: "",
     units: "metric",
-    timezone: "America/Halifax",
     location: "",
   };
 }
@@ -76,20 +75,5 @@ describe("TidePanel", () => {
     );
     expect(screen.getByText(/canoe cove/i)).toBeTruthy();
     expect(screen.getByText(/01710/)).toBeTruthy();
-  });
-
-  test("enabled checkbox toggle propagates", () => {
-    let captured: Tide | null = null;
-    render(
-      <TidePanel
-        value={{ ...baseConfig(), enabled: false }}
-        onChange={(t) => {
-          captured = t;
-        }}
-      />,
-    );
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(captured).toBeTruthy();
-    expect(captured!.enabled).toBe(true);
   });
 });

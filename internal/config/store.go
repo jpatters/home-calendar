@@ -151,9 +151,6 @@ func normalize(c types.Config) types.Config {
 	if c.Tide.Units == "" {
 		c.Tide.Units = d.Tide.Units
 	}
-	if c.Tide.Timezone == "" {
-		c.Tide.Timezone = d.Tide.Timezone
-	}
 	if c.Display.DefaultView == "" {
 		c.Display.DefaultView = d.Display.DefaultView
 	}

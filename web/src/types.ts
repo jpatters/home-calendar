@@ -18,7 +18,6 @@ export interface Tide {
   enabled: boolean;
   stationCode: string;
   units: "metric" | "imperial";
-  timezone: string;
   location: string;
 }
 
@@ -132,7 +131,6 @@ export interface TideEvent {
 export interface TideSnapshot {
   updatedAt: string;
   units: string;
-  timezone: string;
   currentMeters: number;
   events: TideEvent[];
 }

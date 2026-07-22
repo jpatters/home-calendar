@@ -80,7 +80,7 @@ export default function Admin({ live }: Props) {
         )}
         {tab === "tide" && (
           <TidePanel
-            value={draft.tide ?? { latitude: 0, longitude: 0, units: "metric", timezone: "auto", location: "" }}
+            value={draft.tide}
             onChange={(tide) => setDraft({ ...draft, tide })}
           />
         )}

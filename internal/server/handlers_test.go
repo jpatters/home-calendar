@@ -56,7 +56,7 @@ func TestTideRefreshReturns409WhenDisabled(t *testing.T) {
 			t.Fatalf("Replace: %v", err)
 		}
 	})
-	srv := &Server{cfg: store, tide: tide.New(nil)}
+	srv := &Server{cfg: store, tide: tide.New("", nil)}
 	req := httptest.NewRequest(http.MethodPost, "/api/tide/refresh", nil)
 	rec := httptest.NewRecorder()
 	srv.handleTideRefresh(rec, req)
@@ -321,6 +321,19 @@ func TestTideStationSearchReturnsResults(t *testing.T) {
 	}
 	if got[0]["code"] != "01710" || got[0]["name"] != "Canoe Cove" {
 		t.Fatalf("body keys do not match what the admin panel reads: %v", got[0])
+	}
+}
+
+func TestTideStationSearchRejectsOverlongQuery(t *testing.T) {
+	s := &Server{stationSearch: func(context.Context, string) ([]tide.StationResult, error) {
+		t.Fatal("stationSearch should not be called for overlong query")
+		return nil, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/tide/stations?q="+strings.Repeat("a", 101), nil)
+	rec := httptest.NewRecorder()
+	s.handleTideStationSearch(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 

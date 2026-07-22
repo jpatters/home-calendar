@@ -9,7 +9,6 @@ const config: Tide = {
   enabled: true,
   stationCode: "07120",
   units: "metric",
-  timezone: "America/Vancouver",
   location: "Victoria",
 };
 
@@ -32,7 +31,6 @@ function buildWeekSnapshot(): TideSnapshot {
   return {
     updatedAt: "2026-04-19T00:00:00Z",
     units: "metric",
-    timezone: "UTC",
     currentMeters: 0.8,
     events,
   };
