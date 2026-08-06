@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { GeoResult, Tide } from "../types";
-import { geocode } from "../api";
+import type { Tide, TideStation } from "../types";
+import { tideStationSearch } from "../api";
 
 interface Props {
   value: Tide;
   onChange: (t: Tide) => void;
 }
 
-function formatLabel(r: GeoResult): string {
-  return [r.name, r.admin1, r.country].filter(Boolean).join(", ");
-}
-
 export default function TidePanel({ value, onChange }: Props) {
   const [query, setQuery] = useState(value.location);
-  const [results, setResults] = useState<GeoResult[] | null>(null);
+  const [results, setResults] = useState<TideStation[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -36,7 +32,7 @@ export default function TidePanel({ value, onChange }: Props) {
       abortRef.current = ctrl;
       setSearching(true);
       setError(null);
-      geocode(trimmed, ctrl.signal)
+      tideStationSearch(trimmed, ctrl.signal)
         .then((list) => {
           if (!ctrl.signal.aborted) {
             setResults(list);
@@ -45,7 +41,7 @@ export default function TidePanel({ value, onChange }: Props) {
         })
         .catch((err) => {
           if (ctrl.signal.aborted || err?.name === "AbortError") return;
-          console.error("geocode search failed", err);
+          console.error("tide station search failed", err);
           setError("Could not search. Try again.");
           setSearching(false);
         });
@@ -53,20 +49,18 @@ export default function TidePanel({ value, onChange }: Props) {
     return () => clearTimeout(handle);
   }, [query, value.location]);
 
-  const pick = (r: GeoResult) => {
+  const pick = (s: TideStation) => {
     onChange({
       ...value,
-      location: formatLabel(r),
-      latitude: r.latitude,
-      longitude: r.longitude,
-      timezone: r.timezone ?? value.timezone,
+      location: s.name,
+      stationCode: s.code,
     });
     setResults(null);
   };
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Tides (Open-Meteo Marine)</h2>
+      <h2>Tides (CHS)</h2>
       <div className="toggle-row">
         <label className="toggle">
           <input
@@ -78,16 +72,17 @@ export default function TidePanel({ value, onChange }: Props) {
         </label>
       </div>
       <p className="hint">
-        Search for a coastal location — no API key required. Note: this data
-        is modelled at 8 km resolution and is not suitable for navigation.
+        Search the Canadian Hydrographic Service tide stations — no API key
+        required. Heights are metres above chart datum, matching published
+        Canadian tide tables. Canadian stations only.
       </p>
       <div className="form-grid">
         <label>
-          <span>Location</span>
+          <span>Station</span>
           <input
             type="text"
             autoComplete="off"
-            placeholder="Start typing a coastal city…"
+            placeholder="Start typing a station or place name…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -113,10 +108,10 @@ export default function TidePanel({ value, onChange }: Props) {
       )}
       {results && results.length > 0 && (
         <ul className="geo-results">
-          {results.map((r, i) => (
-            <li key={`${r.latitude},${r.longitude},${i}`}>
-              <button type="button" onClick={() => pick(r)}>
-                {formatLabel(r)}
+          {results.map((s) => (
+            <li key={s.code}>
+              <button type="button" onClick={() => pick(s)}>
+                {s.name} ({s.code})
               </button>
             </li>
           ))}
@@ -124,10 +119,8 @@ export default function TidePanel({ value, onChange }: Props) {
       )}
 
       <div className="hint">
-        Saved location: <strong>{value.location || "(none)"}</strong>{" "}
-        {value.latitude !== 0 || value.longitude !== 0
-          ? `(${value.latitude.toFixed(2)}, ${value.longitude.toFixed(2)})`
-          : null}
+        Saved station: <strong>{value.location || "(none)"}</strong>{" "}
+        {value.stationCode ? `(${value.stationCode})` : null}
       </div>
     </div>
   );

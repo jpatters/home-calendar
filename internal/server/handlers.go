@@ -131,6 +131,27 @@ func (s *Server) handleTideRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleTideStationSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		http.Error(w, "query parameter q is required", http.StatusBadRequest)
+		return
+	}
+	if len(q) > 100 {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	results, err := s.stationSearch(ctx, q)
+	if err != nil {
+		log.Printf("tide station search: %v", err)
+		http.Error(w, "station search failed", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
 func (s *Server) handleGetBaseball(w http.ResponseWriter, r *http.Request) {
 	snap := s.baseball.Snapshot()
 	if snap == nil {

@@ -33,10 +33,8 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
       },
       tide: {
         enabled: true,
-        latitude: 0,
-        longitude: 0,
+        stationCode: "",
         units: "metric",
-        timezone: "UTC",
         location: "",
       },
       snowDay: { enabled: true, url: "" },
