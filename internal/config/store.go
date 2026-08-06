@@ -65,6 +65,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 		Baseball *struct {
 			Enabled *bool `json:"enabled"`
 		} `json:"baseball"`
+		Pool *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"pool"`
 		Display *struct {
 			CalendarEnabled *bool `json:"calendarEnabled"`
 			ClockEnabled    *bool `json:"clockEnabled"`
@@ -84,6 +87,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 	}
 	if probe.Baseball == nil || probe.Baseball.Enabled == nil {
 		c.Baseball.Enabled = true
+	}
+	if probe.Pool == nil || probe.Pool.Enabled == nil {
+		c.Pool.Enabled = true
 	}
 	if probe.Display == nil || probe.Display.CalendarEnabled == nil {
 		c.Display.CalendarEnabled = true
@@ -165,6 +171,12 @@ func normalize(c types.Config) types.Config {
 	}
 	if c.Display.BaseballRefreshSeconds <= 0 {
 		c.Display.BaseballRefreshSeconds = d.Display.BaseballRefreshSeconds
+	}
+	if c.Display.PoolRefreshSeconds <= 0 {
+		c.Display.PoolRefreshSeconds = d.Display.PoolRefreshSeconds
+	}
+	if c.Pool.DeviceURL == "" {
+		c.Pool.DeviceURL = d.Pool.DeviceURL
 	}
 	c.Baseball.TeamName = strings.TrimSpace(c.Baseball.TeamName)
 	c.Baseball.TeamAbbr = strings.TrimSpace(c.Baseball.TeamAbbr)

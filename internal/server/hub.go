@@ -15,6 +15,7 @@ type Frame struct {
 	SnowDay  *types.SnowDaySnapshot  `json:"snowday,omitempty"`
 	Tide     *types.TideSnapshot     `json:"tide,omitempty"`
 	Baseball *types.BaseballSnapshot `json:"baseball,omitempty"`
+	Pool     *types.PoolSnapshot     `json:"pool,omitempty"`
 }
 
 // Hub fans out frames to every connected WebSocket client. Each client owns a

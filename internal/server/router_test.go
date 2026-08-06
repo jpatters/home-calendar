@@ -10,6 +10,7 @@ import (
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/ical"
+	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/snowday"
 	"github.com/jpatters/home-calendar/internal/tide"
 	"github.com/jpatters/home-calendar/internal/types"
@@ -27,6 +28,7 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	cfg.Tide.Enabled = false
 	cfg.SnowDay.Enabled = false
 	cfg.Baseball.Enabled = false
+	cfg.Pool.Enabled = false
 	cfg.Display.CalendarEnabled = false
 	if _, err := store.Replace(cfg); err != nil {
 		t.Fatalf("Replace: %v", err)
@@ -52,13 +54,16 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
+	srv.pool = pool.New(func(snap *types.PoolSnapshot) {
+		hub.Broadcast(Frame{Type: "pool", Pool: snap})
+	})
 
 	client := hub.register()
 	defer hub.unregister(client)
 
 	srv.restartFetchers(cfg)
 
-	got := collectFrameTypes(t, client, 5, 500*time.Millisecond)
+	got := collectFrameTypes(t, client, 6, 500*time.Millisecond)
 	if !got["weather"] {
 		t.Errorf("missing clearing frame for weather")
 	}
@@ -74,6 +79,9 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	if !got["baseball"] {
 		t.Errorf("missing clearing frame for baseball")
 	}
+	if !got["pool"] {
+		t.Errorf("missing clearing frame for pool")
+	}
 }
 
 func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
@@ -86,6 +94,7 @@ func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
 	cfg.Weather.Enabled = false
 	cfg.Tide.Enabled = true
 	cfg.SnowDay.Enabled = true
+	cfg.Pool.Enabled = false
 	cfg.Display.CalendarEnabled = true
 	if _, err := store.Replace(cfg); err != nil {
 		t.Fatalf("Replace: %v", err)
@@ -110,6 +119,9 @@ func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
 	})
 	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
+	})
+	srv.pool = pool.New(func(snap *types.PoolSnapshot) {
+		hub.Broadcast(Frame{Type: "pool", Pool: snap})
 	})
 
 	client := hub.register()

@@ -18,6 +18,7 @@ function buildConfig(
     tideEnabled: boolean;
     snowDayEnabled: boolean;
     baseballEnabled: boolean;
+    poolEnabled: boolean;
     calendarEnabled: boolean;
     clockEnabled: boolean;
   }> = {},
@@ -48,12 +49,17 @@ function buildConfig(
       teamName: "",
       teamAbbr: "",
     },
+    pool: {
+      enabled: overrides.poolEnabled ?? true,
+      deviceUrl: "http://pool.test",
+    },
     display: {
       defaultView: "week",
       calendarRefreshSeconds: 300,
       weatherRefreshSeconds: 900,
       tideRefreshSeconds: 3600,
       baseballRefreshSeconds: 600,
+      poolRefreshSeconds: 30,
       theme: "default",
       mode: "light",
       calendarEnabled: overrides.calendarEnabled ?? true,
@@ -72,6 +78,7 @@ function buildLive(config: Config): LiveData {
     snowday: null,
     tide: null,
     baseball: null,
+    pool: null,
   };
 }
 
@@ -134,5 +141,17 @@ describe("Display widget enable/disable", () => {
     const live = buildLive(buildConfig({ calendarEnabled: true }));
     const { container } = render(<Display live={live} />);
     expect(container.querySelector(".calendar-pane")).not.toBeNull();
+  });
+
+  test("pool widget is hidden when pool.enabled is false", () => {
+    const live = buildLive(buildConfig({ poolEnabled: false }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".pool-widget")).toBeNull();
+  });
+
+  test("pool widget is rendered when pool.enabled is true", () => {
+    const live = buildLive(buildConfig({ poolEnabled: true }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".pool-widget")).not.toBeNull();
   });
 });

@@ -423,7 +423,11 @@ func TestFetcherClearsSnapshotWhenStationIsUnset(t *testing.T) {
 	// source arrives with no station code. Any tides already on screen came
 	// from the old source and are wrong, so they must be cleared rather than
 	// left up.
-	start := time.Date(2026, 7, 22, 2, 2, 0, 0, time.UTC)
+	//
+	// This test drives the fetcher through RefreshNow, which reads the real
+	// clock, so the stub is anchored just before time.Now() (rather than a
+	// fixed date) to keep its predictions bracketing "now" as the clock moves.
+	start := time.Now().UTC().Add(-time.Minute)
 	srv, _ := canoeCoveStub(t, start)
 	defer srv.Close()
 

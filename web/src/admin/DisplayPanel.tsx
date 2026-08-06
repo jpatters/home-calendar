@@ -83,6 +83,15 @@ export default function DisplayPanel({ value, onChange, autoAvailable }: Props) 
             onChange={(e) => onChange({ ...value, weatherRefreshSeconds: Number(e.target.value) })}
           />
         </label>
+        <label>
+          <span>Pool refresh (seconds)</span>
+          <input
+            type="number"
+            min={10}
+            value={value.poolRefreshSeconds}
+            onChange={(e) => onChange({ ...value, poolRefreshSeconds: Number(e.target.value) })}
+          />
+        </label>
       </div>
     </div>
   );
