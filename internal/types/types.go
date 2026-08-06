@@ -36,6 +36,7 @@ type Display struct {
 	WeatherRefreshSeconds  int    `json:"weatherRefreshSeconds"`
 	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
 	BaseballRefreshSeconds int    `json:"baseballRefreshSeconds"`
+	PoolRefreshSeconds     int    `json:"poolRefreshSeconds"`
 	Theme                  string `json:"theme"`
 	Mode                   string `json:"mode"`
 	CalendarEnabled        bool   `json:"calendarEnabled"`
@@ -54,12 +55,18 @@ type Baseball struct {
 	TeamAbbr string `json:"teamAbbr"`
 }
 
+type Pool struct {
+	Enabled   bool   `json:"enabled"`
+	DeviceURL string `json:"deviceUrl"`
+}
+
 type Config struct {
 	Calendars []Calendar `json:"calendars"`
 	Weather   Weather    `json:"weather"`
 	Tide      Tide       `json:"tide"`
 	SnowDay   SnowDay    `json:"snowDay"`
 	Baseball  Baseball   `json:"baseball"`
+	Pool      Pool       `json:"pool"`
 	Display   Display    `json:"display"`
 }
 
@@ -177,6 +184,14 @@ type BaseballSnapshot struct {
 	NextGame   *BaseballGame `json:"nextGame"`
 }
 
+type PoolSnapshot struct {
+	UpdatedAt    time.Time `json:"updatedAt"`
+	TemperatureC float64   `json:"temperatureC"`
+	TargetC      float64   `json:"targetC"`
+	Heating      bool      `json:"heating"`
+	Mode         string    `json:"mode"`
+}
+
 func DefaultConfig() Config {
 	return Config{
 		Calendars: []Calendar{},
@@ -199,12 +214,17 @@ func DefaultConfig() Config {
 		Baseball: Baseball{
 			Enabled: true,
 		},
+		Pool: Pool{
+			Enabled:   true,
+			DeviceURL: "http://pool-thermostat.local",
+		},
 		Display: Display{
 			DefaultView:            "week",
 			CalendarRefreshSeconds: 300,
 			WeatherRefreshSeconds:  900,
 			TideRefreshSeconds:     3600,
 			BaseballRefreshSeconds: 600,
+			PoolRefreshSeconds:     30,
 			Theme:                  "default",
 			Mode:                   "light",
 			CalendarEnabled:        true,

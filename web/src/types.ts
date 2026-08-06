@@ -41,6 +41,7 @@ export interface Display {
   weatherRefreshSeconds: number;
   tideRefreshSeconds: number;
   baseballRefreshSeconds: number;
+  poolRefreshSeconds: number;
   theme: ThemePalette;
   mode: ThemeMode;
   calendarEnabled: boolean;
@@ -67,12 +68,18 @@ export interface BaseballTeam {
   locationName: string;
 }
 
+export interface Pool {
+  enabled: boolean;
+  deviceUrl: string;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
   tide: Tide;
   snowDay: SnowDay;
   baseball: Baseball;
+  pool: Pool;
   display: Display;
 }
 
@@ -171,6 +178,14 @@ export interface BaseballSnapshot {
   nextGame: BaseballGame | null;
 }
 
+export interface PoolSnapshot {
+  updatedAt: string;
+  temperatureC: number;
+  targetC: number;
+  heating: boolean;
+  mode: string;
+}
+
 export type WSFrame =
   | {
       type: "snapshot";
@@ -180,10 +195,12 @@ export type WSFrame =
       snowday: SnowDaySnapshot | null;
       tide: TideSnapshot | null;
       baseball: BaseballSnapshot | null;
+      pool: PoolSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
   | { type: "snowday"; snowday: SnowDaySnapshot | null }
   | { type: "tide"; tide: TideSnapshot | null }
   | { type: "baseball"; baseball: BaseballSnapshot | null }
+  | { type: "pool"; pool: PoolSnapshot | null }
   | { type: "config"; config: Config };

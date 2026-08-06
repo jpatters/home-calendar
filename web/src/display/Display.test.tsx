@@ -18,6 +18,7 @@ function buildConfig(
     tideEnabled: boolean;
     snowDayEnabled: boolean;
     baseballEnabled: boolean;
+    poolEnabled: boolean;
     calendarEnabled: boolean;
     clockEnabled: boolean;
   }> = {},
@@ -50,12 +51,17 @@ function buildConfig(
       teamName: "",
       teamAbbr: "",
     },
+    pool: {
+      enabled: overrides.poolEnabled ?? true,
+      deviceUrl: "http://pool.test",
+    },
     display: {
       defaultView: "week",
       calendarRefreshSeconds: 300,
       weatherRefreshSeconds: 900,
       tideRefreshSeconds: 3600,
       baseballRefreshSeconds: 600,
+      poolRefreshSeconds: 30,
       theme: "default",
       mode: "light",
       calendarEnabled: overrides.calendarEnabled ?? true,
@@ -74,6 +80,7 @@ function buildLive(config: Config): LiveData {
     snowday: null,
     tide: null,
     baseball: null,
+    pool: null,
   };
 }
 

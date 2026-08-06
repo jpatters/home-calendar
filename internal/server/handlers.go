@@ -173,6 +173,27 @@ func (s *Server) handleBaseballTeamSearch(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, results)
 }
 
+func (s *Server) handleGetPool(w http.ResponseWriter, r *http.Request) {
+	snap := s.pool.Snapshot()
+	if snap == nil {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
+}
+
+func (s *Server) handlePoolRefresh(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.Pool.Enabled {
+		http.Error(w, "pool widget is disabled", http.StatusConflict)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	s.pool.RefreshNow(ctx, cfg.Pool)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

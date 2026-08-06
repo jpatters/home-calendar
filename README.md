@@ -32,6 +32,11 @@ private network.
   (`statsapi.mlb.com`). Pick a team via type-ahead search in admin. Regular
   season + playoffs only; spring training and exhibition games are filtered
   out.
+- **Pool**: optional widget showing the pool's current water temperature and
+  whether the heat pump is actively heating or idle. Reads the `climate` entity
+  from an [ESPHome](https://esphome.io/) device's built-in web server over the
+  LAN — no cloud, no API key. Set the device URL in admin (a fixed IP is more
+  reliable than an mDNS `.local` name from a container).
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 
@@ -145,12 +150,17 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "teamName": "New York Yankees",
     "teamAbbr": "NYY"
   },
+  "pool": {
+    "enabled": true,
+    "deviceUrl": "http://pool-thermostat.local"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
     "tideRefreshSeconds": 3600,
     "baseballRefreshSeconds": 600,
+    "poolRefreshSeconds": 30,
     "theme": "default",
     "mode": "light",
     "calendarEnabled": true,
@@ -159,8 +169,8 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
 }
 ```
 
-Each widget has an `enabled` flag. Weather, Tide, Snow Day, and Baseball each
-carry their own `enabled` field; the calendar and clock live under
+Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, and Pool
+each carry their own `enabled` field; the calendar and clock live under
 `display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
 the server stops its background fetcher (so no API calls are made) and the
 display hides it. You can toggle widgets from the admin page — look for the
@@ -200,6 +210,8 @@ assigns IDs, and triggers an immediate refresh.
 | GET    | `/api/baseball`               | Current baseball snapshot                 |
 | POST   | `/api/baseball/refresh`       | Force a baseball refresh                  |
 | GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |
+| GET    | `/api/pool`                   | Current pool temperature snapshot         |
+| POST   | `/api/pool/refresh`           | Force a pool refresh                      |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding

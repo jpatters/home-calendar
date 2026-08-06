@@ -9,6 +9,7 @@ import SnowDayWidget from "./SnowDayWidget";
 import TideWidget from "./TideWidget";
 import TideModal from "./TideModal";
 import BaseballWidget from "./BaseballWidget";
+import PoolWidget from "./PoolWidget";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 
@@ -34,6 +35,7 @@ export default function Display({ live }: Props) {
   const snowDayEnabled = live.config?.snowDay.enabled ?? true;
   const tideEnabled = live.config?.tide.enabled ?? true;
   const baseballEnabled = live.config?.baseball.enabled ?? true;
+  const poolEnabled = live.config?.pool.enabled ?? true;
 
   return (
     <div
@@ -75,6 +77,7 @@ export default function Display({ live }: Props) {
         {baseballEnabled && (
           <BaseballWidget baseball={live.baseball} config={live.config?.baseball} />
         )}
+        {poolEnabled && <PoolWidget pool={live.pool} />}
         <div className="connection-indicator">
           <span className={live.connected ? "dot ok" : "dot bad"} />
           {live.connected ? "live" : "reconnecting…"}
