@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -122,7 +123,6 @@ func (f *Fetcher) fetch(ctx context.Context, p types.Pool) {
 }
 
 type climateResponse struct {
-	Mode               string `json:"mode"`
 	Action             string `json:"action"`
 	CurrentTemperature string `json:"current_temperature"`
 	TargetTemperature  string `json:"target_temperature"`
@@ -166,15 +166,25 @@ func Search(ctx context.Context, client *http.Client, baseURL string) (*types.Po
 	if err != nil {
 		return nil, fmt.Errorf("pool: parse current_temperature %q: %w", body.CurrentTemperature, err)
 	}
-	// Target is best-effort: a missing/blank setpoint shouldn't drop the whole
-	// reading, since the temperature and heating state are the primary signal.
+	// ESPHome reports "nan" for current_temperature while the probe is
+	// unavailable (e.g. during a reboot). ParseFloat accepts that as a valid
+	// NaN, so reject non-finite values explicitly and keep the last good
+	// snapshot rather than broadcasting a bogus reading.
+	if math.IsNaN(current) || math.IsInf(current, 0) {
+		return nil, fmt.Errorf("pool: current_temperature not finite: %q", body.CurrentTemperature)
+	}
+	// Target is best-effort: a missing/blank/non-finite setpoint shouldn't drop
+	// the whole reading, since the temperature and heating state are the
+	// primary signal. A zero target is treated as "no setpoint" by the UI.
 	target, _ := strconv.ParseFloat(strings.TrimSpace(body.TargetTemperature), 64)
+	if math.IsNaN(target) || math.IsInf(target, 0) {
+		target = 0
+	}
 
 	return &types.PoolSnapshot{
 		UpdatedAt:    time.Now(),
 		TemperatureC: current,
 		TargetC:      target,
 		Heating:      body.Action == "HEATING",
-		Mode:         body.Mode,
 	}, nil
 }

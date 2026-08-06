@@ -11,7 +11,6 @@ function snapshot(overrides: Partial<PoolSnapshot> = {}): PoolSnapshot {
     temperatureC: 25.2,
     targetC: 27.0,
     heating: true,
-    mode: "HEAT",
     ...overrides,
   };
 }
@@ -23,7 +22,7 @@ describe("PoolWidget", () => {
   });
 
   test("shows the current water temperature", () => {
-    render(<PoolWidget pool={snapshot({ temperatureC: 25.2 })} />);
+    render(<PoolWidget pool={snapshot()} />);
     expect(screen.getByText(/25\.2/)).toBeTruthy();
   });
 
@@ -43,5 +42,10 @@ describe("PoolWidget", () => {
     render(<PoolWidget pool={snapshot({ targetC: 27 })} />);
     expect(screen.getByText(/target/i)).toBeTruthy();
     expect(screen.getByText(/27\.0/)).toBeTruthy();
+  });
+
+  test("hides the target line when there is no setpoint", () => {
+    render(<PoolWidget pool={snapshot({ targetC: 0 })} />);
+    expect(screen.queryByText(/target/i)).toBeNull();
   });
 });

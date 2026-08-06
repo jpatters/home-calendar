@@ -142,4 +142,16 @@ describe("Display widget enable/disable", () => {
     const { container } = render(<Display live={live} />);
     expect(container.querySelector(".calendar-pane")).not.toBeNull();
   });
+
+  test("pool widget is hidden when pool.enabled is false", () => {
+    const live = buildLive(buildConfig({ poolEnabled: false }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".pool-widget")).toBeNull();
+  });
+
+  test("pool widget is rendered when pool.enabled is true", () => {
+    const live = buildLive(buildConfig({ poolEnabled: true }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".pool-widget")).not.toBeNull();
+  });
 });

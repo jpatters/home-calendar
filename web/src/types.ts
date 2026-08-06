@@ -185,7 +185,6 @@ export interface PoolSnapshot {
   temperatureC: number;
   targetC: number;
   heating: boolean;
-  mode: string;
 }
 
 export type WSFrame =

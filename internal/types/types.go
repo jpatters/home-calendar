@@ -188,7 +188,6 @@ type PoolSnapshot struct {
 	TemperatureC float64   `json:"temperatureC"`
 	TargetC      float64   `json:"targetC"`
 	Heating      bool      `json:"heating"`
-	Mode         string    `json:"mode"`
 }
 
 func DefaultConfig() Config {

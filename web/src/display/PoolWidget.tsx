@@ -27,7 +27,9 @@ export default function PoolWidget({ pool }: Props) {
         </span>
       </div>
       <div className="pool-temp-value">{formatTemp(pool.temperatureC)}</div>
-      <div className="pool-target">Target {formatTemp(pool.targetC)}</div>
+      {pool.targetC > 0 && (
+        <div className="pool-target">Target {formatTemp(pool.targetC)}</div>
+      )}
     </div>
   );
 }

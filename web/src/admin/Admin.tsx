@@ -134,7 +134,7 @@ export default function Admin({ live }: Props) {
           {live.config?.baseball.enabled && live.config.baseball.teamId !== 0 && (
             <button onClick={() => void refreshBaseball()}>Refresh baseball now</button>
           )}
-          {live.config?.pool.enabled && (
+          {live.config?.pool.enabled && live.config.pool.deviceUrl && (
             <button onClick={() => void refreshPool()}>Refresh pool now</button>
           )}
         </div>

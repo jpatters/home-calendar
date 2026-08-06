@@ -66,6 +66,22 @@ func TestSearchReportsIdleWhenNotHeating(t *testing.T) {
 	}
 }
 
+func TestSearchRejectsNonFiniteTemperature(t *testing.T) {
+	// ESPHome emits "nan" for current_temperature while the probe is
+	// unavailable; ParseFloat accepts it as NaN, so Search must reject it
+	// rather than broadcast a bogus reading.
+	srv := climateStub(t, "IDLE", "nan", "27.0")
+	defer srv.Close()
+
+	snap, err := pool.Search(context.Background(), srv.Client(), srv.URL)
+	if err == nil {
+		t.Fatalf("expected error for non-finite temperature, got snap=%+v", snap)
+	}
+	if snap != nil {
+		t.Errorf("expected nil snapshot on non-finite temperature, got %+v", snap)
+	}
+}
+
 func TestSearchReturnsErrorOnUpstreamFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
