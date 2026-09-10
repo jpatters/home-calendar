@@ -6,10 +6,12 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jpatters/home-calendar/internal/hottub"
+	"github.com/jpatters/home-calendar/internal/types"
 )
 
 // realStatus is the inYT log struct (bytes 256..479) read verbatim from an
@@ -53,6 +55,12 @@ type fakeModule struct {
 	files  string
 	status []byte // log struct starting at offset 256
 	silent bool
+	// dropFirst ignores the first STATU request so only a resend gets an
+	// answer.
+	dropFirst bool
+	// noisy sends an unsolicited STATP push (which a real module emits to
+	// connected clients) before every reply.
+	noisy bool
 }
 
 // serve runs a fake in.touch2 module on loopback and returns its address. It
@@ -67,6 +75,7 @@ func serve(t *testing.T, m fakeModule) string {
 	t.Cleanup(func() { pc.Close() })
 	go func() {
 		buf := make([]byte, 4096)
+		seen := map[string]bool{}
 		for {
 			n, addr, err := pc.ReadFrom(buf)
 			if err != nil {
@@ -76,6 +85,13 @@ func serve(t *testing.T, m fakeModule) string {
 				continue
 			}
 			msg := buf[:n]
+			if m.dropFirst && bytes.Contains(msg, []byte("STATU")) && !seen[string(msg)] {
+				seen[string(msg)] = true
+				continue
+			}
+			if m.noisy {
+				pc.WriteTo([]byte("<PACKT><SRCCN>SPAfc:0f:e7:d9:c5:5b</SRCCN><DESCN>client</DESCN><DATAS>STATP\x01\x01\x0b\x00\x14</DATAS></PACKT>"), addr)
+			}
 			if bytes.Equal(msg, []byte("<HELLO>1</HELLO>")) {
 				pc.WriteTo([]byte("<HELLO>SPAfc:0f:e7:d9:c5:5b|My Spa</HELLO>"), addr)
 				continue
@@ -188,6 +204,60 @@ func TestReadReturnsErrorWhenModuleSilent(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("Read took %v, expected it to honour the context deadline", elapsed)
+	}
+}
+
+func TestReadRetriesWhenADatagramIsDropped(t *testing.T) {
+	addr := serve(t, fakeModule{files: inYTFiles, status: realStatus(t), dropFirst: true})
+
+	snap, err := hottub.Read(testCtx(t), addr)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if snap.TemperatureF != 67.0 || snap.TargetF != 102.0 || !snap.Heating {
+		t.Errorf("snapshot = %+v, want 67.0/102.0/heating", snap)
+	}
+}
+
+func TestReadIgnoresUnsolicitedDatagrams(t *testing.T) {
+	addr := serve(t, fakeModule{files: inYTFiles, status: realStatus(t), noisy: true})
+
+	snap, err := hottub.Read(testCtx(t), addr)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if snap.TemperatureF != 67.0 || snap.TargetF != 102.0 || !snap.Heating {
+		t.Errorf("snapshot = %+v, want 67.0/102.0/heating", snap)
+	}
+}
+
+func TestStopReturnsPromptlyWhileModuleIsSilent(t *testing.T) {
+	addr := serve(t, fakeModule{silent: true})
+	f := hottub.New(nil)
+	f.Start(context.Background(), types.HotTub{Enabled: true, Host: addr}, time.Minute)
+	time.Sleep(100 * time.Millisecond) // let the first poll block on the silent module
+
+	start := time.Now()
+	f.Stop()
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Errorf("Stop took %v while a poll was pending, want it to cancel promptly", elapsed)
+	}
+}
+
+func TestReadAcceptsIPv6Literal(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "[::1]:0")
+	if err != nil {
+		t.Skip("IPv6 loopback unavailable")
+	}
+	pc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err = hottub.Read(ctx, "::1")
+	if err == nil {
+		t.Fatalf("expected timeout from an unanswered address")
+	}
+	if strings.Contains(err.Error(), "bad host") {
+		t.Errorf("bare IPv6 literal rejected as bad host: %v", err)
 	}
 }
 

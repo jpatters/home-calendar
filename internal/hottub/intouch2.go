@@ -52,7 +52,6 @@ const (
 type Fetcher struct {
 	mu       sync.RWMutex
 	snapshot *types.HotTubSnapshot
-	lastErr  error
 
 	cancel   context.CancelFunc
 	doneWG   sync.WaitGroup
@@ -89,7 +88,6 @@ func (f *Fetcher) Stop() {
 	}
 	f.mu.Lock()
 	f.snapshot = nil
-	f.lastErr = nil
 	f.mu.Unlock()
 }
 
@@ -131,14 +129,10 @@ func (f *Fetcher) fetch(ctx context.Context, h types.HotTub) {
 		// UDP drops and the module's RF link to the spa both come and go;
 		// keep the last good snapshot and try again on the next tick.
 		log.Printf("hottub: %v", err)
-		f.mu.Lock()
-		f.lastErr = err
-		f.mu.Unlock()
 		return
 	}
 	f.mu.Lock()
 	f.snapshot = snap
-	f.lastErr = nil
 	f.mu.Unlock()
 	if f.onUpdate != nil {
 		f.onUpdate(snap)
@@ -148,18 +142,19 @@ func (f *Fetcher) fetch(ctx context.Context, h types.HotTub) {
 // Read queries the in.touch2 module at host ("ip" or "ip:port") and returns
 // the current water temperature, setpoint, and heater state in Fahrenheit.
 func Read(ctx context.Context, host string) (*types.HotTubSnapshot, error) {
-	addr, err := resolve(host)
+	addr := withDefaultPort(host)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "udp", addr)
 	if err != nil {
-		return nil, err
-	}
-	conn, err := net.Dial("udp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("hottub: dial %s: %w", addr, err)
+		return nil, fmt.Errorf("hottub: dial %q: %w", addr, err)
 	}
 	defer conn.Close()
-	c := &client{ctx: ctx, conn: conn}
+	// A cancelled context must interrupt a blocking Read immediately so
+	// Stop() (and therefore config saves) never waits out a request timeout.
+	stop := context.AfterFunc(ctx, func() { conn.SetDeadline(time.Now()) })
+	defer stop()
+	c := &client{conn: conn}
 
-	hello, err := c.exchange([]byte("<HELLO>1</HELLO>"), []byte("<HELLO>"))
+	hello, err := c.exchange(ctx, []byte("<HELLO>1</HELLO>"), []byte("<HELLO>"))
 	if err != nil {
 		return nil, fmt.Errorf("hottub: discover: %w", err)
 	}
@@ -169,7 +164,7 @@ func Read(ctx context.Context, host string) (*types.HotTubSnapshot, error) {
 	}
 	c.spaID = spaID
 
-	files, err := c.request([]byte("SFILE"), []byte("FILES"))
+	files, err := c.request(ctx, []byte("SFILE"), []byte("FILES"))
 	if err != nil {
 		return nil, fmt.Errorf("hottub: read spa pack: %w", err)
 	}
@@ -180,7 +175,7 @@ func Read(ctx context.Context, host string) (*types.HotTubSnapshot, error) {
 	req := append([]byte("STATU"), 1)
 	req = binary.BigEndian.AppendUint16(req, blockStart)
 	req = binary.BigEndian.AppendUint16(req, blockLen)
-	statv, err := c.request(req, []byte("STATV"))
+	statv, err := c.request(ctx, req, []byte("STATV"))
 	if err != nil {
 		return nil, fmt.Errorf("hottub: read status: %w", err)
 	}
@@ -190,19 +185,14 @@ func Read(ctx context.Context, host string) (*types.HotTubSnapshot, error) {
 	return decode(statv[8 : 8+blockLen])
 }
 
-func resolve(host string) (string, error) {
+// withDefaultPort appends the in.touch2 port unless host already carries one.
+// Bare IPv6 literals fail SplitHostPort too and are bracketed by JoinHostPort.
+func withDefaultPort(host string) string {
 	host = strings.TrimSpace(host)
-	_, _, err := net.SplitHostPort(host)
-	var addrErr *net.AddrError
-	if errors.As(err, &addrErr) && strings.Contains(addrErr.Err, "missing port") {
-		host = net.JoinHostPort(host, DefaultPort)
-	} else if err != nil {
-		return "", fmt.Errorf("hottub: bad host %q: %w", host, err)
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		return net.JoinHostPort(host, DefaultPort)
 	}
-	if _, err := net.ResolveUDPAddr("udp", host); err != nil {
-		return "", fmt.Errorf("hottub: bad host %q: %w", host, err)
-	}
-	return host, nil
+	return host
 }
 
 func checkSpaPack(files []byte) error {
@@ -213,7 +203,7 @@ func checkSpaPack(files []byte) error {
 	}
 	logFile := strings.TrimSuffix(parts[2], ".xml")
 	if logFile != supportedLogFile {
-		return fmt.Errorf("hottub: unsupported spa pack %q (only %s is supported)", parts[1]+","+parts[2], supportedLogFile)
+		return fmt.Errorf("hottub: unsupported spa pack %q (only %s is supported)", files, supportedLogFile)
 	}
 	return nil
 }
@@ -233,21 +223,20 @@ func decode(block []byte) (*types.HotTubSnapshot, error) {
 }
 
 type client struct {
-	ctx   context.Context
 	conn  net.Conn
 	spaID []byte
 }
 
 // request wraps payload in a PACKT envelope and returns the DATAS content of
 // the first reply whose content starts with want.
-func (c *client) request(payload, want []byte) ([]byte, error) {
+func (c *client) request(ctx context.Context, payload, want []byte) ([]byte, error) {
 	var frame []byte
 	frame = append(frame, "<PACKT><SRCCN>"+clientID+"</SRCCN><DESCN>"...)
 	frame = append(frame, c.spaID...)
 	frame = append(frame, "</DESCN><DATAS>"...)
 	frame = append(frame, payload...)
 	frame = append(frame, "</DATAS></PACKT>"...)
-	reply, err := c.exchange(frame, append([]byte("<DATAS>"), want...))
+	reply, err := c.exchange(ctx, frame, append([]byte("<DATAS>"), want...))
 	if err != nil {
 		return nil, err
 	}
@@ -262,14 +251,14 @@ func (c *client) request(payload, want []byte) ([]byte, error) {
 // exchange sends msg and waits for a datagram containing want, retrying once
 // on timeout since UDP offers no delivery guarantee. The module's replies do
 // not close their tags consistently, so matching is done on content only.
-func (c *client) exchange(msg, want []byte) ([]byte, error) {
+func (c *client) exchange(ctx context.Context, msg, want []byte) ([]byte, error) {
 	buf := make([]byte, 4096)
 	for attempt := 0; attempt < requestAttempts; attempt++ {
-		if err := c.ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		deadline := time.Now().Add(requestTimeout)
-		if d, ok := c.ctx.Deadline(); ok && d.Before(deadline) {
+		if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 			deadline = d
 		}
 		if err := c.conn.SetDeadline(deadline); err != nil {
@@ -283,6 +272,9 @@ func (c *client) exchange(msg, want []byte) ([]byte, error) {
 			if err != nil {
 				var netErr net.Error
 				if errors.As(err, &netErr) && netErr.Timeout() {
+					if ctxErr := ctx.Err(); ctxErr != nil {
+						return nil, ctxErr
+					}
 					break
 				}
 				return nil, err
