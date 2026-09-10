@@ -182,6 +182,26 @@ describe("Display widget enable/disable", () => {
   });
 });
 
+describe("Display hot tub modal", () => {
+  test("tapping the hot tub widget opens the hot tub dialog", () => {
+    const live = {
+      ...buildLive(buildConfig({ hotTubEnabled: true })),
+      hottub: {
+        updatedAt: "2026-09-10T12:00:00Z",
+        temperatureF: 67,
+        targetF: 102,
+        minTargetF: 59,
+        maxTargetF: 106,
+        heating: true,
+      },
+    };
+    render(<Display live={live} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /hot tub details/i }));
+    expect(screen.getByRole("dialog", { name: /hot tub/i })).toBeTruthy();
+  });
+});
+
 describe("Display refresh button", () => {
   test("reloads the page when the refresh button is pressed", () => {
     const live = buildLive(buildConfig());

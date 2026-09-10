@@ -11,6 +11,7 @@ import TideModal from "./TideModal";
 import BaseballWidget from "./BaseballWidget";
 import PoolWidget from "./PoolWidget";
 import HotTubWidget from "./HotTubWidget";
+import HotTubModal from "./HotTubModal";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 import { reloadPage } from "../browser";
@@ -24,6 +25,7 @@ export default function Display({ live }: Props) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [tideOpen, setTideOpen] = useState(false);
   const [weatherOpen, setWeatherOpen] = useState(false);
+  const [hotTubOpen, setHotTubOpen] = useState(false);
 
   if (!live.ready) {
     return <div className="loading">Loading…</div>;
@@ -81,7 +83,9 @@ export default function Display({ live }: Props) {
           <BaseballWidget baseball={live.baseball} config={live.config?.baseball} />
         )}
         {poolEnabled && <PoolWidget pool={live.pool} />}
-        {hotTubEnabled && <HotTubWidget hottub={live.hottub} />}
+        {hotTubEnabled && (
+          <HotTubWidget hottub={live.hottub} onOpen={() => setHotTubOpen(true)} />
+        )}
         <div className="status-row">
           <div className="connection-indicator">
             <span className={live.connected ? "dot ok" : "dot bad"} />
@@ -106,6 +110,9 @@ export default function Display({ live }: Props) {
           config={live.config?.weather}
           onClose={() => setWeatherOpen(false)}
         />
+      )}
+      {hotTubOpen && live.hottub && (
+        <HotTubModal hottub={live.hottub} onClose={() => setHotTubOpen(false)} />
       )}
       {selectedEvent && (
         <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />

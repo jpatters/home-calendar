@@ -135,6 +135,67 @@ func TestHotTubRefreshReturns409WhenDisabled(t *testing.T) {
 	}
 }
 
+func TestHotTubTargetReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.HotTub.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, hottub: hottub.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hottub/target", strings.NewReader(`{"targetF":103}`))
+	rec := httptest.NewRecorder()
+	srv.handleHotTubTarget(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func enabledHotTubStore(t *testing.T, host string) *config.Store {
+	t.Helper()
+	return newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.HotTub.Enabled = true
+		cfg.HotTub.Host = host
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+}
+
+func TestHotTubTargetRejectsMalformedBody(t *testing.T) {
+	srv := &Server{cfg: enabledHotTubStore(t, "127.0.0.1:1"), hottub: hottub.New(nil)}
+	for _, body := range []string{``, `not json`, `{"targetF":"hot"}`} {
+		req := httptest.NewRequest(http.MethodPost, "/api/hottub/target", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		srv.handleHotTubTarget(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("body %q: expected 400, got %d; body=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestHotTubTargetReturns400ForInvalidTarget(t *testing.T) {
+	srv := &Server{cfg: enabledHotTubStore(t, "127.0.0.1:1"), hottub: hottub.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hottub/target", strings.NewReader(`{"targetF":102.5}`))
+	rec := httptest.NewRecorder()
+	srv.handleHotTubTarget(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHotTubTargetReturns502WhenModuleUnreachable(t *testing.T) {
+	srv := &Server{cfg: enabledHotTubStore(t, "not a host:port:extra"), hottub: hottub.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hottub/target", strings.NewReader(`{"targetF":103}`))
+	rec := httptest.NewRecorder()
+	srv.handleHotTubTarget(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWeatherGeocodeRejectsEmptyQuery(t *testing.T) {
 	s := &Server{geocode: func(context.Context, string) ([]weather.GeoResult, error) {
 		t.Fatal("geocode should not be called on empty query")

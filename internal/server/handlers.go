@@ -3,10 +3,12 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
@@ -234,6 +236,34 @@ func (s *Server) handleHotTubRefresh(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	s.hottub.RefreshNow(ctx, cfg.HotTub)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHotTubTarget(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.HotTub.Enabled {
+		http.Error(w, "hot tub widget is disabled", http.StatusConflict)
+		return
+	}
+	var body struct {
+		TargetF *float64 `json:"targetF"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TargetF == nil {
+		http.Error(w, "body must be JSON with a numeric targetF", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	snap, err := s.hottub.SetTarget(ctx, cfg.HotTub, *body.TargetF)
+	if errors.Is(err, hottub.ErrInvalidTarget) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		log.Printf("hottub: set target: %v", err)
+		http.Error(w, "hot tub did not respond", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

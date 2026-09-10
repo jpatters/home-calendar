@@ -1,4 +1,4 @@
-import type { BaseballTeam, Config, GeoResult, TideStation } from "./types";
+import type { BaseballTeam, Config, GeoResult, HotTubSnapshot, TideStation } from "./types";
 
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
@@ -42,6 +42,16 @@ export async function refreshPool(): Promise<void> {
 
 export async function refreshHotTub(): Promise<void> {
   await fetch("/api/hottub/refresh", { method: "POST" });
+}
+
+export async function setHotTubTarget(targetF: number): Promise<HotTubSnapshot> {
+  const res = await fetch("/api/hottub/target", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetF }),
+  });
+  if (!res.ok) throw new Error(`POST /api/hottub/target ${res.status}`);
+  return res.json();
 }
 
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {

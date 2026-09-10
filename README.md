@@ -46,7 +46,10 @@ private network.
   cloud, no API key. Only the inYT spa pack with log structure v66 is
   supported; other packs are rejected with a clear error rather than decoded
   with the wrong byte offsets. Temperatures are shown in whole degrees
-  Fahrenheit to match the tub's own panel. Set the module's IP in admin. This
+  Fahrenheit to match the tub's own panel. Tap the widget to open a panel with
+  up/down arrows that change the target one degree per tap; a burst of taps is
+  sent to the tub as a single write, and the arrows stop at the limits the spa
+  pack reports (typically 59–106 °F). Set the module's IP in admin. This
   is unicast UDP to a fixed address, so it works from the default Docker bridge
   network without host networking.
 - **Config**: single JSON file on a bind-mounted volume.
@@ -244,10 +247,17 @@ assigns IDs, and triggers an immediate refresh.
 | POST   | `/api/pool/refresh`           | Force a pool refresh                      |
 | GET    | `/api/hottub`                 | Current hot tub temperature snapshot      |
 | POST   | `/api/hottub/refresh`         | Force a hot tub refresh                   |
+| POST   | `/api/hottub/target`          | Set the hot tub target (`{"targetF": 103}`) |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
 widget is disabled.
+
+`POST /api/hottub/target` takes a whole number of degrees Fahrenheit within the
+`minTargetF`–`maxTargetF` range the snapshot reports. It returns the fresh
+snapshot once the module acknowledges the write and broadcasts it as a `hottub`
+frame; `400` for a fractional or out-of-range target, `409` when the widget is
+disabled, and `502` when the module does not answer.
 
 ### WebSocket frames
 
