@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Display from "./Display";
 import type { LiveData } from "../useLiveData";
 import type { Config } from "../types";
@@ -8,8 +8,15 @@ vi.mock("./CalendarView", () => ({
   default: () => <div data-testid="calendar-view" />,
 }));
 
+vi.mock("../browser", () => ({
+  reloadPage: vi.fn(),
+}));
+
+import { reloadPage } from "../browser";
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 function buildConfig(
@@ -172,5 +179,21 @@ describe("Display widget enable/disable", () => {
     const live = buildLive(buildConfig({ hotTubEnabled: true }));
     const { container } = render(<Display live={live} />);
     expect(container.querySelector(".hottub-widget")).not.toBeNull();
+  });
+});
+
+describe("Display refresh button", () => {
+  test("reloads the page when the refresh button is pressed", () => {
+    const live = buildLive(buildConfig());
+    render(<Display live={live} />);
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(reloadPage).toHaveBeenCalledTimes(1);
+  });
+
+  test("reloads the page even while the live connection is down", () => {
+    const live = { ...buildLive(buildConfig()), connected: false };
+    render(<Display live={live} />);
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(reloadPage).toHaveBeenCalledTimes(1);
   });
 });
