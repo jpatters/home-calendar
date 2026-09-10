@@ -198,6 +198,8 @@ export interface HotTubSnapshot {
   updatedAt: string;
   temperatureF: number;
   targetF: number;
+  minTargetF: number;
+  maxTargetF: number;
   heating: boolean;
 }
 

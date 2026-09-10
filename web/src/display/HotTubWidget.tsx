@@ -1,14 +1,12 @@
 import type { HotTubSnapshot } from "../types";
+import { formatTemp } from "./hotTubFormat";
 
 interface Props {
   hottub: HotTubSnapshot | null;
+  onOpen: () => void;
 }
 
-function formatTemp(fahrenheit: number): string {
-  return `${Math.round(fahrenheit)}°F`;
-}
-
-export default function HotTubWidget({ hottub }: Props) {
+export default function HotTubWidget({ hottub, onOpen }: Props) {
   if (!hottub) {
     return (
       <div className="widget hottub-widget hottub-widget-empty">
@@ -17,7 +15,12 @@ export default function HotTubWidget({ hottub }: Props) {
     );
   }
   return (
-    <div className="widget hottub-widget">
+    <button
+      type="button"
+      className="widget hottub-widget"
+      aria-label="Hot tub details"
+      onClick={onOpen}
+    >
       <div className="hottub-header">
         <span className="hottub-label">Hot tub</span>
         <span
@@ -28,6 +31,6 @@ export default function HotTubWidget({ hottub }: Props) {
       </div>
       <div className="hottub-temp-value">{formatTemp(hottub.temperatureF)}</div>
       <div className="hottub-target">Target {formatTemp(hottub.targetF)}</div>
-    </div>
+    </button>
   );
 }

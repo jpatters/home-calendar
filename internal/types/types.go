@@ -199,10 +199,15 @@ type PoolSnapshot struct {
 	Heating      bool      `json:"heating"`
 }
 
+// HotTubSnapshot is one reading from the hot tub. TargetF is the user's
+// setpoint; MinTargetF and MaxTargetF are the limits the spa pack allows it to
+// be set to.
 type HotTubSnapshot struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 	TemperatureF float64   `json:"temperatureF"`
 	TargetF      float64   `json:"targetF"`
+	MinTargetF   float64   `json:"minTargetF"`
+	MaxTargetF   float64   `json:"maxTargetF"`
 	Heating      bool      `json:"heating"`
 }
 

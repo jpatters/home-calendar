@@ -93,6 +93,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("POST /api/pool/refresh", s.handlePoolRefresh)
 	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
 	mux.HandleFunc("POST /api/hottub/refresh", s.handleHotTubRefresh)
+	mux.HandleFunc("POST /api/hottub/target", s.handleHotTubTarget)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()
