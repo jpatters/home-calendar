@@ -485,13 +485,26 @@ input, select {
 .baseball-outs   { font-variant-numeric: tabular-nums; }
 
 /* -------- connection dot -------- */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+}
+.reload-btn {
+  padding: 0 12px;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  background: transparent;
+  border-radius: 999px;
+}
 .connection-indicator {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.85rem;
   color: var(--fg-muted);
-  padding: 4px 12px;
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.ok  { background: #34a853; }

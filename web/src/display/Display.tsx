@@ -13,6 +13,7 @@ import PoolWidget from "./PoolWidget";
 import HotTubWidget from "./HotTubWidget";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
+import { reloadPage } from "../browser";
 
 interface Props {
   live: LiveData;
@@ -81,9 +82,14 @@ export default function Display({ live }: Props) {
         )}
         {poolEnabled && <PoolWidget pool={live.pool} />}
         {hotTubEnabled && <HotTubWidget hottub={live.hottub} />}
-        <div className="connection-indicator">
-          <span className={live.connected ? "dot ok" : "dot bad"} />
-          {live.connected ? "live" : "reconnecting…"}
+        <div className="status-row">
+          <div className="connection-indicator">
+            <span className={live.connected ? "dot ok" : "dot bad"} />
+            {live.connected ? "live" : "reconnecting…"}
+          </div>
+          <button type="button" className="reload-btn" onClick={reloadPage}>
+            <span aria-hidden="true">↻ </span>Refresh
+          </button>
         </div>
       </aside>
 

@@ -51,6 +51,8 @@ private network.
   network without host networking.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
+- **Refresh**: a small button at the bottom of the widget column reloads the
+  whole page, for when a wall display needs a kick.
 
 ## Quick start (Docker)
 
