@@ -8,6 +8,7 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -24,6 +25,7 @@ type Server struct {
 	tide          *tide.Fetcher
 	baseball      *baseball.Fetcher
 	pool          *pool.Fetcher
+	hottub        *hottub.Fetcher
 	hub           *Hub
 	rootCtx       context.Context
 	geocode       func(ctx context.Context, query string) ([]weather.GeoResult, error)
@@ -56,6 +58,9 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.pool = pool.New(func(snap *types.PoolSnapshot) {
 		hub.Broadcast(Frame{Type: "pool", Pool: snap})
 	})
+	s.hottub = hottub.New(func(snap *types.HotTubSnapshot) {
+		hub.Broadcast(Frame{Type: "hottub", HotTub: snap})
+	})
 	s.geocode = func(ctx context.Context, q string) ([]weather.GeoResult, error) {
 		return weather.Search(ctx, s.weather.HTTPClient(), weather.DefaultGeocodingURL, q)
 	}
@@ -86,6 +91,8 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("GET /api/baseball/teams", s.handleBaseballTeamSearch)
 	mux.HandleFunc("GET /api/pool", s.handleGetPool)
 	mux.HandleFunc("POST /api/pool/refresh", s.handlePoolRefresh)
+	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
+	mux.HandleFunc("POST /api/hottub/refresh", s.handleHotTubRefresh)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()
@@ -105,6 +112,7 @@ func (s *Server) Shutdown() {
 	s.tide.Stop()
 	s.baseball.Stop()
 	s.pool.Stop()
+	s.hottub.Stop()
 }
 
 func (s *Server) restartFetchers(c types.Config) {
@@ -172,6 +180,14 @@ func (s *Server) applyFetcherConfig(ctx context.Context, c types.Config, broadca
 		s.pool.Stop()
 		if broadcastClears {
 			s.hub.Broadcast(Frame{Type: "pool", Pool: nil})
+		}
+	}
+	if c.HotTub.Enabled {
+		s.hottub.Start(ctx, c.HotTub, time.Duration(c.Display.HotTubRefreshSeconds)*time.Second)
+	} else {
+		s.hottub.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "hottub", HotTub: nil})
 		}
 	}
 }

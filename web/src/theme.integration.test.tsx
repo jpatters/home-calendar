@@ -20,6 +20,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
     tide: null,
     baseball: null,
     pool: null,
+    hottub: null,
     weather,
     config: {
       calendars: [],
@@ -40,6 +41,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
       snowDay: { enabled: true, url: "" },
       baseball: { enabled: true, teamId: 0, teamName: "", teamAbbr: "" },
       pool: { enabled: true, deviceUrl: "" },
+      hotTub: { enabled: false, host: "" },
       display: {
         defaultView: "week",
         calendarRefreshSeconds: 300,
@@ -47,6 +49,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         tideRefreshSeconds: 3600,
         baseballRefreshSeconds: 600,
         poolRefreshSeconds: 30,
+        hotTubRefreshSeconds: 30,
         theme,
         mode,
         calendarEnabled: true,
@@ -123,6 +126,7 @@ describe("useTheme", () => {
       tide: null,
       baseball: null,
       pool: null,
+      hottub: null,
     };
     render(<Harness live={live} />);
     expect(document.documentElement.dataset.palette).toBeUndefined();

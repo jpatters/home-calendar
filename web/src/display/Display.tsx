@@ -10,6 +10,7 @@ import TideWidget from "./TideWidget";
 import TideModal from "./TideModal";
 import BaseballWidget from "./BaseballWidget";
 import PoolWidget from "./PoolWidget";
+import HotTubWidget from "./HotTubWidget";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 
@@ -36,6 +37,7 @@ export default function Display({ live }: Props) {
   const tideEnabled = live.config?.tide.enabled ?? true;
   const baseballEnabled = live.config?.baseball.enabled ?? true;
   const poolEnabled = live.config?.pool.enabled ?? true;
+  const hotTubEnabled = live.config?.hotTub.enabled ?? false;
 
   return (
     <div
@@ -78,6 +80,7 @@ export default function Display({ live }: Props) {
           <BaseballWidget baseball={live.baseball} config={live.config?.baseball} />
         )}
         {poolEnabled && <PoolWidget pool={live.pool} />}
+        {hotTubEnabled && <HotTubWidget hottub={live.hottub} />}
         <div className="connection-indicator">
           <span className={live.connected ? "dot ok" : "dot bad"} />
           {live.connected ? "live" : "reconnecting…"}

@@ -92,6 +92,15 @@ export default function DisplayPanel({ value, onChange, autoAvailable }: Props) 
             onChange={(e) => onChange({ ...value, poolRefreshSeconds: Number(e.target.value) })}
           />
         </label>
+        <label>
+          <span>Hot tub refresh (seconds)</span>
+          <input
+            type="number"
+            min={10}
+            value={value.hotTubRefreshSeconds}
+            onChange={(e) => onChange({ ...value, hotTubRefreshSeconds: Number(e.target.value) })}
+          />
+        </label>
       </div>
     </div>
   );

@@ -33,6 +33,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 		},
 		SnowDay: types.SnowDay{URL: "https://example.com/snow"},
 		Pool:    types.Pool{DeviceURL: "http://pool.example"},
+		HotTub:  types.HotTub{Enabled: true, Host: "192.168.1.50"},
 		Display: types.Display{
 			DefaultView:            "day",
 			CalendarRefreshSeconds: 120,
@@ -40,6 +41,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			TideRefreshSeconds:     1800,
 			BaseballRefreshSeconds: 900,
 			PoolRefreshSeconds:     45,
+			HotTubRefreshSeconds:   20,
 			Theme:                  "ocean",
 			Mode:                   "dark",
 		},

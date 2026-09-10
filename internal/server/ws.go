@@ -33,6 +33,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		Tide:     s.tide.Snapshot(),
 		Baseball: s.baseball.Snapshot(),
 		Pool:     s.pool.Snapshot(),
+		HotTub:   s.hottub.Snapshot(),
 	}
 	if data, err := json.Marshal(snap); err == nil {
 		if err := conn.Write(r.Context(), websocket.MessageText, data); err != nil {
