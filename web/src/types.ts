@@ -45,6 +45,7 @@ export interface Display {
   tideRefreshSeconds: number;
   baseballRefreshSeconds: number;
   poolRefreshSeconds: number;
+  hotTubRefreshSeconds: number;
   theme: ThemePalette;
   mode: ThemeMode;
   calendarEnabled: boolean;
@@ -76,6 +77,11 @@ export interface Pool {
   deviceUrl: string;
 }
 
+export interface HotTub {
+  enabled: boolean;
+  host: string;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
@@ -83,6 +89,7 @@ export interface Config {
   snowDay: SnowDay;
   baseball: Baseball;
   pool: Pool;
+  hotTub: HotTub;
   display: Display;
 }
 
@@ -187,6 +194,13 @@ export interface PoolSnapshot {
   heating: boolean;
 }
 
+export interface HotTubSnapshot {
+  updatedAt: string;
+  temperatureF: number;
+  targetF: number;
+  heating: boolean;
+}
+
 export type WSFrame =
   | {
       type: "snapshot";
@@ -197,6 +211,7 @@ export type WSFrame =
       tide: TideSnapshot | null;
       baseball: BaseballSnapshot | null;
       pool: PoolSnapshot | null;
+      hottub: HotTubSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
@@ -204,4 +219,5 @@ export type WSFrame =
   | { type: "tide"; tide: TideSnapshot | null }
   | { type: "baseball"; baseball: BaseballSnapshot | null }
   | { type: "pool"; pool: PoolSnapshot | null }
+  | { type: "hottub"; hottub: HotTubSnapshot | null }
   | { type: "config"; config: Config };

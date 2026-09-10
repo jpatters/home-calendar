@@ -39,6 +39,16 @@ private network.
   from an [ESPHome](https://esphome.io/) device's built-in web server over the
   LAN — no cloud, no API key. Set the device URL in admin (a fixed IP is more
   reliable than an mDNS `.local` name from a container).
+- **Hot tub**: optional widget showing the hot tub's water temperature,
+  setpoint, and whether the heater is on. Talks directly to a Gecko in.touch2
+  WiFi module over the LAN using its UDP protocol on port 10022 (the same one
+  the in.touch2 phone app and the geckolib Home Assistant integration use) — no
+  cloud, no API key. Only the inYT spa pack with log structure v66 is
+  supported; other packs are rejected with a clear error rather than decoded
+  with the wrong byte offsets. Temperatures are shown in whole degrees
+  Fahrenheit to match the tub's own panel. Set the module's IP in admin. This
+  is unicast UDP to a fixed address, so it works from the default Docker bridge
+  network without host networking.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 
@@ -154,6 +164,10 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "enabled": true,
     "deviceUrl": "http://pool-thermostat.local"
   },
+  "hotTub": {
+    "enabled": false,
+    "host": "192.168.1.50"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
@@ -161,6 +175,7 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "tideRefreshSeconds": 600,
     "baseballRefreshSeconds": 600,
     "poolRefreshSeconds": 30,
+    "hotTubRefreshSeconds": 30,
     "theme": "default",
     "mode": "light",
     "calendarEnabled": true,
@@ -169,13 +184,18 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
 }
 ```
 
-Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, and Pool
-each carry their own `enabled` field; the calendar and clock live under
+Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Pool, and
+Hot Tub each carry their own `enabled` field; the calendar and clock live under
 `display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
 the server stops its background fetcher (so no API calls are made) and the
 display hides it. You can toggle widgets from the admin page — look for the
 "Show …" checkbox at the top of each panel. Configs written before these flags
-existed are treated as all-enabled when loaded.
+existed are treated as all-enabled when loaded, with one exception: the hot tub
+widget defaults to disabled, and configs from before it existed stay disabled
+until you turn it on in admin.
+
+The hot tub `host` is the in.touch2 module's LAN address as `ip` or `ip:port`;
+the port defaults to `10022`.
 
 The baseball widget additionally stays dormant while no team is selected
 (`teamId: 0`); no polling happens until you pick a team from the admin
@@ -220,6 +240,8 @@ assigns IDs, and triggers an immediate refresh.
 | GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |
 | GET    | `/api/pool`                   | Current pool temperature snapshot         |
 | POST   | `/api/pool/refresh`           | Force a pool refresh                      |
+| GET    | `/api/hottub`                 | Current hot tub temperature snapshot      |
+| POST   | `/api/hottub/refresh`         | Force a hot tub refresh                   |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
@@ -228,12 +250,14 @@ widget is disabled.
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...}, "pool": {...}, "hottub": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
 { "type": "snowday",  "snowday": {...} }
 { "type": "tide",     "tide": {...} }
 { "type": "baseball", "baseball": {...} }
+{ "type": "pool",     "pool": {...} }
+{ "type": "hottub",   "hottub": {...} }
 { "type": "config",   "config": {...} }
 ```
 

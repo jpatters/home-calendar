@@ -2,20 +2,21 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Config } from "../types";
 import type { LiveData } from "../useLiveData";
-import { putConfig, refreshBaseball, refreshCalendars, refreshPool, refreshSnowDay, refreshTide, refreshWeather } from "../api";
+import { putConfig, refreshBaseball, refreshCalendars, refreshHotTub, refreshPool, refreshSnowDay, refreshTide, refreshWeather } from "../api";
 import CalendarsPanel from "./CalendarsPanel";
 import WeatherPanel from "./WeatherPanel";
 import SnowDayPanel from "./SnowDayPanel";
 import TidePanel from "./TidePanel";
 import BaseballPanel from "./BaseballPanel";
 import PoolPanel from "./PoolPanel";
+import HotTubPanel from "./HotTubPanel";
 import DisplayPanel from "./DisplayPanel";
 
 interface Props {
   live: LiveData;
 }
 
-type Tab = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "pool" | "display";
+type Tab = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "pool" | "hottub" | "display";
 
 export default function Admin({ live }: Props) {
   const [draft, setDraft] = useState<Config | null>(live.config);
@@ -64,6 +65,7 @@ export default function Admin({ live }: Props) {
         <button className={tab === "snowday" ? "active" : ""} onClick={() => setTab("snowday")}>Snow Day</button>
         <button className={tab === "baseball" ? "active" : ""} onClick={() => setTab("baseball")}>Baseball</button>
         <button className={tab === "pool" ? "active" : ""} onClick={() => setTab("pool")}>Pool</button>
+        <button className={tab === "hottub" ? "active" : ""} onClick={() => setTab("hottub")}>Hot Tub</button>
         <button className={tab === "display" ? "active" : ""} onClick={() => setTab("display")}>Display</button>
       </div>
 
@@ -104,6 +106,12 @@ export default function Admin({ live }: Props) {
             onChange={(pool) => setDraft({ ...draft, pool })}
           />
         )}
+        {tab === "hottub" && (
+          <HotTubPanel
+            value={draft.hotTub ?? { enabled: false, host: "" }}
+            onChange={(hotTub) => setDraft({ ...draft, hotTub })}
+          />
+        )}
         {tab === "display" && (
           <DisplayPanel
             value={draft.display}
@@ -136,6 +144,9 @@ export default function Admin({ live }: Props) {
           )}
           {live.config?.pool.enabled && live.config.pool.deviceUrl && (
             <button onClick={() => void refreshPool()}>Refresh pool now</button>
+          )}
+          {live.config?.hotTub.enabled && live.config.hotTub.host && (
+            <button onClick={() => void refreshHotTub()}>Refresh hot tub now</button>
           )}
         </div>
         <div className="save">

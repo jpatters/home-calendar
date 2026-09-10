@@ -37,6 +37,7 @@ type Display struct {
 	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
 	BaseballRefreshSeconds int    `json:"baseballRefreshSeconds"`
 	PoolRefreshSeconds     int    `json:"poolRefreshSeconds"`
+	HotTubRefreshSeconds   int    `json:"hotTubRefreshSeconds"`
 	Theme                  string `json:"theme"`
 	Mode                   string `json:"mode"`
 	CalendarEnabled        bool   `json:"calendarEnabled"`
@@ -60,6 +61,13 @@ type Pool struct {
 	DeviceURL string `json:"deviceUrl"`
 }
 
+// HotTub configures the Gecko in.touch2 hot tub widget. Host is the module's
+// LAN address as "ip" or "ip:port"; the port defaults to 10022.
+type HotTub struct {
+	Enabled bool   `json:"enabled"`
+	Host    string `json:"host"`
+}
+
 type Config struct {
 	Calendars []Calendar `json:"calendars"`
 	Weather   Weather    `json:"weather"`
@@ -67,6 +75,7 @@ type Config struct {
 	SnowDay   SnowDay    `json:"snowDay"`
 	Baseball  Baseball   `json:"baseball"`
 	Pool      Pool       `json:"pool"`
+	HotTub    HotTub     `json:"hotTub"`
 	Display   Display    `json:"display"`
 }
 
@@ -190,6 +199,13 @@ type PoolSnapshot struct {
 	Heating      bool      `json:"heating"`
 }
 
+type HotTubSnapshot struct {
+	UpdatedAt    time.Time `json:"updatedAt"`
+	TemperatureF float64   `json:"temperatureF"`
+	TargetF      float64   `json:"targetF"`
+	Heating      bool      `json:"heating"`
+}
+
 func DefaultConfig() Config {
 	return Config{
 		Calendars: []Calendar{},
@@ -222,6 +238,7 @@ func DefaultConfig() Config {
 			TideRefreshSeconds:     600,
 			BaseballRefreshSeconds: 600,
 			PoolRefreshSeconds:     30,
+			HotTubRefreshSeconds:   30,
 			Theme:                  "default",
 			Mode:                   "light",
 			CalendarEnabled:        true,

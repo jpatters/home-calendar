@@ -40,6 +40,10 @@ export async function refreshPool(): Promise<void> {
   await fetch("/api/pool/refresh", { method: "POST" });
 }
 
+export async function refreshHotTub(): Promise<void> {
+  await fetch("/api/hottub/refresh", { method: "POST" });
+}
+
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {
   const res = await fetch(`/api/weather/geocode?q=${encodeURIComponent(query)}`, { signal });
   if (!res.ok) throw new Error(`GET /api/weather/geocode ${res.status}`);

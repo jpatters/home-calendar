@@ -12,6 +12,7 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -112,6 +113,23 @@ func TestPoolRefreshReturns409WhenDisabled(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/pool/refresh", nil)
 	rec := httptest.NewRecorder()
 	srv.handlePoolRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHotTubRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.HotTub.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, hottub: hottub.New(nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hottub/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleHotTubRefresh(rec, req)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
 	}

@@ -175,6 +175,10 @@ func normalize(c types.Config) types.Config {
 	if c.Display.PoolRefreshSeconds <= 0 {
 		c.Display.PoolRefreshSeconds = d.Display.PoolRefreshSeconds
 	}
+	if c.Display.HotTubRefreshSeconds <= 0 {
+		c.Display.HotTubRefreshSeconds = d.Display.HotTubRefreshSeconds
+	}
+	c.HotTub.Host = strings.TrimSpace(c.HotTub.Host)
 	if c.Pool.DeviceURL == "" {
 		c.Pool.DeviceURL = d.Pool.DeviceURL
 	}

@@ -19,6 +19,7 @@ function buildConfig(
     snowDayEnabled: boolean;
     baseballEnabled: boolean;
     poolEnabled: boolean;
+    hotTubEnabled: boolean;
     calendarEnabled: boolean;
     clockEnabled: boolean;
   }> = {},
@@ -53,6 +54,10 @@ function buildConfig(
       enabled: overrides.poolEnabled ?? true,
       deviceUrl: "http://pool.test",
     },
+    hotTub: {
+      enabled: overrides.hotTubEnabled ?? true,
+      host: "192.168.1.50",
+    },
     display: {
       defaultView: "week",
       calendarRefreshSeconds: 300,
@@ -60,6 +65,7 @@ function buildConfig(
       tideRefreshSeconds: 3600,
       baseballRefreshSeconds: 600,
       poolRefreshSeconds: 30,
+      hotTubRefreshSeconds: 30,
       theme: "default",
       mode: "light",
       calendarEnabled: overrides.calendarEnabled ?? true,
@@ -79,6 +85,7 @@ function buildLive(config: Config): LiveData {
     tide: null,
     baseball: null,
     pool: null,
+    hottub: null,
   };
 }
 
@@ -153,5 +160,17 @@ describe("Display widget enable/disable", () => {
     const live = buildLive(buildConfig({ poolEnabled: true }));
     const { container } = render(<Display live={live} />);
     expect(container.querySelector(".pool-widget")).not.toBeNull();
+  });
+
+  test("hot tub widget is hidden when hotTub.enabled is false", () => {
+    const live = buildLive(buildConfig({ hotTubEnabled: false }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".hottub-widget")).toBeNull();
+  });
+
+  test("hot tub widget is rendered when hotTub.enabled is true", () => {
+    const live = buildLive(buildConfig({ hotTubEnabled: true }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".hottub-widget")).not.toBeNull();
   });
 });
