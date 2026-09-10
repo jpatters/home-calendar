@@ -53,6 +53,7 @@ const (
 	logVersion          = 66
 	requestTimeout      = 2 * time.Second
 	requestAttempts     = 2
+	lateReplyWindow     = 100 * time.Millisecond
 
 	packTypeInYT        = 10
 	packCommandSetValue = 70
@@ -257,10 +258,9 @@ func toF(raw uint16) float64 { return float64(raw)/10 + 32 }
 func fromF(f float64) uint16 { return uint16((f - 32) * 10) }
 
 type session struct {
-	conn      net.Conn
-	stop      func() bool
-	spaID     []byte
-	statusSeq byte
+	conn  net.Conn
+	stop  func() bool
+	spaID []byte
 }
 
 // dial connects to the module, discovers its identifier, and verifies the spa
@@ -341,15 +341,15 @@ func (s *session) readLimits(ctx context.Context) (minF, maxF float64, err error
 		toF(binary.BigEndian.Uint16(limits[maxSetpointPos-limitsChunk:])), nil
 }
 
-// readStatus returns statusChunk bytes of the status block from start. Each
-// request carries its own sequence byte so a late reply to an earlier read
-// (after a retry) is never mistaken for this one.
+// readStatus returns statusChunk bytes of the status block from start. The
+// module answers every STATU with sequence byte 0 regardless of the request,
+// so replies cannot be matched to requests; exchange keeps a late reply to a
+// retried read from being taken for the next chunk.
 func (s *session) readStatus(ctx context.Context, start int) ([]byte, error) {
-	s.statusSeq++
-	req := append([]byte("STATU"), s.statusSeq)
+	req := append([]byte("STATU"), 1)
 	req = binary.BigEndian.AppendUint16(req, uint16(start))
 	req = binary.BigEndian.AppendUint16(req, statusChunk)
-	statv, err := s.request(ctx, req, []byte{'S', 'T', 'A', 'T', 'V', s.statusSeq})
+	statv, err := s.request(ctx, req, []byte("STATV"))
 	if err != nil {
 		return nil, fmt.Errorf("hottub: read status: %w", err)
 	}
@@ -393,6 +393,9 @@ func (s *session) request(ctx context.Context, payload, want []byte) ([]byte, er
 // exchange sends msg and waits for a datagram containing want, retrying once
 // on timeout since UDP offers no delivery guarantee. The module's replies do
 // not close their tags consistently, so matching is done on content only.
+// When a resend was needed, the module may still answer the original too;
+// that late duplicate is discarded so the next request does not take it as
+// its own reply.
 func (s *session) exchange(ctx context.Context, msg, want []byte) ([]byte, error) {
 	buf := make([]byte, 4096)
 	for attempt := 0; attempt < requestAttempts; attempt++ {
@@ -422,9 +425,25 @@ func (s *session) exchange(ctx context.Context, msg, want []byte) ([]byte, error
 				return nil, err
 			}
 			if bytes.Contains(buf[:n], want) {
-				return append([]byte(nil), buf[:n]...), nil
+				reply := append([]byte(nil), buf[:n]...)
+				if attempt > 0 {
+					s.discardLateReplies()
+				}
+				return reply, nil
 			}
 		}
 	}
 	return nil, fmt.Errorf("no reply from module after %d attempts", requestAttempts)
+}
+
+func (s *session) discardLateReplies() {
+	buf := make([]byte, 4096)
+	if err := s.conn.SetDeadline(time.Now().Add(lateReplyWindow)); err != nil {
+		return
+	}
+	for {
+		if _, err := s.conn.Read(buf); err != nil {
+			return
+		}
+	}
 }

@@ -78,10 +78,9 @@ type fakeModule struct {
 	// noisy sends an unsolicited STATP push (which a real module emits to
 	// connected clients) before every reply.
 	noisy bool
-	// staleStatus precedes every STATV reply with a STATV for a different
-	// request (wrong sequence byte, garbage bytes), as a late reply to an
-	// earlier read would look.
-	staleStatus bool
+	// slowFirst answers the first STATU only once its resend arrives, and
+	// then answers both, as a module that was merely slow does.
+	slowFirst bool
 
 	mu     sync.Mutex
 	writes [][]byte // DATAS payload of every SPACK received
@@ -127,7 +126,7 @@ func serve(t *testing.T, m *fakeModule) string {
 				continue
 			}
 			msg := buf[:n]
-			if m.dropFirst && !dropped && bytes.Contains(msg, []byte("STATU")) {
+			if (m.dropFirst || m.slowFirst) && !dropped && bytes.Contains(msg, []byte("STATU")) {
 				dropped = true
 				continue
 			}
@@ -157,13 +156,13 @@ func serve(t *testing.T, m *fakeModule) string {
 				if length > maxStatusChunk {
 					length = maxStatusChunk
 				}
-				if m.staleStatus {
-					stale := append([]byte("STATV"), data[5]+1, 0, byte(length))
-					stale = append(stale, bytes.Repeat([]byte{0xee}, length)...)
-					pc.WriteTo(append(append([]byte("<PACKT><SRCCN>SPAfc:0f:e7:d9:c5:5b</SRCCN><DESCN>client</DESCN><DATAS>"), stale...), []byte("</DATAS></PACKT>")...), addr)
-				}
-				reply = append([]byte("STATV"), data[5], 0, byte(length))
+				// The real module always answers with sequence byte 0.
+				reply = append([]byte("STATV"), 0, 0, byte(length))
 				reply = append(reply, block[start:start+length]...)
+				if m.slowFirst && start == 0 {
+					frame := append([]byte("<PACKT><SRCCN>SPAfc:0f:e7:d9:c5:5b</SRCCN><DESCN>client</SRCCN><DESCN>SPAfc:0f:e7:</DESCN><DATAS>"), reply...)
+					pc.WriteTo(append(frame, []byte("</DATAS></PACKT>")...), addr)
+				}
 			case bytes.HasPrefix(data, []byte("SPACK")) && len(data) >= 13:
 				m.mu.Lock()
 				m.writes = append(m.writes, append([]byte(nil), data...))
@@ -265,8 +264,11 @@ func TestReadRejectsUnsupportedConfigVersion(t *testing.T) {
 	}
 }
 
-func TestReadIgnoresStatusRepliesForOtherRequests(t *testing.T) {
-	addr := serve(t, &fakeModule{files: inYTFiles, status: realStatus(t), staleStatus: true})
+func TestReadIsNotConfusedByALateReplyToARetriedRead(t *testing.T) {
+	// Status replies carry no request identifier, so a slow answer to the
+	// first chunk arriving alongside the resend's answer must not be taken
+	// as the second chunk.
+	addr := serve(t, &fakeModule{files: inYTFiles, status: realStatus(t), slowFirst: true})
 
 	snap, err := hottub.Read(testCtx(t), addr)
 	if err != nil {

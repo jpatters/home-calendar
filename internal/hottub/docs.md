@@ -36,7 +36,7 @@ Path: @/internal/hottub
 ### Things to Know
 
 - Only inYT config v65 / log v66 offsets are valid. The constants at the top of `intouch2.go` were taken from geckolib's `inyt-cfg-65` and `inyt-log-66` definitions and verified against a real module on 2026-09-10; `checkSpaPack` exists precisely so a different pack fails loudly instead of decoding garbage.
-- Each `STATU` read carries its own sequence byte and the reply must echo it. After a retry, a late reply to the previous chunk would otherwise be accepted as the next chunk and decode the wrong bytes.
+- The module answers every `STATU` with sequence byte 0, so status replies cannot be matched to requests. After a resend, `exchange` briefly drains the socket so a late answer to the original request is not taken as the next chunk's reply and decoded as the wrong bytes.
 - Reads are chunked at 20 bytes because the real module truncates `STATV` replies longer than roughly 39 bytes. A single large read of the 1024-byte status block does not work; the test fake in `intouch2_test.go` enforces the same cap so a regression to one big read fails the tests.
 - `TargetF` is the config struct's `SetpointG` (position 1), not the log struct's `RealSetPointG` (position 275). `SetpointG` is the user's setpoint and the field that `SPACK` writes; `RealSetPointG` is read-only and can differ under economy mode.
 - The status block's layout is: config struct at bytes 0..255, log struct from 256 onward. The three read offsets (0, 60, 260) are chosen so each 20-byte chunk covers the fields it needs; the `-60` / `-260` arithmetic in `readSnapshot` translates absolute positions into chunk-relative indices.
