@@ -25,6 +25,7 @@ function buildConfig(
     tideEnabled: boolean;
     snowDayEnabled: boolean;
     baseballEnabled: boolean;
+    hockeyEnabled: boolean;
     poolEnabled: boolean;
     hotTubEnabled: boolean;
     calendarEnabled: boolean;
@@ -57,6 +58,11 @@ function buildConfig(
       teamName: "",
       teamAbbr: "",
     },
+    hockey: {
+      enabled: overrides.hockeyEnabled ?? true,
+      teamAbbr: "",
+      teamName: "",
+    },
     pool: {
       enabled: overrides.poolEnabled ?? true,
       deviceUrl: "http://pool.test",
@@ -71,6 +77,7 @@ function buildConfig(
       weatherRefreshSeconds: 900,
       tideRefreshSeconds: 3600,
       baseballRefreshSeconds: 600,
+      hockeyRefreshSeconds: 600,
       poolRefreshSeconds: 30,
       hotTubRefreshSeconds: 30,
       theme: "default",
@@ -91,6 +98,7 @@ function buildLive(config: Config): LiveData {
     snowday: null,
     tide: null,
     baseball: null,
+    hockey: null,
     pool: null,
     hottub: null,
   };
@@ -155,6 +163,18 @@ describe("Display widget enable/disable", () => {
     const live = buildLive(buildConfig({ calendarEnabled: true }));
     const { container } = render(<Display live={live} />);
     expect(container.querySelector(".calendar-pane")).not.toBeNull();
+  });
+
+  test("hockey widget is hidden when hockey.enabled is false", () => {
+    const live = buildLive(buildConfig({ hockeyEnabled: false }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".hockey-widget")).toBeNull();
+  });
+
+  test("hockey widget is rendered when hockey.enabled is true", () => {
+    const live = buildLive(buildConfig({ hockeyEnabled: true }));
+    const { container } = render(<Display live={live} />);
+    expect(container.querySelector(".hockey-widget")).not.toBeNull();
   });
 
   test("pool widget is hidden when pool.enabled is false", () => {

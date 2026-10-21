@@ -32,6 +32,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			Location:    "Victoria",
 		},
 		SnowDay: types.SnowDay{URL: "https://example.com/snow"},
+		Hockey:  types.Hockey{Enabled: true, TeamAbbr: "TOR", TeamName: "Toronto Maple Leafs"},
 		Pool:    types.Pool{DeviceURL: "http://pool.example"},
 		HotTub:  types.HotTub{Enabled: true, Host: "192.168.1.50"},
 		Display: types.Display{
@@ -40,6 +41,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 			WeatherRefreshSeconds:  600,
 			TideRefreshSeconds:     1800,
 			BaseballRefreshSeconds: 900,
+			HockeyRefreshSeconds:   450,
 			PoolRefreshSeconds:     45,
 			HotTubRefreshSeconds:   20,
 			Theme:                  "ocean",
@@ -201,6 +203,9 @@ func TestBackfillEnabledDefaultsTrueWhenAbsent(t *testing.T) {
 	if !got.SnowDay.Enabled {
 		t.Errorf("SnowDay.Enabled = false, want true")
 	}
+	if !got.Hockey.Enabled {
+		t.Errorf("Hockey.Enabled = false, want true")
+	}
 	if !got.Display.CalendarEnabled {
 		t.Errorf("Display.CalendarEnabled = false, want true")
 	}
@@ -212,9 +217,10 @@ func TestBackfillEnabledDefaultsTrueWhenAbsent(t *testing.T) {
 func TestBackfillPreservesExplicitFalseAndFillsAbsentFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	// Weather is explicitly disabled; tide present but without enabled;
-	// snowDay absent entirely; display present but without the new fields.
-	raw := `{"weather":{"enabled":false,"latitude":1,"longitude":2},"tide":{"latitude":3,"longitude":4},"display":{"theme":"ocean"}}`
+	// Weather and hockey are explicitly disabled; tide present but without
+	// enabled; snowDay absent entirely; display present but without the new
+	// fields.
+	raw := `{"weather":{"enabled":false,"latitude":1,"longitude":2},"tide":{"latitude":3,"longitude":4},"hockey":{"enabled":false,"teamAbbr":"TOR"},"display":{"theme":"ocean"}}`
 	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
 		t.Fatalf("write seed: %v", err)
 	}
@@ -225,6 +231,9 @@ func TestBackfillPreservesExplicitFalseAndFillsAbsentFields(t *testing.T) {
 	got := s.Get()
 	if got.Weather.Enabled {
 		t.Errorf("Weather.Enabled = true, want false (explicit)")
+	}
+	if got.Hockey.Enabled {
+		t.Errorf("Hockey.Enabled = true, want false (explicit)")
 	}
 	if !got.Tide.Enabled {
 		t.Errorf("Tide.Enabled = false, want true (absent field)")
@@ -251,6 +260,7 @@ func TestReplacePreservesExplicitlyDisabledFlags(t *testing.T) {
 	in.Weather.Enabled = false
 	in.Tide.Enabled = false
 	in.SnowDay.Enabled = false
+	in.Hockey.Enabled = false
 	in.Display.CalendarEnabled = false
 	in.Display.ClockEnabled = false
 	if _, err := s.Replace(in); err != nil {
@@ -270,6 +280,9 @@ func TestReplacePreservesExplicitlyDisabledFlags(t *testing.T) {
 	}
 	if got.SnowDay.Enabled {
 		t.Errorf("SnowDay.Enabled = true, want false")
+	}
+	if got.Hockey.Enabled {
+		t.Errorf("Hockey.Enabled = true, want false")
 	}
 	if got.Display.CalendarEnabled {
 		t.Errorf("Display.CalendarEnabled = true, want false")
@@ -332,5 +345,40 @@ func TestOpenAcceptsConfigWrittenBeforeStationCodes(t *testing.T) {
 	}
 	if code := s.Get().Tide.StationCode; code != "" {
 		t.Errorf("Tide.StationCode = %q, want empty; coordinates must not be guessed into a station", code)
+	}
+}
+
+func TestNormalizeFillsHockeyRefreshDefaultWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if got := s.Get().Display.HockeyRefreshSeconds; got != 600 {
+		t.Errorf("Display.HockeyRefreshSeconds = %d, want default 600", got)
+	}
+}
+
+func TestNormalizeUpperCasesAndTrimsHockeyAbbrev(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cfg := s.Get()
+	cfg.Hockey = types.Hockey{Enabled: true, TeamAbbr: " tor ", TeamName: " Toronto Maple Leafs "}
+	saved, err := s.Replace(cfg)
+	if err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	if saved.Hockey.TeamAbbr != "TOR" {
+		t.Errorf("TeamAbbr = %q, want TOR", saved.Hockey.TeamAbbr)
+	}
+	if saved.Hockey.TeamName != "Toronto Maple Leafs" {
+		t.Errorf("TeamName = %q, want trimmed", saved.Hockey.TeamName)
 	}
 }

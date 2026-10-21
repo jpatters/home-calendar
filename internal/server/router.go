@@ -8,6 +8,7 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
@@ -18,19 +19,21 @@ import (
 )
 
 type Server struct {
-	cfg           *config.Store
-	ical          *ical.Fetcher
-	weather       *weather.Fetcher
-	snowday       *snowday.Fetcher
-	tide          *tide.Fetcher
-	baseball      *baseball.Fetcher
-	pool          *pool.Fetcher
-	hottub        *hottub.Fetcher
-	hub           *Hub
-	rootCtx       context.Context
-	geocode       func(ctx context.Context, query string) ([]weather.GeoResult, error)
-	teamSearch    func(ctx context.Context, query string) ([]baseball.TeamResult, error)
-	stationSearch func(ctx context.Context, query string) ([]tide.StationResult, error)
+	cfg              *config.Store
+	ical             *ical.Fetcher
+	weather          *weather.Fetcher
+	snowday          *snowday.Fetcher
+	tide             *tide.Fetcher
+	baseball         *baseball.Fetcher
+	hockey           *hockey.Fetcher
+	pool             *pool.Fetcher
+	hottub           *hottub.Fetcher
+	hub              *Hub
+	rootCtx          context.Context
+	geocode          func(ctx context.Context, query string) ([]weather.GeoResult, error)
+	teamSearch       func(ctx context.Context, query string) ([]baseball.TeamResult, error)
+	hockeyTeamSearch func(ctx context.Context, query string) ([]hockey.TeamResult, error)
+	stationSearch    func(ctx context.Context, query string) ([]tide.StationResult, error)
 }
 
 func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) {
@@ -55,6 +58,9 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	s.baseball = baseball.New(baseball.DefaultScheduleURL, func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
+	s.hockey = hockey.New(hockey.DefaultBaseURL, func(snap *types.HockeySnapshot) {
+		hub.Broadcast(Frame{Type: "hockey", Hockey: snap})
+	})
 	s.pool = pool.New(func(snap *types.PoolSnapshot) {
 		hub.Broadcast(Frame{Type: "pool", Pool: snap})
 	})
@@ -66,6 +72,9 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	}
 	s.teamSearch = func(ctx context.Context, q string) ([]baseball.TeamResult, error) {
 		return baseball.SearchTeams(ctx, s.baseball.HTTPClient(), baseball.DefaultTeamsURL, q)
+	}
+	s.hockeyTeamSearch = func(ctx context.Context, q string) ([]hockey.TeamResult, error) {
+		return hockey.SearchTeams(ctx, s.hockey.HTTPClient(), hockey.DefaultBaseURL, q)
 	}
 	stations := tide.NewDirectory(s.tide.HTTPClient(), tide.DefaultBaseURL)
 	s.stationSearch = stations.Search
@@ -89,6 +98,9 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("GET /api/baseball", s.handleGetBaseball)
 	mux.HandleFunc("POST /api/baseball/refresh", s.handleBaseballRefresh)
 	mux.HandleFunc("GET /api/baseball/teams", s.handleBaseballTeamSearch)
+	mux.HandleFunc("GET /api/hockey", s.handleGetHockey)
+	mux.HandleFunc("POST /api/hockey/refresh", s.handleHockeyRefresh)
+	mux.HandleFunc("GET /api/hockey/teams", s.handleHockeyTeamSearch)
 	mux.HandleFunc("GET /api/pool", s.handleGetPool)
 	mux.HandleFunc("POST /api/pool/refresh", s.handlePoolRefresh)
 	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
@@ -112,6 +124,7 @@ func (s *Server) Shutdown() {
 	s.snowday.Stop()
 	s.tide.Stop()
 	s.baseball.Stop()
+	s.hockey.Stop()
 	s.pool.Stop()
 	s.hottub.Stop()
 }
@@ -173,6 +186,17 @@ func (s *Server) applyFetcherConfig(ctx context.Context, c types.Config, broadca
 		s.baseball.Stop()
 		if broadcastClears {
 			s.hub.Broadcast(Frame{Type: "baseball", Baseball: nil})
+		}
+	}
+	if c.Hockey.Enabled && c.Hockey.TeamAbbr != "" {
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "hockey", Hockey: nil})
+		}
+		s.hockey.Start(ctx, c.Hockey, time.Duration(c.Display.HockeyRefreshSeconds)*time.Second, 30*time.Second)
+	} else {
+		s.hockey.Stop()
+		if broadcastClears {
+			s.hub.Broadcast(Frame{Type: "hockey", Hockey: nil})
 		}
 	}
 	if c.Pool.Enabled {

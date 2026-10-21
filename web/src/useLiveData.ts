@@ -3,6 +3,7 @@ import type {
   BaseballSnapshot,
   CalendarEvent,
   Config,
+  HockeySnapshot,
   HotTubSnapshot,
   PoolSnapshot,
   SnowDaySnapshot,
@@ -20,6 +21,7 @@ export interface LiveData {
   snowday: SnowDaySnapshot | null;
   tide: TideSnapshot | null;
   baseball: BaseballSnapshot | null;
+  hockey: HockeySnapshot | null;
   pool: PoolSnapshot | null;
   hottub: HotTubSnapshot | null;
 }
@@ -33,6 +35,7 @@ const INITIAL: LiveData = {
   snowday: null,
   tide: null,
   baseball: null,
+  hockey: null,
   pool: null,
   hottub: null,
 };
@@ -77,6 +80,7 @@ export function useLiveData(): LiveData {
                 snowday: frame.snowday ?? null,
                 tide: frame.tide ?? null,
                 baseball: frame.baseball ?? null,
+                hockey: frame.hockey ?? null,
                 pool: frame.pool ?? null,
                 hottub: frame.hottub ?? null,
               };
@@ -90,6 +94,8 @@ export function useLiveData(): LiveData {
               return { ...s, tide: frame.tide ?? null };
             case "baseball":
               return { ...s, baseball: frame.baseball ?? null };
+            case "hockey":
+              return { ...s, hockey: frame.hockey ?? null };
             case "pool":
               return { ...s, pool: frame.pool ?? null };
             case "hottub":

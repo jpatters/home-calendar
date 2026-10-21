@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Config } from "../types";
 import type { LiveData } from "../useLiveData";
-import { putConfig, refreshBaseball, refreshCalendars, refreshHotTub, refreshPool, refreshSnowDay, refreshTide, refreshWeather } from "../api";
+import { putConfig, refreshBaseball, refreshCalendars, refreshHockey, refreshHotTub, refreshPool, refreshSnowDay, refreshTide, refreshWeather } from "../api";
 import CalendarsPanel from "./CalendarsPanel";
 import WeatherPanel from "./WeatherPanel";
 import SnowDayPanel from "./SnowDayPanel";
 import TidePanel from "./TidePanel";
 import BaseballPanel from "./BaseballPanel";
+import HockeyPanel from "./HockeyPanel";
 import PoolPanel from "./PoolPanel";
 import HotTubPanel from "./HotTubPanel";
 import DisplayPanel from "./DisplayPanel";
@@ -16,7 +17,7 @@ interface Props {
   live: LiveData;
 }
 
-type Tab = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "pool" | "hottub" | "display";
+type Tab = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "display";
 
 export default function Admin({ live }: Props) {
   const [draft, setDraft] = useState<Config | null>(live.config);
@@ -64,6 +65,7 @@ export default function Admin({ live }: Props) {
         <button className={tab === "tide" ? "active" : ""} onClick={() => setTab("tide")}>Tide</button>
         <button className={tab === "snowday" ? "active" : ""} onClick={() => setTab("snowday")}>Snow Day</button>
         <button className={tab === "baseball" ? "active" : ""} onClick={() => setTab("baseball")}>Baseball</button>
+        <button className={tab === "hockey" ? "active" : ""} onClick={() => setTab("hockey")}>Hockey</button>
         <button className={tab === "pool" ? "active" : ""} onClick={() => setTab("pool")}>Pool</button>
         <button className={tab === "hottub" ? "active" : ""} onClick={() => setTab("hottub")}>Hot Tub</button>
         <button className={tab === "display" ? "active" : ""} onClick={() => setTab("display")}>Display</button>
@@ -98,6 +100,12 @@ export default function Admin({ live }: Props) {
           <BaseballPanel
             value={draft.baseball ?? { enabled: true, teamId: 0, teamName: "", teamAbbr: "" }}
             onChange={(baseball) => setDraft({ ...draft, baseball })}
+          />
+        )}
+        {tab === "hockey" && (
+          <HockeyPanel
+            value={draft.hockey ?? { enabled: true, teamAbbr: "", teamName: "" }}
+            onChange={(hockey) => setDraft({ ...draft, hockey })}
           />
         )}
         {tab === "pool" && (
@@ -141,6 +149,9 @@ export default function Admin({ live }: Props) {
           )}
           {live.config?.baseball.enabled && live.config.baseball.teamId !== 0 && (
             <button onClick={() => void refreshBaseball()}>Refresh baseball now</button>
+          )}
+          {live.config?.hockey.enabled && live.config.hockey.teamAbbr && (
+            <button onClick={() => void refreshHockey()}>Refresh hockey now</button>
           )}
           {live.config?.pool.enabled && live.config.pool.deviceUrl && (
             <button onClick={() => void refreshPool()}>Refresh pool now</button>

@@ -196,6 +196,48 @@ func (s *Server) handleBaseballTeamSearch(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, results)
 }
 
+func (s *Server) handleGetHockey(w http.ResponseWriter, r *http.Request) {
+	snap := s.hockey.Snapshot()
+	if snap == nil {
+		writeJSON(w, http.StatusOK, nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
+}
+
+func (s *Server) handleHockeyRefresh(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.Hockey.Enabled || cfg.Hockey.TeamAbbr == "" {
+		http.Error(w, "hockey widget is disabled or no team selected", http.StatusConflict)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	s.hockey.RefreshNow(ctx, cfg.Hockey)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleHockeyTeamSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		http.Error(w, "query parameter q is required", http.StatusBadRequest)
+		return
+	}
+	if len(q) > 100 {
+		http.Error(w, "query too long", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	results, err := s.hockeyTeamSearch(ctx, q)
+	if err != nil {
+		log.Printf("hockey team search: %v", err)
+		http.Error(w, "team search failed", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
 func (s *Server) handleGetPool(w http.ResponseWriter, r *http.Request) {
 	snap := s.pool.Snapshot()
 	if snap == nil {
