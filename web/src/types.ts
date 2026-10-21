@@ -44,6 +44,7 @@ export interface Display {
   weatherRefreshSeconds: number;
   tideRefreshSeconds: number;
   baseballRefreshSeconds: number;
+  hockeyRefreshSeconds: number;
   poolRefreshSeconds: number;
   hotTubRefreshSeconds: number;
   theme: ThemePalette;
@@ -72,6 +73,19 @@ export interface BaseballTeam {
   locationName: string;
 }
 
+export interface Hockey {
+  enabled: boolean;
+  teamAbbr: string;
+  teamName: string;
+}
+
+export interface HockeyTeam {
+  abbrev: string;
+  name: string;
+  placeName: string;
+  commonName: string;
+}
+
 export interface Pool {
   enabled: boolean;
   deviceUrl: string;
@@ -88,6 +102,7 @@ export interface Config {
   tide: Tide;
   snowDay: SnowDay;
   baseball: Baseball;
+  hockey: Hockey;
   pool: Pool;
   hotTub: HotTub;
   display: Display;
@@ -187,6 +202,33 @@ export interface BaseballSnapshot {
   nextGame: BaseballGame | null;
 }
 
+export interface HockeyGame {
+  gameTime: string;
+  opponent: string;
+  opponentAbbr: string;
+  homeAway: "home" | "away";
+  venue?: string;
+  status: string;
+  isFinal: boolean;
+  isLive?: boolean;
+  teamScore: number;
+  opponentScore: number;
+  gameType: number;
+  period?: number;
+  periodType?: "REG" | "OT" | "SO" | string;
+  clock?: string;
+  inIntermission?: boolean;
+}
+
+export interface HockeySnapshot {
+  updatedAt: string;
+  teamAbbr: string;
+  teamName: string;
+  liveGame: HockeyGame | null;
+  latestGame: HockeyGame | null;
+  nextGame: HockeyGame | null;
+}
+
 export interface PoolSnapshot {
   updatedAt: string;
   temperatureC: number;
@@ -212,6 +254,7 @@ export type WSFrame =
       snowday: SnowDaySnapshot | null;
       tide: TideSnapshot | null;
       baseball: BaseballSnapshot | null;
+      hockey: HockeySnapshot | null;
       pool: PoolSnapshot | null;
       hottub: HotTubSnapshot | null;
     }
@@ -220,6 +263,7 @@ export type WSFrame =
   | { type: "snowday"; snowday: SnowDaySnapshot | null }
   | { type: "tide"; tide: TideSnapshot | null }
   | { type: "baseball"; baseball: BaseballSnapshot | null }
+  | { type: "hockey"; hockey: HockeySnapshot | null }
   | { type: "pool"; pool: PoolSnapshot | null }
   | { type: "hottub"; hottub: HotTubSnapshot | null }
   | { type: "config"; config: Config };

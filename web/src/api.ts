@@ -1,4 +1,4 @@
-import type { BaseballTeam, Config, GeoResult, HotTubSnapshot, TideStation } from "./types";
+import type { BaseballTeam, Config, GeoResult, HockeyTeam, HotTubSnapshot, TideStation } from "./types";
 
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
@@ -36,6 +36,10 @@ export async function refreshBaseball(): Promise<void> {
   await fetch("/api/baseball/refresh", { method: "POST" });
 }
 
+export async function refreshHockey(): Promise<void> {
+  await fetch("/api/hockey/refresh", { method: "POST" });
+}
+
 export async function refreshPool(): Promise<void> {
   await fetch("/api/pool/refresh", { method: "POST" });
 }
@@ -71,6 +75,13 @@ export async function tideStationSearch(query: string, signal?: AbortSignal): Pr
 export async function baseballTeamSearch(query: string, signal?: AbortSignal): Promise<BaseballTeam[]> {
   const res = await fetch(`/api/baseball/teams?q=${encodeURIComponent(query)}`, { signal });
   if (!res.ok) throw new Error(`GET /api/baseball/teams ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function hockeyTeamSearch(query: string, signal?: AbortSignal): Promise<HockeyTeam[]> {
+  const res = await fetch(`/api/hockey/teams?q=${encodeURIComponent(query)}`, { signal });
+  if (!res.ok) throw new Error(`GET /api/hockey/teams ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }

@@ -65,6 +65,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 		Baseball *struct {
 			Enabled *bool `json:"enabled"`
 		} `json:"baseball"`
+		Hockey *struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"hockey"`
 		Pool *struct {
 			Enabled *bool `json:"enabled"`
 		} `json:"pool"`
@@ -87,6 +90,9 @@ func backfillEnabledFlags(raw []byte, c *types.Config) {
 	}
 	if probe.Baseball == nil || probe.Baseball.Enabled == nil {
 		c.Baseball.Enabled = true
+	}
+	if probe.Hockey == nil || probe.Hockey.Enabled == nil {
+		c.Hockey.Enabled = true
 	}
 	if probe.Pool == nil || probe.Pool.Enabled == nil {
 		c.Pool.Enabled = true
@@ -172,6 +178,9 @@ func normalize(c types.Config) types.Config {
 	if c.Display.BaseballRefreshSeconds <= 0 {
 		c.Display.BaseballRefreshSeconds = d.Display.BaseballRefreshSeconds
 	}
+	if c.Display.HockeyRefreshSeconds <= 0 {
+		c.Display.HockeyRefreshSeconds = d.Display.HockeyRefreshSeconds
+	}
 	if c.Display.PoolRefreshSeconds <= 0 {
 		c.Display.PoolRefreshSeconds = d.Display.PoolRefreshSeconds
 	}
@@ -184,6 +193,8 @@ func normalize(c types.Config) types.Config {
 	}
 	c.Baseball.TeamName = strings.TrimSpace(c.Baseball.TeamName)
 	c.Baseball.TeamAbbr = strings.TrimSpace(c.Baseball.TeamAbbr)
+	c.Hockey.TeamAbbr = strings.ToUpper(strings.TrimSpace(c.Hockey.TeamAbbr))
+	c.Hockey.TeamName = strings.TrimSpace(c.Hockey.TeamName)
 	c.Display = normalizeDisplayTheme(c.Display, d.Display)
 	return c
 }

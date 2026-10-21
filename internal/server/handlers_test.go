@@ -12,6 +12,7 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
@@ -446,5 +447,116 @@ func TestTideStationSearchSurfacesUpstreamErrorAsBadGateway(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "secret-host") {
 		t.Errorf("response body leaked upstream error: %q", rec.Body.String())
+	}
+}
+
+func TestHockeyRefreshReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Hockey.Enabled = false
+		cfg.Hockey.TeamAbbr = "TOR"
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, hockey: hockey.New("", nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hockey/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleHockeyRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHockeyRefreshReturns409WhenTeamUnset(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Hockey.Enabled = true
+		cfg.Hockey.TeamAbbr = ""
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, hockey: hockey.New("", nil)}
+	req := httptest.NewRequest(http.MethodPost, "/api/hockey/refresh", nil)
+	rec := httptest.NewRecorder()
+	srv.handleHockeyRefresh(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when team not chosen, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHockeyTeamSearchRejectsEmptyQuery(t *testing.T) {
+	s := &Server{hockeyTeamSearch: func(context.Context, string) ([]hockey.TeamResult, error) {
+		t.Fatal("hockeyTeamSearch should not be called on empty query")
+		return nil, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/hockey/teams?q=", nil)
+	rec := httptest.NewRecorder()
+	s.handleHockeyTeamSearch(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHockeyTeamSearchReturnsResults(t *testing.T) {
+	want := []hockey.TeamResult{
+		{Abbrev: "TOR", Name: "Toronto Maple Leafs", PlaceName: "Toronto", CommonName: "Maple Leafs"},
+	}
+	s := &Server{hockeyTeamSearch: func(_ context.Context, q string) ([]hockey.TeamResult, error) {
+		if q != "leaf" {
+			t.Errorf("expected q=leaf, got %q", q)
+		}
+		return want, nil
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/hockey/teams?q=leaf", nil)
+	rec := httptest.NewRecorder()
+	s.handleHockeyTeamSearch(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	var got []hockey.TeamResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, rec.Body.String())
+	}
+	if len(got) != 1 || got[0].Abbrev != "TOR" || got[0].Name != "Toronto Maple Leafs" {
+		t.Fatalf("unexpected body: %+v", got)
+	}
+}
+
+func TestHockeyTeamSearchSurfacesUpstreamErrorAsBadGateway(t *testing.T) {
+	s := &Server{hockeyTeamSearch: func(context.Context, string) ([]hockey.TeamResult, error) {
+		return nil, errors.New("upstream: http://secret-host/internal")
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/api/hockey/teams?q=leaf", nil)
+	rec := httptest.NewRecorder()
+	s.handleHockeyTeamSearch(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "secret-host") {
+		t.Errorf("response body leaked upstream error: %q", rec.Body.String())
+	}
+}
+
+func TestGetHockeyReturnsNoDataSentinelBeforeSnapshot(t *testing.T) {
+	srv := &Server{hockey: hockey.New("", nil)}
+	req := httptest.NewRequest(http.MethodGet, "/api/hockey", nil)
+	rec := httptest.NewRecorder()
+	srv.handleGetHockey(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var got *struct {
+		TeamAbbr string `json:"teamAbbr"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not valid JSON: %v; body=%s", err, rec.Body.String())
+	}
+	if got != nil {
+		t.Errorf("expected nil snapshot body, got %+v", got)
 	}
 }

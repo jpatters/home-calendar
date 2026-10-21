@@ -19,6 +19,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
     snowday: null,
     tide: null,
     baseball: null,
+    hockey: null,
     pool: null,
     hottub: null,
     weather,
@@ -40,6 +41,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
       },
       snowDay: { enabled: true, url: "" },
       baseball: { enabled: true, teamId: 0, teamName: "", teamAbbr: "" },
+      hockey: { enabled: true, teamAbbr: "", teamName: "" },
       pool: { enabled: true, deviceUrl: "" },
       hotTub: { enabled: false, host: "" },
       display: {
@@ -48,6 +50,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         weatherRefreshSeconds: 900,
         tideRefreshSeconds: 3600,
         baseballRefreshSeconds: 600,
+        hockeyRefreshSeconds: 600,
         poolRefreshSeconds: 30,
         hotTubRefreshSeconds: 30,
         theme,
@@ -125,6 +128,7 @@ describe("useTheme", () => {
       snowday: null,
       tide: null,
       baseball: null,
+      hockey: null,
       pool: null,
       hottub: null,
     };

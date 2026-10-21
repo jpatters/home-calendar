@@ -9,6 +9,7 @@ import SnowDayWidget from "./SnowDayWidget";
 import TideWidget from "./TideWidget";
 import TideModal from "./TideModal";
 import BaseballWidget from "./BaseballWidget";
+import HockeyWidget from "./HockeyWidget";
 import PoolWidget from "./PoolWidget";
 import HotTubWidget from "./HotTubWidget";
 import HotTubModal from "./HotTubModal";
@@ -39,6 +40,7 @@ export default function Display({ live }: Props) {
   const snowDayEnabled = live.config?.snowDay.enabled ?? true;
   const tideEnabled = live.config?.tide.enabled ?? true;
   const baseballEnabled = live.config?.baseball.enabled ?? true;
+  const hockeyEnabled = live.config?.hockey.enabled ?? true;
   const poolEnabled = live.config?.pool.enabled ?? true;
   const hotTubEnabled = live.config?.hotTub.enabled ?? false;
 
@@ -81,6 +83,9 @@ export default function Display({ live }: Props) {
         )}
         {baseballEnabled && (
           <BaseballWidget baseball={live.baseball} config={live.config?.baseball} />
+        )}
+        {hockeyEnabled && (
+          <HockeyWidget hockey={live.hockey} config={live.config?.hockey} />
         )}
         {poolEnabled && <PoolWidget pool={live.pool} />}
         {hotTubEnabled && (

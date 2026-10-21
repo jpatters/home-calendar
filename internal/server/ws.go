@@ -32,6 +32,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		SnowDay:  s.snowday.Snapshot(),
 		Tide:     s.tide.Snapshot(),
 		Baseball: s.baseball.Snapshot(),
+		Hockey:   s.hockey.Snapshot(),
 		Pool:     s.pool.Snapshot(),
 		HotTub:   s.hottub.Snapshot(),
 	}

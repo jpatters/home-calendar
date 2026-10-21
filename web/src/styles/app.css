@@ -454,66 +454,69 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .hottub-arrow-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hottub-modal-error { color: var(--danger, #c0392b); text-align: center; }
 
-/* -------- baseball -------- */
-.baseball-widget {
+/* -------- scores (baseball, hockey) -------- */
+.baseball-widget,
+.hockey-widget {
   display: flex;
   flex-direction: column;
   gap: 10px;
   background: var(--bg-widget);
 }
-.baseball-section { display: flex; flex-direction: column; gap: 4px; }
-.baseball-section-label {
+.scores-section { display: flex; flex-direction: column; gap: 4px; }
+.scores-section-label {
   font-size: 0.75rem;
   color: var(--fg-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.baseball-scoreline,
-.baseball-matchup {
+.scores-scoreline,
+.scores-matchup {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 1rem;
 }
-.baseball-team { font-weight: 500; }
-.baseball-winner { color: var(--accent); }
-.baseball-score {
+.scores-team { font-weight: 500; }
+.scores-winner { color: var(--accent); }
+.scores-score {
   font-variant-numeric: tabular-nums;
   font-size: 1.15rem;
   font-weight: 600;
 }
-.baseball-scoreline-sep { color: var(--fg-muted); }
-.baseball-vs { color: var(--fg-muted); font-size: 0.9rem; }
-.baseball-meta {
+.scores-scoreline-sep { color: var(--fg-muted); }
+.scores-vs { color: var(--fg-muted); font-size: 0.9rem; }
+.scores-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   color: var(--fg-muted);
   font-size: 0.85rem;
 }
-.baseball-status { text-transform: uppercase; letter-spacing: 0.05em; }
-.baseball-empty { color: var(--fg-muted); font-size: 0.9rem; }
-.baseball-live-label {
+.scores-status { text-transform: uppercase; letter-spacing: 0.05em; }
+.scores-empty { color: var(--fg-muted); font-size: 0.9rem; }
+.scores-live-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #d33;
   font-weight: 600;
 }
-.baseball-live-dot {
+.scores-live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #d33;
   display: inline-block;
-  animation: baseball-live-pulse 1.6s ease-in-out infinite;
+  animation: scores-live-pulse 1.6s ease-in-out infinite;
 }
-@keyframes baseball-live-pulse {
+@keyframes scores-live-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%      { opacity: 0.4; transform: scale(0.85); }
 }
-.baseball-inning { font-variant-numeric: tabular-nums; }
-.baseball-outs   { font-variant-numeric: tabular-nums; }
+.scores-inning,
+.scores-outs,
+.scores-period,
+.scores-clock { font-variant-numeric: tabular-nums; }
 
 /* -------- connection dot -------- */
 .status-row {

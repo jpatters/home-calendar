@@ -36,6 +36,7 @@ type Display struct {
 	WeatherRefreshSeconds  int    `json:"weatherRefreshSeconds"`
 	TideRefreshSeconds     int    `json:"tideRefreshSeconds"`
 	BaseballRefreshSeconds int    `json:"baseballRefreshSeconds"`
+	HockeyRefreshSeconds   int    `json:"hockeyRefreshSeconds"`
 	PoolRefreshSeconds     int    `json:"poolRefreshSeconds"`
 	HotTubRefreshSeconds   int    `json:"hotTubRefreshSeconds"`
 	Theme                  string `json:"theme"`
@@ -56,6 +57,14 @@ type Baseball struct {
 	TeamAbbr string `json:"teamAbbr"`
 }
 
+// Hockey configures the NHL widget. TeamAbbr is the league's three-letter
+// team code (e.g. "TOR"), which is how every NHL schedule endpoint is keyed.
+type Hockey struct {
+	Enabled  bool   `json:"enabled"`
+	TeamAbbr string `json:"teamAbbr"`
+	TeamName string `json:"teamName"`
+}
+
 type Pool struct {
 	Enabled   bool   `json:"enabled"`
 	DeviceURL string `json:"deviceUrl"`
@@ -74,6 +83,7 @@ type Config struct {
 	Tide      Tide       `json:"tide"`
 	SnowDay   SnowDay    `json:"snowDay"`
 	Baseball  Baseball   `json:"baseball"`
+	Hockey    Hockey     `json:"hockey"`
 	Pool      Pool       `json:"pool"`
 	HotTub    HotTub     `json:"hotTub"`
 	Display   Display    `json:"display"`
@@ -192,6 +202,39 @@ type BaseballSnapshot struct {
 	NextGame   *BaseballGame `json:"nextGame"`
 }
 
+// HockeyGame is one NHL game from the team's point of view. Status is the
+// raw NHL gameState code ("OFF", "LIVE", "FUT", ...), not display text; the
+// IsFinal/IsLive flags are the interpreted form. Period and PeriodType
+// describe the current period while live, or the final period once complete
+// ("OT"/"SO" mark games decided past regulation). Clock and InIntermission
+// are only populated for a live game.
+type HockeyGame struct {
+	GameTime       time.Time `json:"gameTime"`
+	Opponent       string    `json:"opponent"`
+	OpponentAbbr   string    `json:"opponentAbbr"`
+	HomeAway       string    `json:"homeAway"`
+	Venue          string    `json:"venue,omitempty"`
+	Status         string    `json:"status"`
+	IsFinal        bool      `json:"isFinal"`
+	IsLive         bool      `json:"isLive"`
+	TeamScore      int       `json:"teamScore"`
+	OpponentScore  int       `json:"opponentScore"`
+	GameType       int       `json:"gameType"`
+	Period         int       `json:"period,omitempty"`
+	PeriodType     string    `json:"periodType,omitempty"`
+	Clock          string    `json:"clock,omitempty"`
+	InIntermission bool      `json:"inIntermission,omitempty"`
+}
+
+type HockeySnapshot struct {
+	UpdatedAt  time.Time   `json:"updatedAt"`
+	TeamAbbr   string      `json:"teamAbbr"`
+	TeamName   string      `json:"teamName"`
+	LiveGame   *HockeyGame `json:"liveGame"`
+	LatestGame *HockeyGame `json:"latestGame"`
+	NextGame   *HockeyGame `json:"nextGame"`
+}
+
 type PoolSnapshot struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 	TemperatureC float64   `json:"temperatureC"`
@@ -232,6 +275,9 @@ func DefaultConfig() Config {
 		Baseball: Baseball{
 			Enabled: true,
 		},
+		Hockey: Hockey{
+			Enabled: true,
+		},
 		Pool: Pool{
 			Enabled:   true,
 			DeviceURL: "http://pool-thermostat.local",
@@ -242,6 +288,7 @@ func DefaultConfig() Config {
 			WeatherRefreshSeconds:  900,
 			TideRefreshSeconds:     600,
 			BaseballRefreshSeconds: 600,
+			HockeyRefreshSeconds:   600,
 			PoolRefreshSeconds:     30,
 			HotTubRefreshSeconds:   30,
 			Theme:                  "default",

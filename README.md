@@ -34,6 +34,17 @@ private network.
   (`statsapi.mlb.com`). Pick a team via type-ahead search in admin. Regular
   season + playoffs only; spring training and exhibition games are filtered
   out.
+- **Hockey**: optional widget showing the most recent completed NHL game's
+  score (marked `Final/OT` or `Final/SO` when decided past regulation) and the
+  date/time/opponent of the next game. While the team is playing, the widget
+  shows a "LIVE" pill with the running score, period, and clock (or
+  "Intermission"), and the server polls every 30 seconds instead of the usual
+  10 minutes. Powered by the free, no-auth NHL web API (`api-web.nhle.com`):
+  the team scoreboard for recent and upcoming games, plus the gamecenter
+  landing for the clock during a live game. Pick a team via type-ahead search
+  in admin; teams are keyed by their three-letter abbreviation. Regular season
+  + playoffs only; preseason games and anything not on a confirmed schedule
+  (postponed, cancelled, time TBD) are filtered out.
 - **Pool**: optional widget showing the pool's current water temperature and
   whether the heat pump is actively heating or idle. Reads the `climate` entity
   from an [ESPHome](https://esphome.io/) device's built-in web server over the

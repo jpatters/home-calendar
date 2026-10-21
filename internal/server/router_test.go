@@ -9,6 +9,7 @@ import (
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
@@ -29,6 +30,7 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	cfg.Tide.Enabled = false
 	cfg.SnowDay.Enabled = false
 	cfg.Baseball.Enabled = false
+	cfg.Hockey.Enabled = false
 	cfg.Pool.Enabled = false
 	cfg.HotTub.Enabled = false
 	cfg.Display.CalendarEnabled = false
@@ -56,6 +58,9 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
 	})
+	srv.hockey = hockey.New("", func(snap *types.HockeySnapshot) {
+		hub.Broadcast(Frame{Type: "hockey", Hockey: snap})
+	})
 	srv.pool = pool.New(func(snap *types.PoolSnapshot) {
 		hub.Broadcast(Frame{Type: "pool", Pool: snap})
 	})
@@ -68,7 +73,7 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 
 	srv.restartFetchers(cfg)
 
-	got := collectFrameTypes(t, client, 7, 500*time.Millisecond)
+	got := collectFrameTypes(t, client, 8, 500*time.Millisecond)
 	if !got["weather"] {
 		t.Errorf("missing clearing frame for weather")
 	}
@@ -83,6 +88,9 @@ func TestRestartFetchersBroadcastsClearingFrameWhenWidgetsDisabled(t *testing.T)
 	}
 	if !got["baseball"] {
 		t.Errorf("missing clearing frame for baseball")
+	}
+	if !got["hockey"] {
+		t.Errorf("missing clearing frame for hockey")
 	}
 	if !got["pool"] {
 		t.Errorf("missing clearing frame for pool")
@@ -127,6 +135,9 @@ func TestRestartFetchersClearingFrameCarriesNilSnapshot(t *testing.T) {
 	})
 	srv.baseball = baseball.New("", func(snap *types.BaseballSnapshot) {
 		hub.Broadcast(Frame{Type: "baseball", Baseball: snap})
+	})
+	srv.hockey = hockey.New("", func(snap *types.HockeySnapshot) {
+		hub.Broadcast(Frame{Type: "hockey", Hockey: snap})
 	})
 	srv.pool = pool.New(func(snap *types.PoolSnapshot) {
 		hub.Broadcast(Frame{Type: "pool", Pool: snap})
