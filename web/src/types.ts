@@ -112,7 +112,6 @@ export interface Agent {
   textInputEnabled: boolean;
   quietStart: string;
   quietEnd: string;
-  province: string;
 }
 
 export interface Config {
@@ -255,6 +254,8 @@ export interface PoolSnapshot {
   updatedAt: string;
   temperatureC: number;
   targetC: number;
+  minTargetC: number;
+  maxTargetC: number;
   heating: boolean;
 }
 

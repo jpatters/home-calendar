@@ -72,9 +72,7 @@ type Pool struct {
 
 // Agent configures the personal assistant. Model and Effort are passed to the
 // OpenAI Responses API. QuietStart/QuietEnd ("HH:MM", local time) are the hours
-// the on-screen character sleeps. Province is an optional two-letter Canadian
-// province code used to pick regional holidays for the character's outfit.
-// API credentials are never stored here; they come from the environment.
+// the on-screen character sleeps. API credentials are never stored here; they come from the environment.
 type Agent struct {
 	Enabled          bool   `json:"enabled"`
 	Model            string `json:"model"`
@@ -82,7 +80,6 @@ type Agent struct {
 	TextInputEnabled bool   `json:"textInputEnabled"`
 	QuietStart       string `json:"quietStart"`
 	QuietEnd         string `json:"quietEnd"`
-	Province         string `json:"province"`
 }
 
 // HotTub configures the Gecko in.touch2 hot tub widget. Host is the module's
@@ -254,10 +251,14 @@ type HockeySnapshot struct {
 	NextGame   *HockeyGame `json:"nextGame"`
 }
 
+// PoolSnapshot is one reading from the pool heater. MinTargetC and MaxTargetC
+// are the setpoint limits the thermostat reports.
 type PoolSnapshot struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 	TemperatureC float64   `json:"temperatureC"`
 	TargetC      float64   `json:"targetC"`
+	MinTargetC   float64   `json:"minTargetC"`
+	MaxTargetC   float64   `json:"maxTargetC"`
 	Heating      bool      `json:"heating"`
 }
 

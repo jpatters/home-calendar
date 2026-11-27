@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
@@ -18,6 +21,7 @@ import (
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/snowday"
 	"github.com/jpatters/home-calendar/internal/tide"
+	"github.com/jpatters/home-calendar/internal/types"
 	"github.com/jpatters/home-calendar/internal/weather"
 )
 
@@ -558,5 +562,181 @@ func TestGetHockeyReturnsNoDataSentinelBeforeSnapshot(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("expected nil snapshot body, got %+v", got)
+	}
+}
+
+func enabledPoolStore(t *testing.T, deviceURL string) *config.Store {
+	t.Helper()
+	return newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Pool.Enabled = true
+		cfg.Pool.DeviceURL = deviceURL
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+}
+
+// fakePoolHeater emulates the ESPHome web_server climate entity "Pool Heater"
+// with 15–35 °C limits: GET reports the current setpoint, POST .../set
+// changes it, or fails with setStatus when that is non-zero.
+type fakePoolHeater struct {
+	mu        sync.Mutex
+	target    string
+	setStatus int
+	sets      int
+}
+
+func startFakePoolHeater(t *testing.T, setStatus int) (*httptest.Server, *fakePoolHeater) {
+	t.Helper()
+	d := &fakePoolHeater{target: "27.0", setStatus: setStatus}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/climate/Pool Heater":
+			limits := ""
+			if r.URL.Query().Get("detail") == "all" {
+				limits = `,"min_temp":"15.0","max_temp":"35.0","step":0.5`
+			}
+			fmt.Fprintf(w, `{"id":"climate/Pool Heater","mode":"HEAT","action":"IDLE","current_temperature":"25.2","target_temperature":%q%s}`, d.target, limits)
+		case r.Method == http.MethodPost && r.URL.Path == "/climate/Pool Heater/set":
+			d.sets++
+			if d.setStatus != 0 {
+				http.Error(w, "nope", d.setStatus)
+				return
+			}
+			d.target = r.URL.Query().Get("target_temperature")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, d
+}
+
+func (d *fakePoolHeater) setCount() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sets
+}
+
+func postPoolTarget(srv *Server, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/pool/target", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handlePoolTarget(rec, req)
+	return rec
+}
+
+func TestPoolTargetReturns409WhenDisabled(t *testing.T) {
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Pool.Enabled = false
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	srv := &Server{cfg: store, pool: pool.New(nil)}
+	if rec := postPoolTarget(srv, `{"targetC":28}`); rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPoolTargetRejectsMalformedBody(t *testing.T) {
+	device, dev := startFakePoolHeater(t, 0)
+	srv := &Server{cfg: enabledPoolStore(t, device.URL), pool: pool.New(nil)}
+	for _, body := range []string{``, `not json`, `{"targetC":"warm"}`, `{}`} {
+		if rec := postPoolTarget(srv, body); rec.Code != http.StatusBadRequest {
+			t.Errorf("body %q: expected 400, got %d; body=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+	if n := dev.setCount(); n != 0 {
+		t.Errorf("expected no writes to the device, got %d", n)
+	}
+}
+
+func TestPoolTargetReturns400ForTargetOutsideLimits(t *testing.T) {
+	device, dev := startFakePoolHeater(t, 0)
+	srv := &Server{cfg: enabledPoolStore(t, device.URL), pool: pool.New(nil)}
+	if rec := postPoolTarget(srv, `{"targetC":36}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if n := dev.setCount(); n != 0 {
+		t.Errorf("expected no writes to the device, got %d", n)
+	}
+}
+
+func TestPoolTargetReturns502WhenDeviceUnreachable(t *testing.T) {
+	srv := &Server{cfg: enabledPoolStore(t, "http://127.0.0.1:1"), pool: pool.New(nil)}
+	if rec := postPoolTarget(srv, `{"targetC":28}`); rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPoolTargetReturns502WhenDeviceRejectsWrite(t *testing.T) {
+	device, _ := startFakePoolHeater(t, http.StatusInternalServerError)
+	srv := &Server{cfg: enabledPoolStore(t, device.URL), pool: pool.New(nil)}
+	if rec := postPoolTarget(srv, `{"targetC":28}`); rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPoolTargetReturnsAndBroadcastsNewSnapshot(t *testing.T) {
+	device, _ := startFakePoolHeater(t, 0)
+	store := newTestStore(t, func(s *config.Store) {
+		cfg := s.Get()
+		cfg.Weather.Enabled = false
+		cfg.Tide.Enabled = false
+		cfg.SnowDay.Enabled = false
+		cfg.Baseball.Enabled = false
+		cfg.Hockey.Enabled = false
+		cfg.HotTub.Enabled = false
+		cfg.Display.CalendarEnabled = false
+		cfg.Pool.Enabled = true
+		cfg.Pool.DeviceURL = device.URL
+		if _, err := s.Replace(cfg); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv, handler, err := New(ctx, store)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer srv.Shutdown()
+	display := srv.hub.register()
+	defer srv.hub.unregister(display)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/pool/target", strings.NewReader(`{"targetC":28.5}`))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var got types.PoolSnapshot
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, rec.Body.String())
+	}
+	if got.TargetC != 28.5 {
+		t.Errorf("response TargetC = %v, want 28.5", got.TargetC)
+	}
+
+	// The poller may also broadcast its own readings; wait for the one
+	// carrying the new setpoint.
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case data := <-display.send:
+			var frame Frame
+			if err := json.Unmarshal(data, &frame); err != nil {
+				t.Fatalf("decode frame: %v", err)
+			}
+			if frame.Type == "pool" && frame.Pool != nil && frame.Pool.TargetC == 28.5 {
+				return
+			}
+		case <-deadline:
+			t.Fatal("no pool frame with targetC 28.5 was broadcast")
+		}
 	}
 }

@@ -52,7 +52,6 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
         textInputEnabled: false,
         quietStart: "22:00",
         quietEnd: "07:00",
-        province: "",
       },
       display: {
         defaultView: "week",

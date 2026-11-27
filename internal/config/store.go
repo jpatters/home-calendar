@@ -223,7 +223,6 @@ func normalizeAgent(cur, def types.Agent) types.Agent {
 	if !validClock(cur.QuietEnd) {
 		cur.QuietEnd = def.QuietEnd
 	}
-	cur.Province = strings.ToUpper(strings.TrimSpace(cur.Province))
 	return cur
 }
 

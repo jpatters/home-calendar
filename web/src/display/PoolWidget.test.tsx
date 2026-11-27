@@ -10,6 +10,8 @@ function snapshot(overrides: Partial<PoolSnapshot> = {}): PoolSnapshot {
     updatedAt: "2026-08-06T12:00:00Z",
     temperatureC: 25.2,
     targetC: 27.0,
+    minTargetC: 10,
+    maxTargetC: 40,
     heating: true,
     ...overrides,
   };

@@ -3,6 +3,7 @@ package pool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -17,9 +18,18 @@ import (
 )
 
 // climatePath is the ESPHome web_server REST path for the pool heater climate
-// entity. The object id is derived from the entity's `name:` ("Pool Heater");
-// the space is percent-encoded by url.URL when the request is built.
+// entity. ESPHome addresses entities by their `name:` ("Pool Heater"); the
+// space is percent-encoded by url.URL when the request is built.
 const climatePath = "/climate/Pool Heater"
+
+// Setpoint limits used when the thermostat does not report its own.
+const (
+	defaultMinTargetC = 10.0
+	defaultMaxTargetC = 40.0
+)
+
+// ErrInvalidTarget reports a requested setpoint the pool heater cannot be set to.
+var ErrInvalidTarget = errors.New("pool: invalid target temperature")
 
 type Fetcher struct {
 	client *http.Client
@@ -74,6 +84,27 @@ func (f *Fetcher) RefreshNow(ctx context.Context, p types.Pool) {
 	f.fetch(ctx, p)
 }
 
+// SetTarget changes the pool heater's setpoint and publishes the reading taken
+// afterwards.
+func (f *Fetcher) SetTarget(ctx context.Context, p types.Pool, targetC float64) (*types.PoolSnapshot, error) {
+	snap, err := SetTarget(ctx, f.client, p.DeviceURL, targetC)
+	if err != nil {
+		return nil, err
+	}
+	f.publish(snap)
+	return snap, nil
+}
+
+func (f *Fetcher) publish(snap *types.PoolSnapshot) {
+	f.mu.Lock()
+	f.snapshot = snap
+	f.lastErr = nil
+	f.mu.Unlock()
+	if f.onUpdate != nil {
+		f.onUpdate(snap)
+	}
+}
+
 func (f *Fetcher) loop(ctx context.Context, p types.Pool, interval time.Duration) {
 	defer f.doneWG.Done()
 	f.fetch(ctx, p)
@@ -113,19 +144,15 @@ func (f *Fetcher) fetch(ctx context.Context, p types.Pool) {
 		f.mu.Unlock()
 		return
 	}
-	f.mu.Lock()
-	f.snapshot = snap
-	f.lastErr = nil
-	f.mu.Unlock()
-	if f.onUpdate != nil {
-		f.onUpdate(snap)
-	}
+	f.publish(snap)
 }
 
 type climateResponse struct {
 	Action             string `json:"action"`
 	CurrentTemperature string `json:"current_temperature"`
 	TargetTemperature  string `json:"target_temperature"`
+	MinTemp            string `json:"min_temp"`
+	MaxTemp            string `json:"max_temp"`
 }
 
 // Search reads the pool heater's climate entity from an ESPHome device's
@@ -135,15 +162,18 @@ type climateResponse struct {
 // ESPHome serializes the climate temperatures as JSON strings (e.g. "25.2"),
 // so they are parsed as floats here. The `action` field ("HEATING" vs "IDLE")
 // is the live heat-call signal; `mode` only reflects setpoint intent.
+// ESPHome only includes the setpoint limits (min_temp/max_temp) in the
+// detail=all form of the response, so that is what is requested; when they
+// are absent the pool defaults of 10–40 °C apply.
 func Search(ctx context.Context, client *http.Client, baseURL string) (*types.PoolSnapshot, error) {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	u, err := url.Parse(baseURL)
+	u, err := climateURL(baseURL, "")
 	if err != nil {
-		return nil, fmt.Errorf("pool: parse device URL: %w", err)
+		return nil, err
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + climatePath
+	u.RawQuery = url.Values{"detail": {"all"}}.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -185,6 +215,61 @@ func Search(ctx context.Context, client *http.Client, baseURL string) (*types.Po
 		UpdatedAt:    time.Now(),
 		TemperatureC: current,
 		TargetC:      target,
+		MinTargetC:   parseLimit(body.MinTemp, defaultMinTargetC),
+		MaxTargetC:   parseLimit(body.MaxTemp, defaultMaxTargetC),
 		Heating:      body.Action == "HEATING",
 	}, nil
+}
+
+// SetTarget sets the pool heater's setpoint to targetC, which must lie within
+// the limits the thermostat reports (inclusive), and returns the reading taken
+// after the change. Out-of-range targets are rejected with ErrInvalidTarget
+// without writing to the device.
+func SetTarget(ctx context.Context, client *http.Client, baseURL string, targetC float64) (*types.PoolSnapshot, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	before, err := Search(ctx, client, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	if math.IsNaN(targetC) || targetC < before.MinTargetC || targetC > before.MaxTargetC {
+		return nil, fmt.Errorf("%w: %v°C is outside %v–%v°C", ErrInvalidTarget, targetC, before.MinTargetC, before.MaxTargetC)
+	}
+
+	u, err := climateURL(baseURL, "/set")
+	if err != nil {
+		return nil, err
+	}
+	u.RawQuery = url.Values{"target_temperature": {strconv.FormatFloat(targetC, 'f', -1, 64)}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("pool: esphome set http %d", resp.StatusCode)
+	}
+	return Search(ctx, client, baseURL)
+}
+
+func climateURL(baseURL, suffix string) (*url.URL, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("pool: parse device URL: %w", err)
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + climatePath + suffix
+	return u, nil
+}
+
+func parseLimit(s string, fallback float64) float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return fallback
+	}
+	return v
 }

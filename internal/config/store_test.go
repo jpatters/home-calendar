@@ -422,7 +422,6 @@ func TestAgentSettingsRoundTrip(t *testing.T) {
 		TextInputEnabled: true,
 		QuietStart:       "21:30",
 		QuietEnd:         "06:15",
-		Province:         "NS",
 	}
 	saved, err := s.Replace(in)
 	if err != nil {
@@ -442,14 +441,13 @@ func TestAgentNormalizeRepairsInvalidValues(t *testing.T) {
 		Effort:     "turbo",
 		QuietStart: "25:00",
 		QuietEnd:   "7am",
-		Province:   " ns ",
 	}
 	saved, err := s.Replace(in)
 	if err != nil {
 		t.Fatalf("Replace: %v", err)
 	}
 	a := saved.Agent
-	if a.Model != "gpt-6.1-terra" || a.Effort != "low" || a.QuietStart != "22:00" || a.QuietEnd != "07:00" || a.Province != "NS" {
+	if a.Model != "gpt-6.1-terra" || a.Effort != "low" || a.QuietStart != "22:00" || a.QuietEnd != "07:00" {
 		t.Errorf("normalized agent=%+v", a)
 	}
 }

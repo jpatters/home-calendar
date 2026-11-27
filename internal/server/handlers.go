@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jpatters/home-calendar/internal/hottub"
+	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
@@ -257,6 +258,34 @@ func (s *Server) handlePoolRefresh(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	s.pool.RefreshNow(ctx, cfg.Pool)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handlePoolTarget(w http.ResponseWriter, r *http.Request) {
+	cfg := s.cfg.Get()
+	if !cfg.Pool.Enabled {
+		http.Error(w, "pool widget is disabled", http.StatusConflict)
+		return
+	}
+	var body struct {
+		TargetC *float64 `json:"targetC"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TargetC == nil {
+		http.Error(w, "body must be JSON with a numeric targetC", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	snap, err := s.pool.SetTarget(ctx, cfg.Pool, *body.TargetC)
+	if errors.Is(err, pool.ErrInvalidTarget) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		log.Printf("pool: set target: %v", err)
+		http.Error(w, "pool heater did not respond", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, snap)
 }
 
 func (s *Server) handleGetHotTub(w http.ResponseWriter, r *http.Request) {
