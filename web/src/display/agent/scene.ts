@@ -66,6 +66,18 @@ function holidayOutfits(year: number): Map<string, OutfitId> {
   return byDate;
 }
 
+/** A holiday outfit is worn on the holiday and this many days before it. */
+const HOLIDAY_LEAD_DAYS = 2;
+
+function holidayOutfitFor(now: Date): OutfitId | undefined {
+  for (let ahead = 0; ahead <= HOLIDAY_LEAD_DAYS; ahead++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ahead);
+    const outfit = holidayOutfits(day.getFullYear()).get(localDate(day));
+    if (outfit) return outfit;
+  }
+  return undefined;
+}
+
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -124,7 +136,7 @@ export function sceneFor({ now, weather, agentState, quietStart, quietEnd }: Sce
   const quiet = inQuietHours(minute, minutesOf(quietStart), minutesOf(quietEnd));
   return {
     pose: poseFor(agentState, quiet),
-    outfit: holidayOutfits(now.getFullYear()).get(today) ?? seasonOutfit(now.getMonth()),
+    outfit: holidayOutfitFor(now) ?? seasonOutfit(now.getMonth()),
     sky: skyFor(minute, today, weather),
     precip: weather ? precipFor(weather.current.weatherCode) : "none",
   };

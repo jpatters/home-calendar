@@ -69,6 +69,12 @@ describe("sceneFor outfit", () => {
     ["Canadian Thanksgiving 2027", at(2027, 10, 11), "thanksgiving"],
     ["Halloween morning", at(2026, 10, 31, 9), "halloween"],
     ["Christmas", at(2026, 12, 25), "christmas"],
+    ["Christmas Eve", at(2026, 12, 24), "christmas"],
+    ["two days before Christmas", at(2026, 12, 23), "christmas"],
+    ["Good Friday (two days before Easter)", at(2026, 4, 3), "easter"],
+    ["the Saturday before Thanksgiving", at(2026, 10, 10), "thanksgiving"],
+    ["Oct 29 (two days before Halloween)", at(2026, 10, 29), "halloween"],
+    ["Dec 30 (two days before New Year's, across the year boundary)", at(2026, 12, 30), "newyear"],
   ])("%s wears the holiday outfit", (_name, now, outfit) => {
     expect(sceneFor(input({ now })).outfit).toBe(outfit);
   });
@@ -82,9 +88,10 @@ describe("sceneFor outfit", () => {
     ["Sep 1", at(2026, 9, 1), "fall"],
     ["Nov 30", at(2026, 11, 30), "fall"],
     ["Dec 1", at(2026, 12, 1), "winter"],
-    ["Christmas Eve", at(2026, 12, 24), "winter"],
-    ["Good Friday", at(2026, 4, 3), "spring"],
+    ["three days before Christmas", at(2026, 12, 22), "winter"],
+    ["three days before Easter", at(2026, 4, 2), "spring"],
     ["the day after Canada Day", at(2026, 7, 2), "summer"],
+    ["the day after Christmas", at(2026, 12, 26), "winter"],
   ])("%s wears the season outfit", (_name, now, outfit) => {
     expect(sceneFor(input({ now })).outfit).toBe(outfit);
   });
