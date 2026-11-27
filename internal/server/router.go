@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jpatters/home-calendar/internal/agent"
 	"github.com/jpatters/home-calendar/internal/baseball"
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/hockey"
@@ -28,6 +29,7 @@ type Server struct {
 	hockey           *hockey.Fetcher
 	pool             *pool.Fetcher
 	hottub           *hottub.Fetcher
+	agent            *agent.Agent
 	hub              *Hub
 	rootCtx          context.Context
 	geocode          func(ctx context.Context, query string) ([]weather.GeoResult, error)
@@ -79,6 +81,8 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	stations := tide.NewDirectory(s.tide.HTTPClient(), tide.DefaultBaseURL)
 	s.stationSearch = stations.Search
 
+	s.agent = s.newAgent(ctx)
+
 	current := cfg.Get()
 	s.applyFetcherConfig(ctx, current, false)
 
@@ -108,6 +112,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
 	mux.HandleFunc("POST /api/hottub/refresh", s.handleHotTubRefresh)
 	mux.HandleFunc("POST /api/hottub/target", s.handleHotTubTarget)
+	mux.HandleFunc("POST /api/agent/converse", s.handleAgentConverse)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()
