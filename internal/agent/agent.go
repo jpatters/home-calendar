@@ -293,6 +293,7 @@ func (a *Agent) runToolCalls(ctx context.Context, tools *Registry, resp *respons
 		case "function_call":
 			called = true
 			call := item.AsFunctionCall()
+			a.setTool(call.Name)
 			fc := &responses.ResponseFunctionToolCallParam{
 				CallID:    call.CallID,
 				Name:      call.Name,
@@ -358,12 +359,27 @@ func (a *Agent) instructions(cfg types.Config, calendarWritable bool) string {
 }
 
 func (a *Agent) setState(state types.AgentState, heard, reply string) {
+	a.emit(func(s *types.AgentSnapshot) {
+		s.State = state
+		s.Heard = heard
+		s.Reply = reply
+		s.Tool = ""
+	})
+}
+
+// setTool reports that the current turn is running the named tool.
+func (a *Agent) setTool(name string) {
+	a.emit(func(s *types.AgentSnapshot) {
+		s.State = types.AgentThinking
+		s.Tool = name
+	})
+}
+
+func (a *Agent) emit(change func(*types.AgentSnapshot)) {
 	a.emitMu.Lock()
 	defer a.emitMu.Unlock()
 	a.mu.Lock()
-	a.snap.State = state
-	a.snap.Heard = heard
-	a.snap.Reply = reply
+	change(&a.snap)
 	a.snap.At = a.opts.Now()
 	s := a.snap
 	a.mu.Unlock()

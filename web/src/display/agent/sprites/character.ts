@@ -57,7 +57,7 @@ const BODY = [
 
 type Layer = Record<number, string>;
 
-export type Face = "idle" | "blink" | "talk" | "think" | "confused" | "sleep";
+export type Face = "idle" | "blink" | "talk" | "think" | "confused" | "sleep" | "back";
 
 const FACES: Record<Face, Layer> = {
   idle: { 9: "..kssksssskssk..", 10: "..kssksssskssk..", 12: "..ksssskkssssk.." },
@@ -66,6 +66,16 @@ const FACES: Record<Face, Layer> = {
   think: { 9: "..kssksssskssk..", 10: "..kssssssssssk..", 12: "..ksssskkssssk.." },
   confused: { 9: "..kssksssskssk..", 10: "..kssksssskssk..", 12: "..kssskskssssk.." },
   sleep: { 9: "..kssssssssssk..", 10: "..kskksssskksk..", 12: "..ksssskkssssk.." },
+  // Seen from behind: hair covers the head down to the neck.
+  back: {
+    7: "..khhhhhhhhhhk..",
+    8: "..khhhhhhhhhhk..",
+    9: "..khhhhhhhhhhk..",
+    10: "..khhhhhhhhhhk..",
+    11: "..kshhhhhhhhsk..",
+    12: "..kshhhhhhhhsk..",
+    13: "...kssssssssk...",
+  },
 };
 
 const HATS = {
@@ -87,6 +97,9 @@ const MARKS = {
   summer: { 19: "..ss........ss..", 20: "..ss........ss..", 24: ".....ss..ss.....", 25: ".....ss..ss....." },
   buttons: { 17: ".......yy.......", 19: ".......yy......." },
 } satisfies Record<string, Layer>;
+
+/** Marks on the front of the shirt, hidden when Ziggy faces away. */
+const FRONT_MARKS = new Set<keyof typeof MARKS>(["heart", "leaf", "jack", "buttons"]);
 
 interface Outfit {
   shirt: string;
@@ -130,7 +143,10 @@ export function composeCharacter(outfitId: OutfitId, face: Face): CharacterSprit
   const outfit = OUTFITS[outfitId];
   const grid = BODY.slice();
   overlay(grid, FACES[face]);
-  for (const mark of outfit.marks ?? []) overlay(grid, MARKS[mark]);
+  for (const mark of outfit.marks ?? []) {
+    if (face === "back" && FRONT_MARKS.has(mark)) continue;
+    overlay(grid, MARKS[mark]);
+  }
   if (outfit.hat) overlay(grid, HATS[outfit.hat]);
   return {
     grid,

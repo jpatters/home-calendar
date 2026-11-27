@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import AgentPanel from "./AgentPanel";
+import { LOOKOUT_X, ROOM_W } from "./sprites/room";
 import type { AgentSnapshot } from "../../types";
 
 type Settings = { textInputEnabled: boolean; quietStart: string; quietEnd: string };
@@ -145,6 +146,42 @@ describe("AgentPanel", () => {
     expect(screen.getByText("…")).toBeTruthy();
     expect(screen.queryByText("stale")).toBeNull();
     expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
+  });
+
+  test("walks to the window and looks out while checking the weather", () => {
+    const { rerender } = render(
+      <AgentPanel agent={snapshot({ state: "thinking", heard: "is it raining?" })} weather={null} settings={settings()} />,
+    );
+    expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
+
+    rerender(
+      <AgentPanel
+        agent={snapshot({ state: "thinking", heard: "is it raining?", tool: "get_weather" })}
+        weather={null}
+        settings={settings()}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Assistant is looking out the window" })).toBeTruthy();
+  });
+
+  test("answers from the window after looking out, then wanders away once done talking", () => {
+    const windowLeft = `${(LOOKOUT_X / ROOM_W) * 100}%`;
+    const position = () => (document.querySelector(".agent-character") as HTMLElement).style.left;
+    const { rerender } = render(
+      <AgentPanel agent={snapshot({ state: "thinking", tool: "get_weather" })} weather={null} settings={settings()} />,
+    );
+    expect(position()).toBe(windowLeft);
+
+    rerender(
+      <AgentPanel agent={snapshot({ state: "talking", reply: "It's raining." })} weather={null} settings={settings()} />,
+    );
+    expect(screen.getByRole("img", { name: "Assistant is talking" })).toBeTruthy();
+    expect(position()).toBe(windowLeft);
+
+    advance(2100);
+    expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
+    expect(position()).not.toBe(windowLeft);
   });
 
   test("looks confused on error and shows the apology", () => {

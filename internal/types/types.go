@@ -286,13 +286,15 @@ const (
 )
 
 // AgentSnapshot describes the latest conversation turn. Heard is what the user
-// said (or typed); Reply is the agent's answer, empty while thinking. Ready is
+// said (or typed); Reply is the agent's answer, empty while thinking. Tool names
+// the tool being run while thinking, if any. Ready is
 // false when the agent has no OpenAI credentials; CalendarWritable is false
 // when no Google service account is configured.
 type AgentSnapshot struct {
 	State            AgentState `json:"state"`
 	Heard            string     `json:"heard"`
 	Reply            string     `json:"reply"`
+	Tool             string     `json:"tool,omitempty"`
 	At               time.Time  `json:"at"`
 	Ready            bool       `json:"ready"`
 	CalendarWritable bool       `json:"calendarWritable"`

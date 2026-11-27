@@ -274,6 +274,8 @@ export interface AgentSnapshot {
   state: AgentState;
   heard: string;
   reply: string;
+  /** The tool being run while thinking, if any. */
+  tool?: string;
   at: string;
   ready: boolean;
   calendarWritable: boolean;

@@ -1154,6 +1154,9 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   position: absolute;
   transition: left 3s linear;
 }
+.agent-character.to-window {
+  transition: left 0.8s ease-out;
+}
 .agent-character-sprite {
   display: block;
   width: 100%;

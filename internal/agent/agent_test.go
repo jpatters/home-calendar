@@ -956,6 +956,43 @@ func TestConverseReportsThinkingThenTalking(t *testing.T) {
 	}
 }
 
+func TestConverseReportsEachToolAsItRunsThenClearsIt(t *testing.T) {
+	var mu sync.Mutex
+	var states []types.AgentSnapshot
+	weather := &recordingTool{name: "get_weather", result: "rain"}
+	scores := &recordingTool{name: "get_scores", result: "3-1"}
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "get_weather", `{}`}),
+		calls("resp_2", fnCall{"call_2", "get_scores", `{}`}),
+		text("resp_3", "Rainy, and the Leafs won."),
+	)
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.OnState = func(s *types.AgentSnapshot) {
+			mu.Lock()
+			states = append(states, *s)
+			mu.Unlock()
+		}
+	}, weather, scores)
+
+	converse(t, a, "conv-1", "Weather and score?")
+
+	mu.Lock()
+	defer mu.Unlock()
+	var got []string
+	for _, s := range states {
+		got = append(got, fmt.Sprintf("%s:%s", s.State, s.Tool))
+	}
+	want := []string{"thinking:", "thinking:get_weather", "thinking:get_scores", "talking:"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("states = %v, want %v", got, want)
+	}
+	for _, s := range states {
+		if s.Heard != "Weather and score?" {
+			t.Errorf("state %+v lost the heard text", s)
+		}
+	}
+}
+
 func TestConcurrentTurnsOnOneConversationEachGetAReplyAndPublishInOrder(t *testing.T) {
 	var mu sync.Mutex
 	var states []types.AgentSnapshot

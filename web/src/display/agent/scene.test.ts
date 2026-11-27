@@ -117,6 +117,18 @@ describe("sceneFor pose", () => {
     expect(sceneFor(input({ agentState, now })).pose).toBe(pose);
   });
 
+  test.each([
+    ["checking the weather looks out the window", "get_weather", at(2026, 7, 15, 12), "lookout"],
+    ["checking the weather at night still looks out the window", "get_weather", at(2026, 7, 15, 23, 30), "lookout"],
+    ["running another tool keeps thinking", "get_scores", at(2026, 7, 15, 12), "think"],
+  ] as const)("%s", (_name, tool, now, pose) => {
+    expect(sceneFor(input({ agentState: "thinking", tool, now })).pose).toBe(pose);
+  });
+
+  test("a weather tool reported with a finished turn does not look out the window", () => {
+    expect(sceneFor(input({ agentState: "talking", tool: "get_weather" })).pose).toBe("talk");
+  });
+
   test("quiet hours that do not wrap midnight", () => {
     const base = { quietStart: "13:00", quietEnd: "15:00" };
     expect(sceneFor(input({ ...base, now: at(2026, 7, 15, 14) })).pose).toBe("sleep");

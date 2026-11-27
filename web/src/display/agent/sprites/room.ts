@@ -10,6 +10,8 @@ export const STAND_Y = FLOOR_Y + 6 - 28;
 /** Horizontal range Ziggy wanders across (left edge of the sprite). */
 export const WANDER_MIN_X = 44;
 export const WANDER_MAX_X = 56;
+/** Where Ziggy stands to look out the window. */
+export const LOOKOUT_X = 17;
 /** Top-left of Ziggy's head on the pillow when asleep. */
 export const SLEEP_X = 82;
 export const SLEEP_Y = 31;

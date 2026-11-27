@@ -6,6 +6,7 @@ import { CHAR_H, CHAR_W, SLEEP_VISIBLE_ROWS, composeCharacter, type Face } from 
 import {
   ROOM_H,
   ROOM_W,
+  LOOKOUT_X,
   SLEEP_X,
   SLEEP_Y,
   STAND_Y,
@@ -34,6 +35,7 @@ type Speech = Pick<AgentSnapshot, "state" | "reply" | "at">;
 const POSE_LABEL: Record<Pose, string> = {
   idle: "idle",
   think: "thinking",
+  lookout: "looking out the window",
   talk: "talking",
   sleep: "sleeping",
   confused: "confused",
@@ -57,6 +59,8 @@ function faceFor(pose: Pose, frame: number): Face {
       return frame % 2 === 0 ? "talk" : "idle";
     case "think":
       return "think";
+    case "lookout":
+      return "back";
     case "confused":
       return "confused";
     case "sleep":
@@ -77,6 +81,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const [inputOpen, setInputOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [sendFailure, setSendFailure] = useState<Speech | null>(null);
+  const [atWindow, setAtWindow] = useState(false);
 
   const now = Date.now();
   const speech: Speech | null =
@@ -89,9 +94,15 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     now: new Date(now),
     weather,
     agentState,
+    tool: agent?.tool,
     quietStart: settings.quietStart,
     quietEnd: settings.quietEnd,
   });
+
+  // After looking out the window Ziggy stays there to give the answer, and
+  // leaves once the turn is over.
+  if (scene.pose === "lookout" && !atWindow) setAtWindow(true);
+  if (atWindow && scene.pose !== "lookout" && scene.pose !== "talk" && scene.pose !== "confused") setAtWindow(false);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), SCENE_REFRESH_MS);
@@ -133,7 +144,11 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const sleeping = scene.pose === "sleep";
   const sprite = composeCharacter(scene.outfit, faceFor(scene.pose, frame));
   const grid = sleeping ? sprite.grid.slice(0, SLEEP_VISIBLE_ROWS) : sprite.grid;
-  const charX = sleeping ? SLEEP_X : Math.round(WANDER_MIN_X + wander * (WANDER_MAX_X - WANDER_MIN_X));
+  const charX = sleeping
+    ? SLEEP_X
+    : atWindow || scene.pose === "lookout"
+      ? LOOKOUT_X
+      : Math.round(WANDER_MIN_X + wander * (WANDER_MAX_X - WANDER_MIN_X));
   const charY = sleeping ? SLEEP_Y : STAND_Y;
   const charH = sleeping ? SLEEP_VISIBLE_ROWS : CHAR_H;
   const rects = roomRects({
@@ -169,7 +184,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
         </svg>
         {bubble && <div className="agent-bubble">{bubble}</div>}
         <div
-          className="agent-character"
+          className={`agent-character${scene.pose === "lookout" ? " to-window" : ""}`}
           style={{
             left: pct(charX, ROOM_W),
             top: pct(charY, ROOM_H),
