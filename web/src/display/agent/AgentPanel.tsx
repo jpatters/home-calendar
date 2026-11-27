@@ -138,7 +138,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const charH = sleeping ? SLEEP_VISIBLE_ROWS : CHAR_H;
   const rects = roomRects({
     sky: scene.sky,
-    precip: scene.precip,
+    conditions: scene.conditions,
     tick: frame,
     blanket: scene.outfit === "christmas" ? "#2e8b57" : "#5b7fd6",
   });

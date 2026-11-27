@@ -2,7 +2,7 @@ import type { AgentState, WeatherSnapshot } from "../../types";
 
 export type Pose = "idle" | "think" | "talk" | "sleep" | "confused";
 export type Sky = "day" | "dusk" | "night";
-export type Precip = "none" | "rain" | "snow" | "fog" | "thunder";
+export type Conditions = "none" | "partly" | "overcast" | "rain" | "snow" | "fog" | "thunder";
 export type OutfitId =
   | "winter"
   | "spring"
@@ -29,7 +29,7 @@ export interface Scene {
   pose: Pose;
   outfit: OutfitId;
   sky: Sky;
-  precip: Precip;
+  conditions: Conditions;
 }
 
 /** Easter Sunday (Gregorian) via the anonymous Meeus/Jones/Butcher algorithm. */
@@ -135,7 +135,9 @@ function skyFor(minute: number, today: string, weather: WeatherSnapshot | null):
   return minute > sunrise && minute < sunset ? "day" : "night";
 }
 
-function precipFor(code: number): Precip {
+function conditionsFor(code: number): Conditions {
+  if (code === 2) return "partly";
+  if (code === 3) return "overcast";
   if (code === 45 || code === 48) return "fog";
   if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
   if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
@@ -151,6 +153,6 @@ export function sceneFor({ now, weather, agentState, quietStart, quietEnd }: Sce
     pose: poseFor(agentState, quiet),
     outfit: holidayOutfitFor(now) ?? seasonOutfit(now.getMonth()),
     sky: skyFor(minute, today, weather),
-    precip: weather ? precipFor(weather.current.weatherCode) : "none",
+    conditions: weather ? conditionsFor(weather.current.weatherCode) : "none",
   };
 }

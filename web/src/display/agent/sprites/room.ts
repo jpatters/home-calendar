@@ -1,6 +1,6 @@
 // Ziggy's room, drawn as a list of pixel rectangles in a ROOM_W x ROOM_H grid.
 // The window shows the sky and weather; precipitation animates with `tick`.
-import type { Precip, Sky } from "../scene";
+import type { Conditions, Sky } from "../scene";
 
 export const ROOM_W = 112;
 export const ROOM_H = 72;
@@ -25,7 +25,7 @@ export interface Rect {
 
 export interface RoomInput {
   sky: Sky;
-  precip: Precip;
+  conditions: Conditions;
   tick: number;
   blanket: string;
 }
@@ -38,6 +38,9 @@ const SKY: Record<Sky, [string, string]> = {
   night: ["#141a45", "#2c3577"],
 };
 const WIN = { x: 10, y: 9, w: 30, h: 26 };
+const OVERCAST_GREY = "#8d939e";
+/** Conditions that hide the sun, moon and stars behind cloud. */
+const COVERED = new Set<Conditions>(["overcast", "rain", "snow", "fog", "thunder"]);
 
 function seeded(seed: number): () => number {
   let s = seed;
@@ -55,10 +58,10 @@ function mix(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1), 16);
   const pb = parseInt(b.slice(1), 16);
   const ch = (s: number) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
-  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
 }
 
-export function roomRects({ sky, precip, tick, blanket }: RoomInput): Rect[] {
+export function roomRects({ sky, conditions, tick, blanket }: RoomInput): Rect[] {
   const out: Rect[] = [];
   const px = (x: number, y: number, w: number, h: number, fill: string, opacity?: number) =>
     out.push({ x, y, w, h, fill, opacity });
@@ -75,38 +78,53 @@ export function roomRects({ sky, precip, tick, blanket }: RoomInput): Rect[] {
 
   // window: sky
   const { x, y, w, h } = WIN;
-  const [top, bottom] = SKY[sky];
+  const covered = COVERED.has(conditions);
+  const [top, bottom] = SKY[sky].map((c) => (covered ? mix(c, OVERCAST_GREY, 0.6) : c));
   for (let i = 0; i < h; i++) px(x, y + i, w, 1, mix(top, bottom, i / (h - 1)));
-  if (sky === "night") {
+  const cloud = (cx: number, cy: number, fill: string) => {
+    px(x + cx, y + cy + 2, 11, 3, fill);
+    px(x + cx + 2, y + cy, 6, 2, fill);
+  };
+  if (!covered && sky === "night") {
     for (const [sx, sy] of STARS) px(x + sx, y + sy, 1, 1, (tick + sx) % 23 === 0 ? "#9aa4ff" : "#ffffff");
     px(x + 21, y + 4, 4, 4, "#f5f0d0");
     px(x + 23, y + 4, 2, 2, SKY.night[0]);
-  } else if (sky === "day" && precip === "none") {
+    if (conditions === "partly") cloud(17, 6, "#5a628f");
+  } else if (!covered && sky === "day") {
     px(x + 4, y + 4, 5, 5, "#ffd84a");
     px(x + 3, y + 5, 7, 3, "#ffd84a");
     px(x + 5, y + 3, 3, 7, "#ffd84a");
     px(x + 15, y + 8, 9, 3, "#ffffff");
     px(x + 17, y + 6, 5, 2, "#ffffff");
-  } else if (sky === "dusk") {
+    if (conditions === "partly") {
+      cloud(4, 7, "#ffffff");
+      cloud(17, 14, "#eef2f7");
+    }
+  } else if (!covered && sky === "dusk") {
     px(x + 8, y + h - 7, 8, 3, "#ffcf6e");
     px(x + 9, y + h - 9, 6, 2, "#ffcf6e");
+    if (conditions === "partly") cloud(16, 5, "#c79bb0");
   }
 
   // window: weather
-  if (precip === "rain" || precip === "snow" || precip === "thunder") {
-    const cloud = precip === "thunder" ? "#5f6273" : "#b7bcc8";
-    px(x, y, w, 4, cloud);
-    px(x + 3, y + 4, 10, 2, cloud);
-    px(x + 16, y + 4, 11, 2, cloud);
+  if (conditions === "overcast" || conditions === "rain" || conditions === "snow" || conditions === "thunder") {
+    const fill = conditions === "thunder" ? "#5f6273" : sky === "night" ? "#4b5065" : "#b7bcc8";
+    px(x, y, w, 4, fill);
+    px(x + 3, y + 4, 10, 2, fill);
+    px(x + 16, y + 4, 11, 2, fill);
+    if (conditions === "overcast") {
+      cloud(1, 10, fill);
+      cloud(16, 15, fill);
+    }
   }
-  if (precip === "rain" || precip === "thunder") {
+  if (conditions === "rain" || conditions === "thunder") {
     for (const [dx0, dy0, speed] of DROPS) {
       const dy = (dy0 + tick * 2.2 * speed) % (h - 5);
       const dx = (dx0 + tick * 0.6) % w;
       px(x + Math.floor(dx), y + 5 + Math.floor(dy), 1, 2, "#dbe9ff");
     }
   }
-  if (precip === "snow") {
+  if (conditions === "snow") {
     for (const [dx0, dy0, speed] of DROPS) {
       const dy = (dy0 + tick * 0.5 * speed) % (h - 5);
       const dx = (dx0 + Math.sin((tick + dy0) / 6) * 1.5 + w) % w;
@@ -114,10 +132,10 @@ export function roomRects({ sky, precip, tick, blanket }: RoomInput): Rect[] {
     }
     px(x, y + h - 2, w, 2, "#ffffff");
   }
-  if (precip === "fog") {
+  if (conditions === "fog") {
     for (let i = 0; i < 4; i++) px(x, y + 5 + i * 6 + (((tick >> 3) + i) % 2), w, 3, "#e8ebf0", 0.55);
   }
-  if (precip === "thunder" && tick % 40 < 2) px(x, y, w, h, "#ffffff");
+  if (conditions === "thunder" && tick % 40 < 2) px(x, y, w, h, "#ffffff");
 
   // window: frame and sill
   px(x - 2, y - 2, w + 4, 2, FRAME);

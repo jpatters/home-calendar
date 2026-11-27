@@ -165,9 +165,13 @@ describe("sceneFor sky fallback", () => {
   });
 });
 
-describe("sceneFor precipitation", () => {
+describe("sceneFor conditions", () => {
   test.each([
     [0, "none"],
+    [1, "none"],
+    [2, "partly"],
+    [3, "overcast"],
+    [4, "none"],
     [44, "none"],
     [45, "fog"],
     [48, "fog"],
@@ -194,13 +198,13 @@ describe("sceneFor precipitation", () => {
     [94, "none"],
     [95, "thunder"],
     [99, "thunder"],
-  ])("current WMO code %i is %s, regardless of today's forecast code", (code, precip) => {
+  ])("current WMO code %i is %s, regardless of today's forecast code", (code, conditions) => {
     const now = at(2026, 6, 10);
-    const dailyCode = precip === "snow" ? 61 : 73;
-    expect(sceneFor(input({ now, weather: weatherFor(now, { code, dailyCode }) })).precip).toBe(precip);
+    const dailyCode = conditions === "snow" ? 61 : 73;
+    expect(sceneFor(input({ now, weather: weatherFor(now, { code, dailyCode }) })).conditions).toBe(conditions);
   });
 
-  test("no weather means no precipitation", () => {
-    expect(sceneFor(input({ weather: null })).precip).toBe("none");
+  test("no weather means a clear window", () => {
+    expect(sceneFor(input({ weather: null })).conditions).toBe("none");
   });
 });
