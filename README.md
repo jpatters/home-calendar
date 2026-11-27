@@ -2,7 +2,8 @@
 
 A touchscreen calendar dashboard for a homelab wall/desk display. Aggregates one
 or more Google Calendars (via their public iCal share URLs) and shows them in
-day / week / month views alongside a clock and weather widget. Everything is
+day / week / month views alongside clock, weather, tide, sports, pool and hot
+tub widgets, plus an optional voice assistant. Everything is
 configured from a bundled admin page. No user accounts — intended for a trusted
 private network.
 
@@ -49,7 +50,11 @@ private network.
   whether the heat pump is actively heating or idle. Reads the `climate` entity
   from an [ESPHome](https://esphome.io/) device's built-in web server over the
   LAN — no cloud, no API key. Set the device URL in admin (a fixed IP is more
-  reliable than an mDNS `.local` name from a container).
+  reliable than an mDNS `.local` name from a container). Tap the widget to
+  open a panel with up/down arrows that change the target half a degree
+  Celsius per tap; a burst of taps is sent as a single write, and the arrows
+  stop at the setpoint limits the thermostat reports (10–40 °C if it reports
+  none).
 - **Hot tub**: optional widget showing the hot tub's water temperature,
   setpoint, and whether the heater is on. Talks directly to a Gecko in.touch2
   WiFi module over the LAN using its UDP protocol on port 10022 (the same one
@@ -63,6 +68,18 @@ private network.
   pack reports (typically 59–106 °F). Set the module's IP in admin. This
   is unicast UDP to a fixed address, so it works from the default Docker bridge
   network without host networking.
+- **Assistant (Ziggy)**: optional voice assistant that can answer questions
+  about the calendar, live game scores and the weather, add/change/delete
+  calendar events, and read or change the hot tub and pool temperatures. It
+  runs on the OpenAI Responses API (model and reasoning effort are set in the
+  admin **Assistant** tab; default `gpt-6.1-terra`, effort `low`). Voice in and
+  out goes through Home Assistant (see
+  [Assistant setup](#assistant-setup-ziggy)). On the display Ziggy is an 8-bit
+  character living in a pixel-art room panel: it thinks, talks (with a speech
+  bubble), sleeps during quiet hours, dresses for the season and for Canadian
+  holidays (from two days before each holiday), and its window shows the time
+  of day and the current weather. Optionally, people can tap Ziggy to type a
+  message instead of speaking.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 - **Layout**: the display is a [dockview](https://dockview.dev/) layout —
@@ -85,6 +102,10 @@ Open:
 
 - `http://<host>:8080/` — touchscreen display
 - `http://<host>:8080/admin` — configuration page
+
+The bundled `docker-compose.yml` publishes the container's port `8080` on host
+port `9090`, so with it use `http://<host>:9090/` instead (and in the Home
+Assistant URL below).
 
 ### Pulling the prebuilt image from GHCR
 
@@ -184,6 +205,11 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "teamName": "New York Yankees",
     "teamAbbr": "NYY"
   },
+  "hockey": {
+    "enabled": true,
+    "teamAbbr": "TOR",
+    "teamName": "Toronto Maple Leafs"
+  },
   "pool": {
     "enabled": true,
     "deviceUrl": "http://pool-thermostat.local"
@@ -192,12 +218,21 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "enabled": false,
     "host": "192.168.1.50"
   },
+  "agent": {
+    "enabled": false,
+    "model": "gpt-6.1-terra",
+    "effort": "low",
+    "textInputEnabled": false,
+    "quietStart": "22:00",
+    "quietEnd": "07:00"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
     "tideRefreshSeconds": 600,
     "baseballRefreshSeconds": 600,
+    "hockeyRefreshSeconds": 600,
     "poolRefreshSeconds": 30,
     "hotTubRefreshSeconds": 30,
     "theme": "default",
@@ -214,16 +249,24 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
 saving the config from admin never changes it. Omit it, or press **Reset
 layout**, to get the default arrangement.
 
-Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Pool, and
-Hot Tub each carry their own `enabled` field; the calendar and clock live under
+Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Hockey,
+Pool, Hot Tub, and the assistant each carry their own `enabled` field; the calendar and clock live under
 `display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
 the server stops its background fetcher (so no API calls are made) and the
 display hides it. You can toggle widgets from the admin page — open the widget's
 section from the sidebar and use the "Show …" checkbox at the top (the calendar
 and clock toggles are in the **Display** section). Configs written before these flags
-existed are treated as all-enabled when loaded, with one exception: the hot tub
-widget defaults to disabled, and configs from before it existed stay disabled
-until you turn it on in admin.
+existed are treated as all-enabled when loaded, with two exceptions: the hot
+tub widget and the assistant default to disabled, and configs from before they
+existed keep them off until you turn them on in admin.
+
+`agent` configures Ziggy. `model` and `effort` are passed to OpenAI (`effort`
+is one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`); a blank
+model or unknown effort falls back to the defaults. `quietStart`/`quietEnd`
+(24-hour `HH:MM`, may wrap midnight) are when the character sleeps on screen;
+it still answers if spoken to. `textInputEnabled` adds the tap-to-type box on
+the display. Credentials are **never** stored in the config — it is served to
+every browser without authentication — see [Assistant setup](#assistant-setup-ziggy).
 
 The hot tub `host` is the in.touch2 module's LAN address as `ip` or `ip:port`;
 the port defaults to `10022`.
@@ -270,11 +313,17 @@ assigns IDs, and triggers an immediate refresh.
 | GET    | `/api/baseball`               | Current baseball snapshot                 |
 | POST   | `/api/baseball/refresh`       | Force a baseball refresh                  |
 | GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |
+| GET    | `/api/hockey`                 | Current hockey snapshot                   |
+| POST   | `/api/hockey/refresh`         | Force a hockey refresh                    |
+| GET    | `/api/hockey/teams?q=`        | Team type-ahead search (NHL)              |
 | GET    | `/api/pool`                   | Current pool temperature snapshot         |
 | POST   | `/api/pool/refresh`           | Force a pool refresh                      |
+| POST   | `/api/pool/target`            | Set the pool target (`{"targetC": 28.5}`) |
 | GET    | `/api/hottub`                 | Current hot tub temperature snapshot      |
 | POST   | `/api/hottub/refresh`         | Force a hot tub refresh                   |
 | POST   | `/api/hottub/target`          | Set the hot tub target (`{"targetF": 103}`) |
+| GET    | `/api/agent`                  | Assistant state, plus whether the OpenAI key and Google credentials are set |
+| POST   | `/api/agent/converse`         | Talk to Ziggy (Home Assistant Webhook Conversation contract) |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
@@ -286,17 +335,30 @@ snapshot once the module acknowledges the write and broadcasts it as a `hottub`
 frame; `400` for a fractional or out-of-range target, `409` when the widget is
 disabled, and `502` when the module does not answer.
 
+`POST /api/pool/target` works the same way in degrees Celsius: the target must
+lie within the `minTargetC`–`maxTargetC` range the snapshot reports (`400`
+otherwise), and the fresh reading is broadcast as a `pool` frame.
+
+`POST /api/agent/converse` takes `{"conversation_id": "...", "query": "..."}`
+and answers `200 {"output": "..."}` with the text to speak. It answers `200`
+even when the assistant is disabled, has no API key, or fails — the `output`
+then explains the problem — because Home Assistant speaks nothing on an error
+status. Only a missing or blank `query` gets `400`. Follow-ups within five
+minutes on the same `conversation_id` continue the conversation.
+
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...}, "pool": {...}, "hottub": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...}, "hockey": {...}, "pool": {...}, "hottub": {...}, "agent": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
 { "type": "snowday",  "snowday": {...} }
 { "type": "tide",     "tide": {...} }
 { "type": "baseball", "baseball": {...} }
+{ "type": "hockey",   "hockey": {...} }
 { "type": "pool",     "pool": {...} }
 { "type": "hottub",   "hottub": {...} }
+{ "type": "agent",    "agent": {...} }
 { "type": "config",   "config": {...} }
 ```
 
@@ -309,10 +371,49 @@ admin saves config. The client reconnects with exponential backoff.
 
 ## Environment variables
 
-| Var           | Default               | Description                 |
-|---------------|-----------------------|-----------------------------|
-| `CONFIG_PATH` | `/data/config.json`   | Config JSON path            |
-| `LISTEN_ADDR` | `:8080`               | Listen address              |
+| Var                           | Default             | Description |
+|-------------------------------|---------------------|-------------|
+| `CONFIG_PATH`                 | `/data/config.json` | Config JSON path |
+| `LISTEN_ADDR`                 | `:8080`             | Listen address |
+| `OPENAI_API_KEY`              | (none)              | Required for the assistant. Without it Ziggy only says it isn't set up. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | (none)              | Optional. Google service account key, as the JSON itself or a path to the file. Enables adding, changing and deleting calendar events. |
+
+## Assistant setup (Ziggy)
+
+1. **OpenAI key.** Set `OPENAI_API_KEY` in the server's environment. With
+   Docker Compose, export it in your shell or put it in a `.env` file next to
+   `docker-compose.yml`; the compose file passes it through. The admin
+   **Assistant** tab shows whether the key is present (never its value).
+2. **Calendar changes (optional).** Without this Ziggy can read the calendars
+   but not change them.
+   - In Google Cloud, enable the Google Calendar API, create a service account,
+     and download a JSON key for it.
+   - Set `GOOGLE_SERVICE_ACCOUNT_JSON` to the JSON contents, or to the path of
+     the key file inside the container (mount it as a volume).
+   - In Google Calendar, share **each** calendar Ziggy should be able to edit
+     with the service account's email address, with the permission **Make
+     changes to events**.
+   - Calendars are matched by the names you gave them in admin, and the Google
+     calendar is identified from its iCal URL, so only calendars added with a
+     Google Calendar iCal address can be changed.
+3. **Turn Ziggy on** in the admin **Assistant** tab, and pick the model,
+   reasoning effort and quiet hours.
+4. **Home Assistant (voice).**
+   - Install the **Webhook Conversation** integration via HACS (needs Home
+     Assistant 2026.4 or newer).
+   - Add a conversation agent with URL
+     `http://<host>:8080/api/agent/converse`, output field `output`,
+     streaming **off**, and a 30-second timeout. (Use the host port you mapped
+     in `docker-compose.yml`.)
+   - Under **Settings → Voice assistants**, choose that agent as the
+     conversation agent of an Assist pipeline.
+   - The "Hey Ziggy" wake word is configured on the voice device / Home
+     Assistant side; this app never hears audio.
+
+Each request has 25 seconds to answer, so Home Assistant's 30-second timeout
+is never hit; a slow or failed answer is spoken as a short apology. Requests
+to OpenAI store the conversation (OpenAI retains it for about 30 days) so
+follow-up questions work.
 
 ## Notes
 

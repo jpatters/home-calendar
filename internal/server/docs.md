@@ -4,7 +4,7 @@ Path: @/internal/server
 
 ### Overview
 
-- The HTTP and WebSocket layer of home-calendar. It owns one `Fetcher` per widget (calendar, weather, snow day, tide, baseball, hockey, pool, hot tub), the config store, and a `Hub` that fans out live-data frames to every connected display.
+- The HTTP and WebSocket layer of home-calendar. It owns one `Fetcher` per widget (calendar, weather, snow day, tide, baseball, hockey, pool, hot tub), the config store, the Ziggy assistant (@/internal/agent), and a `Hub` that fans out live-data frames to every connected display.
 - Serves a JSON API under `/api/*` for the admin UI and the display, a single `/api/ws` WebSocket for push updates, and the embedded Vite build for everything else.
 - Started once from @/cmd/server/main.go via `New(ctx, store)`; `Shutdown()` stops all fetchers.
 
@@ -27,6 +27,11 @@ Path: @/internal/server
     |
     v
  internal/{ical,weather,tide,baseball,hockey,pool,hottub,snowday}.Fetcher
+    ^
+    |  tools read snapshots / call SetTarget
+ agent.Agent  <--- POST /api/agent/converse (Home Assistant, display text box)
+    |  OnState --> Hub.Broadcast("agent" frame)
+    `--> OpenAI Responses API, internal/gcal (Google Calendar writes)
 ```
 
 ### Core Implementation
@@ -37,12 +42,18 @@ Path: @/internal/server
 - Layout write path: `PUT /api/layout` (`handlePutLayout`) takes the display's serialized dockview layout. The body must decode as JSON and be either an object or `null` (anything else is 400); `null` clears the stored layout so displays fall back to their default arrangement. It saves via `Store.SetLayout`, broadcasts a `config` frame with the updated config, and returns that config. Unlike `PUT /api/config` it does not call `restartFetchers`, since only the arrangement changed.
 - Hot tub write path: `POST /api/hottub/target` takes `{"targetF": <number>}`. It returns 409 if the widget is disabled, 400 when the body is not JSON or `targetF` is missing, 400 when the driver reports `hottub.ErrInvalidTarget` (fractional or outside the tub's min/max), 502 when the module fails to acknowledge, and 200 with the post-write `HotTubSnapshot` on success. The driver's `Fetcher.SetTarget` also fires `onUpdate`, so the hub broadcasts the same snapshot to all displays independently of the HTTP response.
 - WebSocket (`ws.go`): on connect the client is registered with the hub and immediately sent a `snapshot` frame containing the current config plus every fetcher's cached snapshot; after that it only receives what the hub broadcasts. A reader goroutine detects disconnects, and a 30 s ping keeps the connection alive.
+- Pool write path: `POST /api/pool/target` takes `{"targetC": <number>}` and mirrors the hot tub endpoint: 409 when disabled, 400 for a bad body or `pool.ErrInvalidTarget` (outside the min/max the ESPHome thermostat reports, default 10-40 °C), 502 when the device fails, 200 with the post-write `PoolSnapshot`. @/internal/pool `SetTarget` reads the entity (`?detail=all`, the only form that includes `min_temp`/`max_temp`), validates, `POST`s `/climate/Pool Heater/set?target_temperature=`, re-reads, and publishes through `onUpdate` so all displays get a `pool` frame.
+- Assistant (`agent.go`): `newAgent` builds the @/internal/agent `Agent` once in `New`, wiring the existing fetchers into `tools.Deps`, reading `OPENAI_API_KEY`, and building a @/internal/gcal client from `GOOGLE_SERVICE_ACCOUNT_JSON` (inline JSON or a file path). A missing or invalid service account is logged and leaves the calendar write tools out; a missing key makes the agent report `ready=false`. Its `OnState` hook broadcasts `Frame{Type: "agent"}`, and the initial `snapshot` frame includes the current agent snapshot.
+- `POST /api/agent/converse` implements the Home Assistant "Webhook Conversation" integration contract: request `{conversation_id, query}`, response `200 {"output": "<text to speak>"}`. That integration speaks nothing on a non-200, so every answerable request is a 200 with a spoken explanation: disabled in config (`agentDisabledReply`), no API key, model failure or timeout (apologies from the agent). Only an undecodable body or blank `query` is a 400 (still with an `output`). Model errors are logged server-side. The display's optional text box uses the same endpoint.
+- `GET /api/agent` returns the `AgentSnapshot` (state, heard, reply, at, `ready`, `calendarWritable`); the admin Assistant tab uses `ready` / `calendarWritable` to show whether each env var is set, without the values ever leaving the server.
 - `Hub` (`hub.go`): a set of clients each with a buffered `send` channel. `Broadcast` marshals once and does a non-blocking send per client; a client whose buffer is full simply misses that frame (slow clients are never allowed to stall the broadcaster).
 
 ### Things to Know
 
-- The endpoint takes an absolute target, not a delta, so a retried or reordered request is idempotent. The frontend (@/web/src/display/HotTubModal.tsx) relies on this when it debounces a burst of arrow taps into a single send.
-- Two errors from `hottub.SetTarget` look similar to a caller but are handled differently: `ErrInvalidTarget` is a client mistake (400, message passed through), anything else is logged and hidden behind a generic 502.
+- The hot tub and pool target endpoints take an absolute target, not a delta, so a retried or reordered request is idempotent. The frontend (`useSetpoint` in @/web/src/display) relies on this when it debounces a burst of arrow taps into a single send. The assistant's set-target tools call the same fetcher `SetTarget` methods, so voice changes get identical validation and broadcasts.
+- Secrets (`OPENAI_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`) are read only from the environment, never from config: `GET /api/config` and every `config` frame expose the whole config to any browser on the network without authentication.
+- The agent is built before `applyFetcherConfig` runs and holds the fetcher pointers, not snapshots, so tools always read the latest cached data; the agent itself is never restarted by config saves (it re-reads model/effort from config each turn).
+- Two errors from `hottub.SetTarget` (and likewise `pool.SetTarget`) look similar to a caller but are handled differently: `ErrInvalidTarget` is a client mistake (400, message passed through), anything else is logged and hidden behind a generic 502.
 - `Frame` fields are all `omitempty` except `Type`. A clearing broadcast (e.g. `Frame{Type: "hottub", HotTub: nil}`) therefore serialises as just `{"type":"hottub"}`, and the frontend's `?? null` handling in @/web/src/useLiveData.ts turns the missing field back into null.
 - `types.Config.Layout` is a `json.RawMessage` (`layout,omitempty`) that Go never interprets; only @/web/src/display/layout.ts understands it. It has a single writer: `Store.Replace` (used by `PUT /api/config`) always keeps the stored layout and discards the incoming one, so the admin UI, which PUTs back the whole config it loaded earlier, cannot wipe a layout saved since. Only `PUT /api/layout` changes it.
 - Config saves restart fetchers with the server's root context, not the request context, so a fetcher's polling loop is not tied to the lifetime of the `PUT /api/config` request.
