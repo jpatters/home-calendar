@@ -22,6 +22,7 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
     hockey: null,
     pool: null,
     hottub: null,
+    agent: null,
     weather,
     config: {
       calendars: [],
@@ -44,6 +45,15 @@ function buildLive(theme: Config["display"]["theme"], mode: Config["display"]["m
       hockey: { enabled: true, teamAbbr: "", teamName: "" },
       pool: { enabled: true, deviceUrl: "" },
       hotTub: { enabled: false, host: "" },
+      agent: {
+        enabled: false,
+        model: "gpt-6.1-terra",
+        effort: "low",
+        textInputEnabled: false,
+        quietStart: "22:00",
+        quietEnd: "07:00",
+        province: "",
+      },
       display: {
         defaultView: "week",
         calendarRefreshSeconds: 300,
@@ -131,6 +141,7 @@ describe("useTheme", () => {
       hockey: null,
       pool: null,
       hottub: null,
+      agent: null,
     };
     render(<Harness live={live} />);
     expect(document.documentElement.dataset.palette).toBeUndefined();

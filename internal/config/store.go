@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -200,7 +201,36 @@ func normalize(c types.Config) types.Config {
 	c.Hockey.TeamAbbr = strings.ToUpper(strings.TrimSpace(c.Hockey.TeamAbbr))
 	c.Hockey.TeamName = strings.TrimSpace(c.Hockey.TeamName)
 	c.Display = normalizeDisplayTheme(c.Display, d.Display)
+	c.Agent = normalizeAgent(c.Agent, d.Agent)
 	return c
+}
+
+var validEfforts = map[string]struct{}{
+	"none": {}, "minimal": {}, "low": {}, "medium": {}, "high": {}, "xhigh": {}, "max": {},
+}
+
+func normalizeAgent(cur, def types.Agent) types.Agent {
+	cur.Model = strings.TrimSpace(cur.Model)
+	if cur.Model == "" {
+		cur.Model = def.Model
+	}
+	if _, ok := validEfforts[cur.Effort]; !ok {
+		cur.Effort = def.Effort
+	}
+	if !validClock(cur.QuietStart) {
+		cur.QuietStart = def.QuietStart
+	}
+	if !validClock(cur.QuietEnd) {
+		cur.QuietEnd = def.QuietEnd
+	}
+	cur.Province = strings.ToUpper(strings.TrimSpace(cur.Province))
+	return cur
+}
+
+// validClock reports whether s is a 24-hour "HH:MM" time.
+func validClock(s string) bool {
+	_, err := time.Parse("15:04", s)
+	return err == nil && len(s) == 5
 }
 
 var validPalettes = map[string]struct{}{

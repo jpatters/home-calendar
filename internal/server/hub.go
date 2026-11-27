@@ -18,6 +18,7 @@ type Frame struct {
 	Hockey   *types.HockeySnapshot   `json:"hockey,omitempty"`
 	Pool     *types.PoolSnapshot     `json:"pool,omitempty"`
 	HotTub   *types.HotTubSnapshot   `json:"hottub,omitempty"`
+	Agent    *types.AgentSnapshot    `json:"agent,omitempty"`
 }
 
 // Hub fans out frames to every connected WebSocket client. Each client owns a

@@ -70,6 +70,21 @@ type Pool struct {
 	DeviceURL string `json:"deviceUrl"`
 }
 
+// Agent configures the personal assistant. Model and Effort are passed to the
+// OpenAI Responses API. QuietStart/QuietEnd ("HH:MM", local time) are the hours
+// the on-screen character sleeps. Province is an optional two-letter Canadian
+// province code used to pick regional holidays for the character's outfit.
+// API credentials are never stored here; they come from the environment.
+type Agent struct {
+	Enabled          bool   `json:"enabled"`
+	Model            string `json:"model"`
+	Effort           string `json:"effort"`
+	TextInputEnabled bool   `json:"textInputEnabled"`
+	QuietStart       string `json:"quietStart"`
+	QuietEnd         string `json:"quietEnd"`
+	Province         string `json:"province"`
+}
+
 // HotTub configures the Gecko in.touch2 hot tub widget. Host is the module's
 // LAN address as "ip" or "ip:port"; the port defaults to 10022.
 type HotTub struct {
@@ -86,6 +101,7 @@ type Config struct {
 	Hockey    Hockey     `json:"hockey"`
 	Pool      Pool       `json:"pool"`
 	HotTub    HotTub     `json:"hotTub"`
+	Agent     Agent      `json:"agent"`
 	Display   Display    `json:"display"`
 	// Layout is the display's serialized dockview layout. The server treats
 	// it as opaque; only the frontend interprets it.
@@ -257,6 +273,30 @@ type HotTubSnapshot struct {
 	Heating      bool      `json:"heating"`
 }
 
+// AgentState is what the on-screen character should be doing for the most
+// recent conversation turn.
+type AgentState string
+
+const (
+	AgentIdle     AgentState = "idle"
+	AgentThinking AgentState = "thinking"
+	AgentTalking  AgentState = "talking"
+	AgentError    AgentState = "error"
+)
+
+// AgentSnapshot describes the latest conversation turn. Heard is what the user
+// said (or typed); Reply is the agent's answer, empty while thinking. Ready is
+// false when the agent has no OpenAI credentials; CalendarWritable is false
+// when no Google service account is configured.
+type AgentSnapshot struct {
+	State            AgentState `json:"state"`
+	Heard            string     `json:"heard"`
+	Reply            string     `json:"reply"`
+	At               time.Time  `json:"at"`
+	Ready            bool       `json:"ready"`
+	CalendarWritable bool       `json:"calendarWritable"`
+}
+
 func DefaultConfig() Config {
 	return Config{
 		Calendars: []Calendar{},
@@ -284,6 +324,12 @@ func DefaultConfig() Config {
 		Pool: Pool{
 			Enabled:   true,
 			DeviceURL: "http://pool-thermostat.local",
+		},
+		Agent: Agent{
+			Model:      "gpt-6.1-terra",
+			Effort:     "low",
+			QuietStart: "22:00",
+			QuietEnd:   "07:00",
 		},
 		Display: Display{
 			DefaultView:            "week",

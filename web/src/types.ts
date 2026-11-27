@@ -96,6 +96,25 @@ export interface HotTub {
   host: string;
 }
 
+export type AgentEffort =
+  | "none"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
+
+export interface Agent {
+  enabled: boolean;
+  model: string;
+  effort: AgentEffort;
+  textInputEnabled: boolean;
+  quietStart: string;
+  quietEnd: string;
+  province: string;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
@@ -105,6 +124,7 @@ export interface Config {
   hockey: Hockey;
   pool: Pool;
   hotTub: HotTub;
+  agent: Agent;
   display: Display;
   // The display's serialized dockview layout; absent means "use the default".
   layout?: unknown;
@@ -247,6 +267,17 @@ export interface HotTubSnapshot {
   heating: boolean;
 }
 
+export type AgentState = "idle" | "thinking" | "talking" | "error";
+
+export interface AgentSnapshot {
+  state: AgentState;
+  heard: string;
+  reply: string;
+  at: string;
+  ready: boolean;
+  calendarWritable: boolean;
+}
+
 export type WSFrame =
   | {
       type: "snapshot";
@@ -259,6 +290,7 @@ export type WSFrame =
       hockey: HockeySnapshot | null;
       pool: PoolSnapshot | null;
       hottub: HotTubSnapshot | null;
+      agent: AgentSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
@@ -268,4 +300,5 @@ export type WSFrame =
   | { type: "hockey"; hockey: HockeySnapshot | null }
   | { type: "pool"; pool: PoolSnapshot | null }
   | { type: "hottub"; hottub: HotTubSnapshot | null }
+  | { type: "agent"; agent: AgentSnapshot | null }
   | { type: "config"; config: Config };

@@ -54,6 +54,14 @@ export function buildConfig(
       enabled: overrides.hotTubEnabled ?? true,
       host: "192.168.1.50",
     },
+    agent: {
+      enabled: false,
+      model: "gpt-6.1-terra",
+      effort: "low",
+      textInputEnabled: false,
+      quietStart: "22:00",
+      quietEnd: "07:00",
+    },
     display: {
       defaultView: "week",
       calendarRefreshSeconds: 300,
@@ -85,5 +93,6 @@ export function buildLive(config: Config): LiveData {
     hockey: null,
     pool: null,
     hottub: null,
+    agent: null,
   };
 }
