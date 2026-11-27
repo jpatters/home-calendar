@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,60 +18,111 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
-// fakeResponsesAPI answers every POST /responses with reply, or with a 400
-// when reply is empty.
-func fakeResponsesAPI(t *testing.T, reply string) (*httptest.Server, *atomic.Int32) {
-	srv, hits, _ := recordingResponsesAPI(t, reply)
-	return srv, hits
+// fakeResponses emulates POST /responses as a server-sent event stream that
+// completes with reply, or answers 400 when reply is empty. It records the
+// Authorization header and tool names of every request.
+type fakeResponses struct {
+	*httptest.Server
+	hits  atomic.Int32
+	mu    sync.Mutex
+	auths []string
+	tools [][]string
 }
 
-// recordingResponsesAPI is fakeResponsesAPI that also stores the tool names
-// offered in the latest request.
-func recordingResponsesAPI(t *testing.T, reply string) (*httptest.Server, *atomic.Int32, *atomic.Value) {
+func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 	t.Helper()
-	var hits atomic.Int32
-	var lastTools atomic.Value
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	f := &fakeResponses{}
+	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/responses") {
 			http.NotFound(w, r)
 			return
 		}
-		hits.Add(1)
+		f.hits.Add(1)
 		var body struct {
 			Tools []struct {
-				Name string `json:"name"`
+				Type  string `json:"type"`
+				Name  string `json:"name"`
+				Tools []struct {
+					Name string `json:"name"`
+				} `json:"tools"`
 			} `json:"tools"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		var names []string
 		for _, tool := range body.Tools {
-			names = append(names, tool.Name)
+			if tool.Type != "namespace" {
+				names = append(names, tool.Name)
+			}
+			for _, inner := range tool.Tools {
+				names = append(names, inner.Name)
+			}
 		}
-		lastTools.Store(names)
-		w.Header().Set("Content-Type", "application/json")
+		f.mu.Lock()
+		f.auths = append(f.auths, r.Header.Get("Authorization"))
+		f.tools = append(f.tools, names)
+		f.mu.Unlock()
 		if reply == "" {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, `{"error":{"message":"secret upstream detail","type":"invalid_request_error"}}`)
 			return
 		}
-		fmt.Fprintf(w, `{"id":"resp_1","object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":%q,"annotations":[]}]}]}`, reply)
+		w.Header().Set("Content-Type", "text/event-stream")
+		final := fmt.Sprintf(`{"id":"resp_1","object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":%q,"annotations":[]}]}]}`, reply)
+		fmt.Fprintf(w, "event: response.created\ndata: %s\n\n", `{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1764200000,"status":"in_progress","model":"gpt-test","output":[]}}`)
+		fmt.Fprintf(w, "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":1,\"response\":%s}\n\n", final)
 	}))
-	t.Cleanup(srv.Close)
-	return srv, &hits, &lastTools
+	t.Cleanup(f.Close)
+	return f
+}
+
+func (f *fakeResponses) authorizations() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.auths...)
+}
+
+// lastTools returns the tool names offered in the latest request.
+func (f *fakeResponses) lastTools() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.tools) == 0 {
+		return nil
+	}
+	return f.tools[len(f.tools)-1]
+}
+
+// fakeResponsesAPI answers every POST /responses with reply, or with a 400
+// when reply is empty.
+func fakeResponsesAPI(t *testing.T, reply string) (*httptest.Server, *atomic.Int32) {
+	f := newFakeResponses(t, reply)
+	return f.Server, &f.hits
 }
 
 // agentApp builds the full router via New with every widget disabled (so no
-// fetcher reaches the network), the agent enabled or not, and OpenAI pointed
-// at openai through the SDK's standard environment variables.
+// fetcher reaches the network), the agent enabled or not, OPENAI_API_KEY set
+// to apiKey, and OpenAI pointed at openaiURL through the SDK's standard
+// environment variable.
 func agentApp(t *testing.T, enabled bool, apiKey, openaiURL string) *httptest.Server {
 	t.Helper()
 	t.Setenv("OPENAI_API_KEY", apiKey)
 	t.Setenv("OPENAI_BASE_URL", openaiURL)
 	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-	store, err := config.Open(filepath.Join(t.TempDir(), "config.json"))
+	dir := t.TempDir()
+	return startApp(t, dir, enabled, "")
+}
+
+// startApp runs New over the config and secrets files in dir, as a server
+// (re)started on that data directory would. authIssuer, when set, is the
+// Sign in with ChatGPT server.
+func startApp(t *testing.T, dir string, enabled bool, authIssuer string) *httptest.Server {
+	t.Helper()
+	configPath := filepath.Join(dir, "config.json")
+	store, err := config.Open(configPath)
 	if err != nil {
 		t.Fatalf("config.Open: %v", err)
 	}
@@ -87,9 +139,13 @@ func agentApp(t *testing.T, enabled bool, apiKey, openaiURL string) *httptest.Se
 	if _, err := store.Replace(cfg); err != nil {
 		t.Fatalf("Replace: %v", err)
 	}
+	sec, err := secrets.Open(secrets.PathFor(configPath))
+	if err != nil {
+		t.Fatalf("secrets.Open: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s, h, err := New(ctx, store)
+	s, h, err := New(ctx, Options{Config: store, Secrets: sec, ChatGPTIssuer: authIssuer})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -228,7 +284,7 @@ func TestAgentConverseApologisesWhenModelFails(t *testing.T) {
 }
 
 func TestAgentOffersOnlyCalendarReadsWithoutGoogleCredentials(t *testing.T) {
-	openai, _, lastTools := recordingResponsesAPI(t, "ok")
+	openai := newFakeResponses(t, "ok")
 	app := agentApp(t, true, "sk-test", openai.URL)
 
 	if status, body := postConverse(t, app, `{"conversation_id":"c","query":"add lunch tomorrow"}`); status != http.StatusOK {
@@ -236,7 +292,7 @@ func TestAgentOffersOnlyCalendarReadsWithoutGoogleCredentials(t *testing.T) {
 	}
 
 	offered := map[string]bool{}
-	names, _ := lastTools.Load().([]string)
+	names := openai.lastTools()
 	for _, n := range names {
 		offered[n] = true
 	}
@@ -367,7 +423,7 @@ func TestGetAgentReportsNotReadyWithoutAPIKey(t *testing.T) {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	if snap.Ready {
-		t.Errorf("agent = %+v, want not ready without OPENAI_API_KEY", snap)
+		t.Errorf("agent = %+v, want not ready without any credential", snap)
 	}
 }
 

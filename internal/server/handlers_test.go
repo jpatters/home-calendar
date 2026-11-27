@@ -19,6 +19,7 @@ import (
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
+	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/snowday"
 	"github.com/jpatters/home-calendar/internal/tide"
 	"github.com/jpatters/home-calendar/internal/types"
@@ -700,7 +701,11 @@ func TestPoolTargetReturnsAndBroadcastsNewSnapshot(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	srv, handler, err := New(ctx, store)
+	sec, err := secrets.Open(filepath.Join(t.TempDir(), "secrets.json"))
+	if err != nil {
+		t.Fatalf("secrets.Open: %v", err)
+	}
+	srv, handler, err := New(ctx, Options{Config: store, Secrets: sec})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

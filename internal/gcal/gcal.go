@@ -4,6 +4,9 @@ package gcal
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -107,6 +110,36 @@ func LoadCredentials(value string) ([]byte, error) {
 		return nil, fmt.Errorf("gcal: read credentials: %w", err)
 	}
 	return b, nil
+}
+
+// ServiceAccountEmail checks that credentialsJSON is a usable service
+// account key (type, client_email and a parseable private_key) and returns
+// its email, the address calendars must be shared with.
+func ServiceAccountEmail(credentialsJSON []byte) (string, error) {
+	var key struct {
+		Type        string `json:"type"`
+		ClientEmail string `json:"client_email"`
+		PrivateKey  string `json:"private_key"`
+	}
+	if err := json.Unmarshal(credentialsJSON, &key); err != nil {
+		return "", errors.New("the Google credentials aren't valid JSON")
+	}
+	if key.Type != "service_account" {
+		return "", errors.New("the Google credentials aren't a service account key")
+	}
+	if strings.TrimSpace(key.ClientEmail) == "" {
+		return "", errors.New("the service account key has no client_email")
+	}
+	block, _ := pem.Decode([]byte(key.PrivateKey))
+	if block == nil {
+		return "", errors.New("the service account key's private_key isn't a PEM key")
+	}
+	if _, err := x509.ParsePKCS8PrivateKey(block.Bytes); err != nil {
+		if _, err := x509.ParsePKCS1PrivateKey(block.Bytes); err != nil {
+			return "", errors.New("the service account key's private_key can't be read")
+		}
+	}
+	return key.ClientEmail, nil
 }
 
 // New returns a client authenticated as the service account in

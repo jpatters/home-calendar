@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/server"
 )
 
@@ -21,15 +23,15 @@ func main() {
 
 	log.Printf("local time zone: %s (TZ=%q)", time.Now().Format("MST -07:00"), os.Getenv("TZ"))
 
-	store, err := config.Open(configPath)
+	store, sec, err := openStores(configPath)
 	if err != nil {
-		log.Fatalf("open config: %v", err)
+		log.Fatal(err)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	srv, handler, err := server.New(ctx, store)
+	srv, handler, err := server.New(ctx, server.Options{Config: store, Secrets: sec})
 	if err != nil {
 		log.Fatalf("start server: %v", err)
 	}
@@ -53,6 +55,19 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = httpServer.Shutdown(shutdownCtx)
+}
+
+// openStores opens the config file and the secrets file beside it.
+func openStores(configPath string) (*config.Store, *secrets.Store, error) {
+	store, err := config.Open(configPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open config: %w", err)
+	}
+	sec, err := secrets.Open(secrets.PathFor(configPath))
+	if err != nil {
+		return nil, nil, fmt.Errorf("open secrets: %w", err)
+	}
+	return store, sec, nil
 }
 
 func envOr(key, fallback string) string {

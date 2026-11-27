@@ -1,59 +1,79 @@
 package agent
 
 import (
+	"slices"
 	"sync"
 	"time"
+
+	"github.com/openai/openai-go/v3/responses"
 )
 
-// conversationTTL is how long after its last turn a conversation can be
-// continued. Home Assistant reuses a conversation_id for follow-ups said
-// shortly after a reply; anything later is treated as a new request.
-const conversationTTL = 5 * time.Minute
+const (
+	// conversationTTL is how long after its last turn a conversation can be
+	// continued. Home Assistant reuses a conversation_id for follow-ups said
+	// shortly after a reply; anything later is treated as a new request.
+	conversationTTL = 5 * time.Minute
+	// maxTurns caps how many completed turns a conversation resends.
+	maxTurns = 10
+)
 
-// memory maps a conversation id to the id of its last completed response.
-// Turns are chained with the Responses API's previous_response_id, so OpenAI
-// holds the history (messages, tool calls, reasoning) and nothing is replayed.
+// memory holds each conversation's completed turns locally. Requests are not
+// stored by OpenAI (store:false), so every request resends the history: the
+// user's words, function calls with their outputs, and the spoken replies.
 type memory struct {
-	mu    sync.Mutex
-	turns map[string]turn
+	mu            sync.Mutex
+	conversations map[string]conversation
 }
 
-type turn struct {
-	responseID string
-	at         time.Time
+type conversation struct {
+	// turns are the input items of each completed turn, oldest first.
+	turns [][]responses.ResponseInputItemUnionParam
+	at    time.Time
 }
 
 func newMemory() *memory {
-	return &memory{turns: map[string]turn{}}
+	return &memory{conversations: map[string]conversation{}}
 }
 
-func (m *memory) last(conversationID string, now time.Time) (string, bool) {
+// history returns the items of the conversation's recent turns, or nothing
+// when it has expired.
+func (m *memory) history(conversationID string, now time.Time) []responses.ResponseInputItemUnionParam {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	t, ok := m.turns[conversationID]
+	c, ok := m.conversations[conversationID]
 	if !ok {
-		return "", false
+		return nil
 	}
-	if now.Sub(t.at) > conversationTTL {
-		delete(m.turns, conversationID)
-		return "", false
+	if now.Sub(c.at) > conversationTTL {
+		delete(m.conversations, conversationID)
+		return nil
 	}
-	return t.responseID, true
+	var items []responses.ResponseInputItemUnionParam
+	for _, t := range c.turns {
+		items = append(items, t...)
+	}
+	return items
 }
 
-func (m *memory) remember(conversationID, responseID string, now time.Time) {
+// remember appends a completed turn, keeping the most recent maxTurns.
+func (m *memory) remember(conversationID string, turn []responses.ResponseInputItemUnionParam, now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for id, t := range m.turns {
-		if now.Sub(t.at) > conversationTTL {
-			delete(m.turns, id)
+	for id, c := range m.conversations {
+		if now.Sub(c.at) > conversationTTL {
+			delete(m.conversations, id)
 		}
 	}
-	m.turns[conversationID] = turn{responseID: responseID, at: now}
+	c := m.conversations[conversationID]
+	turns := append(slices.Clone(c.turns), turn)
+	if len(turns) > maxTurns {
+		turns = turns[len(turns)-maxTurns:]
+	}
+	m.conversations[conversationID] = conversation{turns: turns, at: now}
 }
 
 func (m *memory) forget(conversationID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.turns, conversationID)
+	delete(m.conversations, conversationID)
 }

@@ -28,18 +28,28 @@ const (
 )
 
 const (
-	notReadyReply = "I'm not set up yet. Someone needs to add an OpenAI API key before I can help."
-	errorReply    = "Sorry, something went wrong on my end. Please try again."
-	timeoutReply  = "Sorry, that took me too long. Please try again."
-	gaveUpReply   = "Sorry, I got stuck working that out. Could you ask me another way?"
+	notReadyReply    = "I'm not set up yet. Someone needs to sign in with ChatGPT or add an OpenAI API key in the calendar settings."
+	signInAgainReply = "I've been signed out of ChatGPT. Someone needs to sign in again in the calendar settings."
+	usageLimitReply  = "I've hit the ChatGPT plan's usage limit for now."
+	errorReply       = "Sorry, something went wrong on my end. Please try again."
+	timeoutReply     = "Sorry, that took me too long. Please try again."
+	gaveUpReply      = "Sorry, I got stuck working that out. Could you ask me another way?"
 )
 
+// usageLimitCode is the Responses error code for an exhausted ChatGPT plan.
+const usageLimitCode = "subscription_sharing_usage_limit_exceeded"
+
 var (
-	// errNotReady reports that the agent has no OpenAI API key.
-	errNotReady = errors.New("agent: no OpenAI API key configured")
+	// errNotReady reports that the agent has no OpenAI credential.
+	errNotReady = errors.New("agent: no OpenAI credential configured")
+	// ErrSignInAgain is returned (wrapped) by a Token func when the saved
+	// ChatGPT sign-in is no longer valid and someone must sign in again.
+	ErrSignInAgain = errors.New("agent: ChatGPT sign-in is no longer valid")
 	// errTooManyRounds reports that the model was still calling tools when
 	// the round limit was reached.
 	errTooManyRounds = errors.New("agent: model still calling tools after round limit")
+	// errUsageLimit reports that the ChatGPT plan's usage limit was reached.
+	errUsageLimit = errors.New("agent: ChatGPT plan usage limit reached")
 )
 
 const persona = `You are Ziggy, the friendly assistant built into a family's wall calendar. People talk to you by saying "Hey Ziggy".
@@ -54,8 +64,11 @@ Only create, change or delete things, or change a temperature, when the person e
 // Options configures an Agent. Zero values for Now, Location and Timeout fall
 // back to time.Now, time.Local and 25 seconds.
 type Options struct {
-	// APIKey is the OpenAI API key; empty means the agent is not ready.
-	APIKey string
+	// Token returns the bearer credential for each model request: a ChatGPT
+	// access token or an OpenAI API key. "" means no credential.
+	Token func(ctx context.Context) (string, error)
+	// Ready reports whether a credential is configured.
+	Ready bool
 	// BaseURL overrides the OpenAI API base URL; empty uses the SDK default
 	// (which honours OPENAI_BASE_URL).
 	BaseURL string
@@ -72,17 +85,25 @@ type Options struct {
 	Timeout  time.Duration
 }
 
+// Capabilities are the parts of an agent that change when credentials do.
+type Capabilities struct {
+	Ready            bool
+	CalendarWritable bool
+	Tools            *Registry
+}
+
 type Agent struct {
 	opts   Options
 	client openai.Client
 	memory *memory
 
 	// emitMu orders state changes with their OnState calls, so the states
-	// published match the order they were set in. mu guards snap alone, so
-	// Snapshot never waits on a publish.
+	// published match the order they were set in. mu guards snap and tools,
+	// so Snapshot never waits on a publish.
 	emitMu sync.Mutex
 	mu     sync.Mutex
 	snap   types.AgentSnapshot
+	tools  *Registry
 }
 
 func New(o Options) *Agent {
@@ -98,7 +119,12 @@ func New(o Options) *Agent {
 	if o.Tools == nil {
 		o.Tools = NewRegistry()
 	}
-	reqOpts := []option.RequestOption{option.WithAPIKey(o.APIKey)}
+	if o.Token == nil {
+		o.Token = func(context.Context) (string, error) { return "", nil }
+	}
+	// Sign in with ChatGPT's examples disable retries: a usage-limit 429
+	// must not be retried, and the turn has a tight deadline anyway.
+	reqOpts := []option.RequestOption{option.WithMaxRetries(0)}
 	if o.BaseURL != "" {
 		reqOpts = append(reqOpts, option.WithBaseURL(o.BaseURL))
 	}
@@ -106,20 +132,47 @@ func New(o Options) *Agent {
 		opts:   o,
 		client: openai.NewClient(reqOpts...),
 		memory: newMemory(),
+		tools:  o.Tools,
 		snap: types.AgentSnapshot{
 			State:            types.AgentIdle,
 			At:               o.Now(),
-			Ready:            o.APIKey != "",
+			Ready:            o.Ready,
 			CalendarWritable: o.CalendarWritable,
 		},
 	}
+}
+
+// SetCapabilities swaps in new capabilities for subsequent turns and
+// publishes the updated snapshot.
+func (a *Agent) SetCapabilities(c Capabilities) {
+	if c.Tools == nil {
+		c.Tools = NewRegistry()
+	}
+	a.emitMu.Lock()
+	defer a.emitMu.Unlock()
+	a.mu.Lock()
+	a.snap.Ready = c.Ready
+	a.snap.CalendarWritable = c.CalendarWritable
+	a.tools = c.Tools
+	s := a.snap
+	a.mu.Unlock()
+	if a.opts.OnState != nil {
+		a.opts.OnState(&s)
+	}
+}
+
+func (a *Agent) capabilities() Capabilities {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return Capabilities{Ready: a.snap.Ready, CalendarWritable: a.snap.CalendarWritable, Tools: a.tools}
 }
 
 // Converse answers text as part of conversationID. The returned reply is
 // always something that can be spoken; err is non-nil when the turn failed and
 // the reply is an apology rather than an answer.
 func (a *Agent) Converse(ctx context.Context, conversationID, text string) (string, error) {
-	if a.opts.APIKey == "" {
+	caps := a.capabilities()
+	if !caps.Ready {
 		a.setState(types.AgentError, text, notReadyReply)
 		return notReadyReply, errNotReady
 	}
@@ -127,7 +180,7 @@ func (a *Agent) Converse(ctx context.Context, conversationID, text string) (stri
 
 	ctx, cancel := context.WithTimeout(ctx, a.opts.Timeout)
 	defer cancel()
-	reply, err := a.run(ctx, conversationID, text)
+	reply, err := a.run(ctx, caps, conversationID, text)
 	if err != nil {
 		a.memory.forget(conversationID)
 		spoken := errorReply
@@ -136,6 +189,12 @@ func (a *Agent) Converse(ctx context.Context, conversationID, text string) (stri
 			spoken = timeoutReply
 		case errors.Is(err, errTooManyRounds):
 			spoken = gaveUpReply
+		case errors.Is(err, errNotReady):
+			spoken = notReadyReply
+		case errors.Is(err, ErrSignInAgain):
+			spoken = signInAgainReply
+		case errors.Is(err, errUsageLimit):
+			spoken = usageLimitReply
 		}
 		a.setState(types.AgentError, text, spoken)
 		return spoken, err
@@ -152,54 +211,128 @@ func (a *Agent) Snapshot() *types.AgentSnapshot {
 	return &s
 }
 
-func (a *Agent) run(ctx context.Context, conversationID, text string) (string, error) {
+// run plays one turn. Nothing is stored server-side, so every request
+// carries the conversation's history plus this turn's items so far.
+func (a *Agent) run(ctx context.Context, caps Capabilities, conversationID, text string) (string, error) {
 	cfg := a.opts.Config()
 	params := responses.ResponseNewParams{
 		Model:        cfg.Agent.Model,
-		Instructions: openai.String(a.instructions(cfg)),
+		Instructions: openai.String(a.instructions(cfg, caps.CalendarWritable)),
 		Reasoning:    shared.ReasoningParam{Effort: shared.ReasoningEffort(cfg.Agent.Effort)},
-		Tools:        a.opts.Tools.params(),
-		Input:        responses.ResponseNewParamsInputUnion{OfString: openai.String(text)},
+		Tools:        caps.Tools.params(),
+		Store:        openai.Bool(false),
 	}
-	if prev, ok := a.memory.last(conversationID, a.opts.Now()); ok {
-		params.PreviousResponseID = openai.String(prev)
-	}
+	history := a.memory.history(conversationID, a.opts.Now())
+	turn := []responses.ResponseInputItemUnionParam{message(responses.EasyInputMessageRoleUser, text)}
 	for range maxRounds {
-		resp, err := a.client.Responses.New(ctx, params)
+		params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: append(append(responses.ResponseInputParam{}, history...), turn...)}
+		resp, err := a.respond(ctx, params)
 		if err != nil {
-			return "", fmt.Errorf("agent: responses: %w", err)
+			return "", err
 		}
-		outputs := a.runToolCalls(ctx, resp)
-		if len(outputs) == 0 {
-			a.memory.remember(conversationID, resp.ID, a.opts.Now())
+		items, called := a.runToolCalls(ctx, caps.Tools, resp)
+		turn = append(turn, items...)
+		if !called {
+			a.memory.remember(conversationID, turn, a.opts.Now())
 			return strings.TrimSpace(resp.OutputText()), nil
 		}
-		params.PreviousResponseID = openai.String(resp.ID)
-		params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: outputs}
 	}
 	return "", fmt.Errorf("%w (%d rounds)", errTooManyRounds, maxRounds)
 }
 
-func (a *Agent) runToolCalls(ctx context.Context, resp *responses.Response) responses.ResponseInputParam {
-	var outputs responses.ResponseInputParam
-	for _, item := range resp.Output {
-		if item.Type != "function_call" {
-			continue
-		}
-		call := item.AsFunctionCall()
-		outputs = append(outputs, responses.ResponseInputItemUnionParam{
-			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-				CallID: openai.String(call.CallID),
-				Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
-					OfString: openai.String(a.opts.Tools.call(ctx, call.Name, call.Arguments)),
-				},
-			},
-		})
+// respond streams one Responses request with the current credential and
+// returns the completed response. Only response.completed is a success.
+func (a *Agent) respond(ctx context.Context, params responses.ResponseNewParams) (*responses.Response, error) {
+	token, err := a.opts.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("agent: credential: %w", err)
 	}
-	return outputs
+	if token == "" {
+		return nil, errNotReady
+	}
+	stream := a.client.Responses.NewStreaming(ctx, params, option.WithAPIKey(token))
+	defer stream.Close()
+	for stream.Next() {
+		ev := stream.Current()
+		switch ev.Type {
+		case "response.completed":
+			resp := ev.AsResponseCompleted().Response
+			return &resp, nil
+		case "response.failed":
+			e := ev.AsResponseFailed().Response.Error
+			if e.Code == usageLimitCode {
+				return nil, fmt.Errorf("%w: %s", errUsageLimit, e.Message)
+			}
+			return nil, fmt.Errorf("agent: response failed: %s: %s", e.Code, e.Message)
+		case "response.incomplete":
+			return nil, errors.New("agent: response incomplete")
+		case "error":
+			e := ev.AsError()
+			return nil, fmt.Errorf("agent: stream error: %s: %s", e.Code, e.Message)
+		}
+	}
+	if err := stream.Err(); err != nil {
+		var apiErr *openai.Error
+		if errors.As(err, &apiErr) && apiErr.Code == usageLimitCode {
+			return nil, fmt.Errorf("%w: %v", errUsageLimit, err)
+		}
+		return nil, fmt.Errorf("agent: responses: %w", err)
+	}
+	return nil, errors.New("agent: stream ended without response.completed")
 }
 
-func (a *Agent) instructions(cfg types.Config) string {
+// runToolCalls runs every function call in resp. It returns the response's
+// items to keep in the turn (function calls with their outputs, and the
+// spoken message) and whether any tool was called. Reasoning items and item
+// ids are dropped: nothing is stored server-side to refer to.
+func (a *Agent) runToolCalls(ctx context.Context, tools *Registry, resp *responses.Response) ([]responses.ResponseInputItemUnionParam, bool) {
+	var items []responses.ResponseInputItemUnionParam
+	called := false
+	for _, item := range resp.Output {
+		switch item.Type {
+		case "function_call":
+			called = true
+			call := item.AsFunctionCall()
+			fc := &responses.ResponseFunctionToolCallParam{
+				CallID:    call.CallID,
+				Name:      call.Name,
+				Arguments: call.Arguments,
+			}
+			if call.Namespace != "" {
+				fc.Namespace = openai.String(call.Namespace)
+			}
+			items = append(items,
+				responses.ResponseInputItemUnionParam{OfFunctionCall: fc},
+				responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+					CallID: openai.String(call.CallID),
+					Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{
+						OfString: openai.String(tools.call(ctx, call.Name, call.Arguments)),
+					},
+				}},
+			)
+		case "message":
+			var text strings.Builder
+			for _, c := range item.AsMessage().Content {
+				if c.Type == "output_text" {
+					text.WriteString(c.Text)
+				}
+			}
+			if text.Len() > 0 {
+				items = append(items, message(responses.EasyInputMessageRoleAssistant, text.String()))
+			}
+		}
+	}
+	return items, called
+}
+
+func message(role responses.EasyInputMessageRole, text string) responses.ResponseInputItemUnionParam {
+	return responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{
+		Role:    role,
+		Content: responses.EasyInputMessageContentUnionParam{OfString: openai.String(text)},
+	}}
+}
+
+func (a *Agent) instructions(cfg types.Config, calendarWritable bool) string {
 	now := a.opts.Now().In(a.opts.Location)
 	var b strings.Builder
 	b.WriteString(persona)
@@ -216,7 +349,7 @@ func (a *Agent) instructions(cfg types.Config) string {
 		}
 		fmt.Fprintf(&b, "\nThe calendars are: %s.", strings.Join(names, ", "))
 	}
-	if a.opts.CalendarWritable {
+	if calendarWritable {
 		b.WriteString(" You can add, change and delete events on calendars that come from Google Calendar.")
 	} else {
 		b.WriteString(" You can read the calendars but cannot change them; if asked, say calendar changes aren't set up yet.")

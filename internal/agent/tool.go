@@ -29,17 +29,28 @@ func NewRegistry(tools ...Tool) *Registry {
 	return &Registry{tools: tools}
 }
 
+// toolNamespace groups every tool, as Sign in with ChatGPT requires function
+// tools to be offered inside a namespace.
+const toolNamespace = "calendar"
+
 func (r *Registry) params() []responses.ToolUnionParam {
-	out := make([]responses.ToolUnionParam, len(r.tools))
+	if len(r.tools) == 0 {
+		return nil
+	}
+	fns := make([]responses.NamespaceToolToolUnionParam, len(r.tools))
 	for i, t := range r.tools {
-		out[i] = responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{
+		fns[i] = responses.NamespaceToolToolUnionParam{OfFunction: &responses.NamespaceToolToolFunctionParam{
 			Name:        t.Name(),
 			Description: openai.String(t.Description()),
 			Parameters:  t.Schema(),
 			Strict:      openai.Bool(true),
 		}}
 	}
-	return out
+	return []responses.ToolUnionParam{{OfNamespace: &responses.NamespaceToolParam{
+		Name:        toolNamespace,
+		Description: "Tools for the family's wall calendar: calendars, scores, weather, hot tub and pool.",
+		Tools:       fns,
+	}}}
 }
 
 // call runs the named tool and renders its result, or its failure, as the

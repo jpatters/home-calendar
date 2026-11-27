@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -18,20 +19,30 @@ import (
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
-// fakeOpenAI emulates POST /responses. Each request gets the next scripted
-// reply; once the script runs out the last reply repeats.
+const usageLimitReply = "I've hit the ChatGPT plan's usage limit for now."
+
+// fakeOpenAI emulates POST /responses as a server-sent event stream. Each
+// request gets the next scripted reply; once the script runs out the last
+// reply repeats.
 type fakeOpenAI struct {
 	t      *testing.T
 	srv    *httptest.Server
 	mu     sync.Mutex
 	reqs   []map[string]any
+	auths  []string
 	script []scripted
 }
 
 type scripted struct {
+	// status and body answer with a plain JSON error instead of a stream.
 	status int
 	body   string
 	hang   bool
+	// response is the final response object, streamed as
+	// response.created, text deltas, then response.completed.
+	response string
+	// events, when set, are streamed verbatim (each a JSON event) instead.
+	events []string
 }
 
 func newFakeOpenAI(t *testing.T, script ...scripted) *fakeOpenAI {
@@ -40,6 +51,18 @@ func newFakeOpenAI(t *testing.T, script ...scripted) *fakeOpenAI {
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+// toolNamespace is the name of the namespace the request groups its tools
+// under, so scripted function calls can name it like a real model would.
+func toolNamespace(body map[string]any) string {
+	tools, _ := body["tools"].([]any)
+	for _, raw := range tools {
+		if tool, _ := raw.(map[string]any); tool["type"] == "namespace" {
+			return fmt.Sprint(tool["name"])
+		}
+	}
+	return ""
 }
 
 func (f *fakeOpenAI) serve(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +77,7 @@ func (f *fakeOpenAI) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	f.reqs = append(f.reqs, body)
+	f.auths = append(f.auths, r.Header.Get("Authorization"))
 	n := len(f.reqs)
 	var s scripted
 	if len(f.script) > 0 {
@@ -64,11 +88,59 @@ func (f *fakeOpenAI) serve(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 	if s.status != 0 {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(s.status)
+		io.WriteString(w, s.body)
+		return
 	}
-	io.WriteString(w, s.body)
+	events := s.events
+	if events == nil {
+		events = streamOf(s.response)
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	ns := toolNamespace(body)
+	for i, ev := range events {
+		ev = strings.ReplaceAll(ev, "__NS__", ns)
+		ev = strings.Replace(ev, `"sequence_number":0`, fmt.Sprintf(`"sequence_number":%d`, i), 1)
+		var probe struct {
+			Type string `json:"type"`
+		}
+		json.Unmarshal([]byte(ev), &probe)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", probe.Type, ev)
+		if fl, ok := w.(http.Flusher); ok {
+			fl.Flush()
+		}
+	}
+}
+
+// streamOf turns a final response object into the events a real stream
+// carries: created, one delta per output text, completed.
+func streamOf(response string) []string {
+	var resp struct {
+		ID     string `json:"id"`
+		Output []struct {
+			Type    string `json:"type"`
+			ID      string `json:"id"`
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal([]byte(response), &resp); err != nil {
+		panic(fmt.Sprintf("bad scripted response %s: %v", response, err))
+	}
+	created := fmt.Sprintf(`{"type":"response.created","sequence_number":0,"response":{"id":%q,"object":"response","created_at":1764200000,"status":"in_progress","model":"gpt-test","output":[]}}`, resp.ID)
+	events := []string{created}
+	for i, item := range resp.Output {
+		if item.Type != "message" {
+			continue
+		}
+		for _, c := range item.Content {
+			events = append(events, fmt.Sprintf(`{"type":"response.output_text.delta","sequence_number":0,"item_id":%q,"output_index":%d,"content_index":0,"delta":%q,"logprobs":[]}`, item.ID, i, c.Text))
+		}
+	}
+	return append(events, fmt.Sprintf(`{"type":"response.completed","sequence_number":0,"response":%s}`, response))
 }
 
 func (f *fakeOpenAI) requests() []map[string]any {
@@ -77,18 +149,37 @@ func (f *fakeOpenAI) requests() []map[string]any {
 	return append([]map[string]any(nil), f.reqs...)
 }
 
+func (f *fakeOpenAI) authorizations() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.auths...)
+}
+
+// text is a completed response with a reasoning item (carrying encrypted
+// content) and a spoken reply.
 func text(id, reply string) scripted {
-	return scripted{body: fmt.Sprintf(`{"id":%q,"object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"reasoning","id":"rs_%s","summary":[]},{"type":"message","id":"msg_%s","role":"assistant","status":"completed","content":[{"type":"output_text","text":%q,"annotations":[]}]}]}`, id, id, id, reply)}
+	return scripted{response: fmt.Sprintf(`{"id":%q,"object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"reasoning","id":"rs_%s","summary":[],"encrypted_content":"enc_%s"},{"type":"message","id":"msg_%s","role":"assistant","status":"completed","content":[{"type":"output_text","text":%q,"annotations":[]}]}]}`, id, id, id, id, reply)}
 }
 
 type fnCall struct{ callID, name, args string }
 
+// calls is a completed response whose output is function calls in the
+// request's tool namespace.
 func calls(id string, cs ...fnCall) scripted {
-	items := make([]string, len(cs))
-	for i, c := range cs {
-		items[i] = fmt.Sprintf(`{"type":"function_call","id":"fc_%s","call_id":%q,"name":%q,"arguments":%q,"status":"completed"}`, c.callID, c.callID, c.name, c.args)
+	items := []string{fmt.Sprintf(`{"type":"reasoning","id":"rs_%s","summary":[],"encrypted_content":"enc_%s"}`, id, id)}
+	for _, c := range cs {
+		items = append(items, fmt.Sprintf(`{"type":"function_call","id":"fc_%s","call_id":%q,"namespace":"__NS__","name":%q,"arguments":%q,"status":"completed"}`, c.callID, c.callID, c.name, c.args))
 	}
-	return scripted{body: fmt.Sprintf(`{"id":%q,"object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[%s]}`, id, strings.Join(items, ","))}
+	return scripted{response: fmt.Sprintf(`{"id":%q,"object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[%s]}`, id, strings.Join(items, ","))}
+}
+
+// failed streams a response that starts and then fails with code.
+func failed(id, code string) scripted {
+	return scripted{events: []string{
+		fmt.Sprintf(`{"type":"response.created","sequence_number":0,"response":{"id":%q,"object":"response","created_at":1764200000,"status":"in_progress","model":"gpt-test","output":[]}}`, id),
+		fmt.Sprintf(`{"type":"response.output_text.delta","sequence_number":0,"item_id":"msg_%s","output_index":0,"content_index":0,"delta":"Let me","logprobs":[]}`, id),
+		fmt.Sprintf(`{"type":"response.failed","sequence_number":0,"response":{"id":%q,"object":"response","created_at":1764200000,"status":"failed","model":"gpt-test","output":[],"error":{"code":%q,"message":"upstream detail"}}}`, id, code),
+	}}
 }
 
 // recordingTool is a real tool that remembers the arguments it was called
@@ -160,13 +251,18 @@ func testConfig() types.Config {
 	return c
 }
 
-// newAgent builds an agent talking to fake with a fixed clock at
+func staticToken(tok string) func(context.Context) (string, error) {
+	return func(context.Context) (string, error) { return tok, nil }
+}
+
+// newAgent builds a ready agent talking to fake with a fixed clock at
 // 2026-11-26 22:30 in Halifax (02:30 UTC on the 27th).
 func newAgent(t *testing.T, fake *fakeOpenAI, edit func(*agent.Options), tools ...agent.Tool) (*agent.Agent, *clock) {
 	t.Helper()
 	clk := &clock{now: time.Date(2026, 11, 27, 2, 30, 0, 0, time.UTC)}
 	opts := agent.Options{
-		APIKey:           "sk-test",
+		Token:            staticToken("sk-test"),
+		Ready:            true,
 		BaseURL:          fake.srv.URL,
 		Config:           testConfig,
 		Tools:            agent.NewRegistry(tools...),
@@ -189,27 +285,91 @@ func converse(t *testing.T, a *agent.Agent, conv, text string) string {
 	return reply
 }
 
+func inputItems(req map[string]any) []map[string]any {
+	var out []map[string]any
+	items, _ := req["input"].([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		out = append(out, m)
+	}
+	return out
+}
+
+func contentText(c any) string {
+	switch v := c.(type) {
+	case string:
+		return v
+	case []any:
+		var parts []string
+		for _, p := range v {
+			m, _ := p.(map[string]any)
+			parts = append(parts, fmt.Sprint(m["text"]))
+		}
+		return strings.Join(parts, "")
+	}
+	return fmt.Sprint(c)
+}
+
+// transcript renders a request's input items as readable lines:
+// "user: ...", "assistant: ...", "call <id> <namespace>.<name> <args>",
+// "output <id> <output>", or "<type>" for anything else.
+func transcript(req map[string]any) []string {
+	var out []string
+	for _, m := range inputItems(req) {
+		switch {
+		case m["type"] == "function_call":
+			out = append(out, fmt.Sprintf("call %v %v.%v %v", m["call_id"], m["namespace"], m["name"], m["arguments"]))
+		case m["type"] == "function_call_output":
+			out = append(out, fmt.Sprintf("output %v %v", m["call_id"], contentText(m["output"])))
+		case m["role"] != nil && (m["type"] == nil || m["type"] == "message"):
+			out = append(out, fmt.Sprintf("%v: %s", m["role"], contentText(m["content"])))
+		default:
+			out = append(out, fmt.Sprint(m["type"]))
+		}
+	}
+	return out
+}
+
 // functionOutputs returns call_id -> output for every function_call_output
 // item in a request's input.
 func functionOutputs(t *testing.T, req map[string]any) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	items, _ := req["input"].([]any)
-	for _, it := range items {
-		m, _ := it.(map[string]any)
-		if m["type"] != "function_call_output" {
-			continue
-		}
-		id, _ := m["call_id"].(string)
-		switch o := m["output"].(type) {
-		case string:
-			out[id] = o
-		default:
-			b, _ := json.Marshal(o)
-			out[id] = string(b)
+	for _, m := range inputItems(req) {
+		if m["type"] == "function_call_output" {
+			out[fmt.Sprint(m["call_id"])] = contentText(m["output"])
 		}
 	}
 	return out
+}
+
+// offeredTools returns every function tool in a request, including those
+// grouped in namespaces.
+func offeredTools(req map[string]any) []map[string]any {
+	var out []map[string]any
+	tools, _ := req["tools"].([]any)
+	for _, raw := range tools {
+		tool, _ := raw.(map[string]any)
+		if tool["type"] == "namespace" {
+			inner, _ := tool["tools"].([]any)
+			for _, r := range inner {
+				m, _ := r.(map[string]any)
+				out = append(out, m)
+			}
+			continue
+		}
+		out = append(out, tool)
+	}
+	return out
+}
+
+func toolNames(req map[string]any) []string {
+	var names []string
+	for _, tool := range offeredTools(req) {
+		names = append(names, fmt.Sprint(tool["name"]))
+	}
+	sort.Strings(names)
+	return names
 }
 
 func asJSON(v any) string {
@@ -217,7 +377,25 @@ func asJSON(v any) string {
 	return string(b)
 }
 
-func TestConverseReturnsModelTextAnswer(t *testing.T) {
+// request returns the i-th request the fake received, failing the test when
+// there were not that many.
+func request(t *testing.T, f *fakeOpenAI, i int) map[string]any {
+	t.Helper()
+	reqs := f.requests()
+	if len(reqs) <= i {
+		t.Fatalf("model received %d requests, want at least %d", len(reqs), i+1)
+	}
+	return reqs[i]
+}
+
+func wantTranscript(t *testing.T, req map[string]any, want ...string) {
+	t.Helper()
+	if got := transcript(req); !reflect.DeepEqual(got, want) {
+		t.Errorf("input =\n  %s\nwant\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+func TestConverseReturnsStreamedModelTextAnswer(t *testing.T) {
 	fake := newFakeOpenAI(t, text("resp_1", "It is sunny today."))
 	a, _ := newAgent(t, fake, nil)
 
@@ -226,25 +404,67 @@ func TestConverseReturnsModelTextAnswer(t *testing.T) {
 	if reply != "It is sunny today." {
 		t.Errorf("reply = %q, want the model's text", reply)
 	}
-	reqs := fake.requests()
-	if len(reqs) != 1 {
-		t.Fatalf("requests = %d, want 1", len(reqs))
+	if n := len(fake.requests()); n != 1 {
+		t.Fatalf("requests = %d, want 1", n)
 	}
-	if !strings.Contains(asJSON(request(t, fake, 0)["input"]), "What's the weather?") {
-		t.Errorf("input %s does not carry the user's words", asJSON(request(t, fake, 0)["input"]))
+	wantTranscript(t, request(t, fake, 0), "user: What's the weather?")
+}
+
+// Sign in with ChatGPT accepts only store:false + stream:true requests
+// without previous_response_id or system-role items, so every request uses
+// that shape whichever credential is in use.
+func TestEveryRequestIsStreamedUnstoredAndSelfContained(t *testing.T) {
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "lookup", `{"x":1}`}),
+		text("resp_2", "Here."),
+		text("resp_3", "Again."),
+	)
+	a, _ := newAgent(t, fake, nil, &recordingTool{name: "lookup", result: "x"})
+
+	converse(t, a, "conv-1", "first")
+	converse(t, a, "conv-1", "second")
+
+	reqs := fake.requests()
+	if len(reqs) != 3 {
+		t.Fatalf("requests = %d, want 3", len(reqs))
+	}
+	for i, req := range reqs {
+		if req["store"] != false {
+			t.Errorf("request %d store = %v, want false", i, req["store"])
+		}
+		if req["stream"] != true {
+			t.Errorf("request %d stream = %v, want true", i, req["stream"])
+		}
+		if v, ok := req["previous_response_id"]; ok {
+			t.Errorf("request %d sent previous_response_id %v", i, v)
+		}
+		if s, _ := req["instructions"].(string); !strings.Contains(s, "Ziggy") {
+			t.Errorf("request %d instructions = %q, want Ziggy's instructions", i, s)
+		}
+		for _, item := range inputItems(req) {
+			if item["role"] == "system" {
+				t.Errorf("request %d has a system-role input item %v", i, item)
+			}
+		}
 	}
 }
 
-func TestConverseOffersRegisteredToolsAsStrictFunctions(t *testing.T) {
+func TestConverseOffersRegisteredToolsAsStrictFunctionsInANamespace(t *testing.T) {
 	fake := newFakeOpenAI(t, text("resp_1", "ok"))
 	a, _ := newAgent(t, fake, nil, &recordingTool{name: "alpha"}, &recordingTool{name: "beta"})
 
 	converse(t, a, "conv-1", "hello")
 
-	tools, _ := request(t, fake, 0)["tools"].([]any)
-	var names []string
-	for _, raw := range tools {
-		tool, _ := raw.(map[string]any)
+	req := request(t, fake, 0)
+	tools, _ := req["tools"].([]any)
+	if len(tools) != 1 {
+		t.Fatalf("tools = %s, want one namespace grouping the functions", asJSON(tools))
+	}
+	ns, _ := tools[0].(map[string]any)
+	if ns["type"] != "namespace" || strings.TrimSpace(fmt.Sprint(ns["name"])) == "" || strings.TrimSpace(fmt.Sprint(ns["description"])) == "" {
+		t.Errorf("tool group = %s, want a named, described namespace", asJSON(ns))
+	}
+	for _, tool := range offeredTools(req) {
 		if tool["type"] != "function" || tool["strict"] != true {
 			t.Errorf("tool %v is not a strict function", tool)
 		}
@@ -252,15 +472,13 @@ func TestConverseOffersRegisteredToolsAsStrictFunctions(t *testing.T) {
 		if params["additionalProperties"] != false {
 			t.Errorf("tool %v parameters lost the schema", tool["name"])
 		}
-		names = append(names, fmt.Sprint(tool["name"]))
 	}
-	sort.Strings(names)
-	if strings.Join(names, ",") != "alpha,beta" {
-		t.Errorf("tools = %v, want alpha and beta", names)
+	if got := toolNames(req); !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+		t.Errorf("tools = %v, want alpha and beta", got)
 	}
 }
 
-func TestConverseRunsRequestedToolAndSendsOutputBack(t *testing.T) {
+func TestConverseRunsRequestedToolAndResendsTheTurnWithItsOutput(t *testing.T) {
 	tool := &recordingTool{name: "lookup", result: map[string]any{"answer": "forty-two"}}
 	fake := newFakeOpenAI(t,
 		calls("resp_1", fnCall{"call_1", "lookup", `{"x":7}`}),
@@ -276,28 +494,13 @@ func TestConverseRunsRequestedToolAndSendsOutputBack(t *testing.T) {
 	if got := tool.calls(); len(got) != 1 || got[0] != `{"x":7}` {
 		t.Errorf("tool calls = %v, want one call with {\"x\":7}", got)
 	}
-	reqs := fake.requests()
-	if len(reqs) != 2 {
-		t.Fatalf("requests = %d, want 2", len(reqs))
-	}
-	if request(t, fake, 1)["previous_response_id"] != "resp_1" {
-		t.Errorf("previous_response_id = %v, want resp_1", request(t, fake, 1)["previous_response_id"])
-	}
-	out := functionOutputs(t, request(t, fake, 1))
-	if !strings.Contains(out["call_1"], "forty-two") {
-		t.Errorf("function outputs = %v, want call_1 carrying the tool result", out)
-	}
 	followUp := request(t, fake, 1)
-	assertInstructionsAndTools(t, followUp, "lookup")
-	for _, typ := range inputTypes(followUp) {
-		if typ != "function_call_output" {
-			t.Errorf("follow-up input item types = %v, want only function_call_output", inputTypes(followUp))
-			break
-		}
-	}
-	if strings.Contains(asJSON(followUp["input"]), "What's the answer?") {
-		t.Errorf("follow-up input %s resends the user's words", asJSON(followUp["input"]))
-	}
+	ns := toolNamespace(followUp)
+	wantTranscript(t, followUp,
+		"user: What's the answer?",
+		fmt.Sprintf(`call call_1 %s.lookup {"x":7}`, ns),
+		`output call_1 {"answer":"forty-two"}`,
+	)
 }
 
 func TestConverseRunsEveryToolCallInOneResponse(t *testing.T) {
@@ -375,22 +578,21 @@ func TestConverseGivesUpAfterSixRounds(t *testing.T) {
 	}
 }
 
-// A turn that ends with function calls the model never saw answered must not
-// be chained to (the API rejects a previous_response_id with pending calls),
-// and the conversation it belonged to is dropped rather than resumed from an
-// earlier turn that no longer matches what was said.
-func TestConverseStartsFreshAfterAnAbandonedTurn(t *testing.T) {
+// A failed turn may end in function calls that never got outputs, so the
+// whole conversation is dropped and the next turn starts from nothing.
+func TestConverseStartsFreshAfterAFailedTurn(t *testing.T) {
 	loop := calls("resp_loop", fnCall{"call_1", "loop", `{"x":1}`})
 	cases := []struct {
 		name   string
 		script []scripted
-		// index of the first request after the abandoned turn
+		// index of the first request after the failed turn
 		next    int
 		timeout time.Duration
 	}{
 		{"round cap", []scripted{text("resp_ok", "Hi."), loop, loop, loop, loop, loop, loop, text("resp_next", "Hi.")}, 7, 0},
 		{"timeout mid-loop", []scripted{text("resp_ok", "Hi."), loop, {hang: true}, text("resp_next", "Hi.")}, 3, 200 * time.Millisecond},
 		{"model error mid-loop", []scripted{text("resp_ok", "Hi."), loop, {status: http.StatusBadRequest, body: `{"error":{"message":"nope","type":"invalid_request_error"}}`}, text("resp_next", "Hi.")}, 3, 0},
+		{"stream failure mid-loop", []scripted{text("resp_ok", "Hi."), loop, failed("resp_bad", "server_error"), text("resp_next", "Hi.")}, 3, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -403,19 +605,16 @@ func TestConverseStartsFreshAfterAnAbandonedTurn(t *testing.T) {
 
 			converse(t, a, "conv-1", "hello")
 			if _, err := a.Converse(context.Background(), "conv-1", "spin"); err == nil {
-				t.Errorf("first turn err = nil, want the failure reported")
+				t.Errorf("failed turn err = nil, want the failure reported")
 			}
 			converse(t, a, "conv-1", "hello again")
 
-			next := request(t, fake, tc.next)
-			if got, ok := next["previous_response_id"]; ok {
-				t.Errorf("next turn chained to %v, want a fresh conversation", got)
-			}
+			wantTranscript(t, request(t, fake, tc.next), "user: hello again")
 		})
 	}
 }
 
-func TestConverseContinuesConversationWithinFiveMinutes(t *testing.T) {
+func TestConverseResendsConversationWithinFiveMinutes(t *testing.T) {
 	fake := newFakeOpenAI(t, text("resp_1", "Sure."), text("resp_2", "Done."))
 	a, clk := newAgent(t, fake, nil, &recordingTool{name: "lookup"})
 
@@ -423,16 +622,57 @@ func TestConverseContinuesConversationWithinFiveMinutes(t *testing.T) {
 	clk.Advance(4 * time.Minute)
 	converse(t, a, "conv-1", "At ten.")
 
-	if _, ok := request(t, fake, 0)["previous_response_id"]; ok {
-		t.Errorf("first turn sent previous_response_id %v", request(t, fake, 0)["previous_response_id"])
-	}
-	second := request(t, fake, 1)
-	if second["previous_response_id"] != "resp_1" {
-		t.Errorf("second turn previous_response_id = %v, want resp_1", second["previous_response_id"])
-	}
-	assertInstructionsAndTools(t, second, "lookup")
-	if !strings.Contains(asJSON(second["input"]), "At ten.") {
-		t.Errorf("second turn input %s does not carry the new words", asJSON(second["input"]))
+	wantTranscript(t, request(t, fake, 1),
+		"user: Add soccer on Saturday.",
+		"assistant: Sure.",
+		"user: At ten.",
+	)
+}
+
+func TestFollowUpResendsEarlierToolCallsAndOutputs(t *testing.T) {
+	tool := &recordingTool{name: "lookup", result: "x"}
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "lookup", `{"x":1}`}),
+		text("resp_2", "Here."),
+		text("resp_3", "Again."),
+	)
+	a, _ := newAgent(t, fake, nil, tool)
+
+	converse(t, a, "conv-1", "first")
+	converse(t, a, "conv-1", "second")
+
+	third := request(t, fake, 2)
+	wantTranscript(t, third,
+		"user: first",
+		fmt.Sprintf(`call call_1 %s.lookup {"x":1}`, toolNamespace(third)),
+		`output call_1 "x"`,
+		"assistant: Here.",
+		"user: second",
+	)
+}
+
+// Nothing is stored server-side, so resent history must not refer to stored
+// items: reasoning items and output item ids are dropped.
+func TestResentHistoryCarriesNoServerSideReferences(t *testing.T) {
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "lookup", `{"x":1}`}),
+		text("resp_2", "Here."),
+		text("resp_3", "Again."),
+	)
+	a, _ := newAgent(t, fake, nil, &recordingTool{name: "lookup", result: "x"})
+
+	converse(t, a, "conv-1", "first")
+	converse(t, a, "conv-1", "second")
+
+	for i, req := range fake.requests() {
+		for _, item := range inputItems(req) {
+			if item["type"] == "reasoning" || item["type"] == "item_reference" {
+				t.Errorf("request %d resends %v item %s", i, item["type"], asJSON(item))
+			}
+			if _, ok := item["id"]; ok {
+				t.Errorf("request %d resends item id in %s", i, asJSON(item))
+			}
+		}
 	}
 }
 
@@ -446,9 +686,34 @@ func TestConverseConversationTimeoutSlidesFromTheLastTurn(t *testing.T) {
 	clk.Advance(4 * time.Minute)
 	converse(t, a, "conv-1", "At ten.")
 
-	if got := request(t, fake, 2)["previous_response_id"]; got != "resp_2" {
-		t.Errorf("third turn previous_response_id = %v, want resp_2 (8 minutes in, 4 since the last turn)", got)
-	}
+	wantTranscript(t, request(t, fake, 2),
+		"user: Add soccer.",
+		"assistant: Sure.",
+		"user: On Saturday.",
+		"assistant: Okay.",
+		"user: At ten.",
+	)
+}
+
+func TestConverseForgetsConversationAfterFiveMinutes(t *testing.T) {
+	fake := newFakeOpenAI(t, text("resp_1", "Sure."), text("resp_2", "Hi."))
+	a, clk := newAgent(t, fake, nil)
+
+	converse(t, a, "conv-1", "Add soccer on Saturday.")
+	clk.Advance(5*time.Minute + time.Second)
+	converse(t, a, "conv-1", "Hello.")
+
+	wantTranscript(t, request(t, fake, 1), "user: Hello.")
+}
+
+func TestConverseKeepsConversationsSeparate(t *testing.T) {
+	fake := newFakeOpenAI(t, text("resp_1", "Sure."), text("resp_2", "Hi."))
+	a, _ := newAgent(t, fake, nil)
+
+	converse(t, a, "kitchen", "Add soccer on Saturday.")
+	converse(t, a, "bedroom", "Hello.")
+
+	wantTranscript(t, request(t, fake, 1), "user: Hello.")
 }
 
 func TestConverseRereadsModelAndEffortEveryTurn(t *testing.T) {
@@ -481,45 +746,148 @@ func TestConverseRereadsModelAndEffortEveryTurn(t *testing.T) {
 	}
 }
 
-func TestConverseContinuesFromLastResponseOfPreviousTurn(t *testing.T) {
-	tool := &recordingTool{name: "lookup", result: "x"}
+func TestConverseSendsTheCurrentCredentialAsBearerOnEveryRequest(t *testing.T) {
+	var mu sync.Mutex
+	token := "chatgpt-access-1"
 	fake := newFakeOpenAI(t,
 		calls("resp_1", fnCall{"call_1", "lookup", `{"x":1}`}),
 		text("resp_2", "Here."),
 		text("resp_3", "Again."),
 	)
-	a, _ := newAgent(t, fake, nil, tool)
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.Token = func(context.Context) (string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			return token, nil
+		}
+	}, &recordingTool{name: "lookup", result: "x"})
 
 	converse(t, a, "conv-1", "first")
+	mu.Lock()
+	token = "sk-api-key"
+	mu.Unlock()
 	converse(t, a, "conv-1", "second")
 
-	if got := request(t, fake, 2)["previous_response_id"]; got != "resp_2" {
-		t.Errorf("previous_response_id = %v, want resp_2", got)
+	want := []string{"Bearer chatgpt-access-1", "Bearer chatgpt-access-1", "Bearer sk-api-key"}
+	if got := fake.authorizations(); !reflect.DeepEqual(got, want) {
+		t.Errorf("Authorization headers = %v, want %v", got, want)
 	}
 }
 
-func TestConverseForgetsConversationAfterFiveMinutes(t *testing.T) {
-	fake := newFakeOpenAI(t, text("resp_1", "Sure."), text("resp_2", "Hi."))
-	a, clk := newAgent(t, fake, nil)
+func TestConverseAsksToSignInAgainWhenChatGPTSignInIsLost(t *testing.T) {
+	var mu sync.Mutex
+	var last types.AgentSnapshot
+	fake := newFakeOpenAI(t, text("resp_1", "unused"))
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.Token = func(context.Context) (string, error) {
+			return "", fmt.Errorf("refresh: %w", agent.ErrSignInAgain)
+		}
+		o.OnState = func(s *types.AgentSnapshot) {
+			mu.Lock()
+			last = *s
+			mu.Unlock()
+		}
+	})
 
-	converse(t, a, "conv-1", "Add soccer on Saturday.")
-	clk.Advance(5*time.Minute + time.Second)
-	converse(t, a, "conv-1", "Hello.")
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
 
-	if got, ok := request(t, fake, 1)["previous_response_id"]; ok {
-		t.Errorf("expired conversation still sent previous_response_id %v", got)
+	if err == nil {
+		t.Errorf("err = nil, want the lost sign-in reported")
+	}
+	lower := strings.ToLower(reply)
+	if !strings.Contains(lower, "sign in again") || !strings.Contains(lower, "calendar settings") {
+		t.Errorf("reply = %q, want it to ask for signing in again in the calendar settings", reply)
+	}
+	if n := len(fake.requests()); n != 0 {
+		t.Errorf("model requests = %d, want 0", n)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if last.State != types.AgentError || last.Reply != reply {
+		t.Errorf("last state = %+v, want error with the spoken reply", last)
 	}
 }
 
-func TestConverseKeepsConversationsSeparate(t *testing.T) {
-	fake := newFakeOpenAI(t, text("resp_1", "Sure."), text("resp_2", "Hi."))
+func TestConverseApologisesWhenCredentialLookupFails(t *testing.T) {
+	fake := newFakeOpenAI(t, text("resp_1", "unused"))
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.Token = func(context.Context) (string, error) { return "", errors.New("auth server unreachable") }
+	})
+
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
+
+	if err == nil || strings.TrimSpace(reply) == "" {
+		t.Errorf("reply %q err %v, want a spoken apology and the error", reply, err)
+	}
+	if strings.Contains(reply, "unreachable") {
+		t.Errorf("reply %q leaks the internal error", reply)
+	}
+	if n := len(fake.requests()); n != 0 {
+		t.Errorf("model requests = %d, want 0", n)
+	}
+}
+
+func TestConverseSpeaksUsageLimitWhenStreamFailsPartway(t *testing.T) {
+	fake := newFakeOpenAI(t, failed("resp_1", "subscription_sharing_usage_limit_exceeded"), text("resp_2", "Hi."))
 	a, _ := newAgent(t, fake, nil)
 
-	converse(t, a, "kitchen", "Add soccer on Saturday.")
-	converse(t, a, "bedroom", "Hello.")
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
 
-	if got, ok := request(t, fake, 1)["previous_response_id"]; ok {
-		t.Errorf("other conversation sent previous_response_id %v", got)
+	if reply != usageLimitReply {
+		t.Errorf("reply = %q, want %q", reply, usageLimitReply)
+	}
+	if err == nil {
+		t.Errorf("err = nil, want the failed response reported")
+	}
+	if snap := a.Snapshot(); snap.State != types.AgentError || snap.Reply != usageLimitReply {
+		t.Errorf("Snapshot() = %+v, want error with the usage-limit reply", snap)
+	}
+	converse(t, a, "conv-1", "hello again")
+	wantTranscript(t, request(t, fake, 1), "user: hello again")
+}
+
+func TestConverseSpeaksUsageLimitWhenRejectedBeforeStreaming(t *testing.T) {
+	fake := newFakeOpenAI(t, scripted{status: http.StatusTooManyRequests, body: `{"error":{"code":"subscription_sharing_usage_limit_exceeded","message":"usage limit reached","type":"rate_limit_error","param":null}}`})
+	a, _ := newAgent(t, fake, nil)
+
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
+
+	if reply != usageLimitReply {
+		t.Errorf("reply = %q, want %q", reply, usageLimitReply)
+	}
+	if err == nil {
+		t.Errorf("err = nil, want the rejection reported")
+	}
+}
+
+func TestConverseTreatsOtherStreamFailuresAsErrors(t *testing.T) {
+	fake := newFakeOpenAI(t, failed("resp_1", "server_error"))
+	a, _ := newAgent(t, fake, nil)
+
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
+
+	if err == nil || strings.TrimSpace(reply) == "" || reply == usageLimitReply {
+		t.Errorf("reply %q err %v, want a generic spoken apology and the error", reply, err)
+	}
+	if strings.Contains(reply, "upstream detail") || strings.Contains(reply, "Let me") {
+		t.Errorf("reply %q leaks the failed stream", reply)
+	}
+}
+
+func TestConverseTreatsStreamEndingWithoutCompletionAsFailure(t *testing.T) {
+	fake := newFakeOpenAI(t, scripted{events: []string{
+		`{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1764200000,"status":"in_progress","model":"gpt-test","output":[]}}`,
+		`{"type":"response.output_text.delta","sequence_number":0,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"Half an ans","logprobs":[]}`,
+	}})
+	a, _ := newAgent(t, fake, nil)
+
+	reply, err := a.Converse(context.Background(), "conv-1", "hi")
+
+	if err == nil {
+		t.Errorf("err = nil, want a stream without response.completed treated as a failure")
+	}
+	if strings.TrimSpace(reply) == "" || strings.Contains(reply, "Half an ans") {
+		t.Errorf("reply = %q, want a spoken apology, not the partial text", reply)
 	}
 }
 
@@ -552,36 +920,6 @@ func TestInstructionsNameConfiguredCalendars(t *testing.T) {
 			t.Errorf("instructions missing calendar %q:\n%s", want, instructions)
 		}
 	}
-}
-
-// assertInstructionsAndTools checks req carries Ziggy's instructions and
-// offers the named tools.
-func assertInstructionsAndTools(t *testing.T, req map[string]any, toolNames ...string) {
-	t.Helper()
-	if s, _ := req["instructions"].(string); !strings.Contains(s, "Ziggy") {
-		t.Errorf("request instructions = %q, want Ziggy's instructions", s)
-	}
-	offered := map[string]bool{}
-	tools, _ := req["tools"].([]any)
-	for _, raw := range tools {
-		tool, _ := raw.(map[string]any)
-		offered[fmt.Sprint(tool["name"])] = true
-	}
-	for _, n := range toolNames {
-		if !offered[n] {
-			t.Errorf("request tools = %v, want %q offered", req["tools"], n)
-		}
-	}
-}
-
-func inputTypes(req map[string]any) []string {
-	var out []string
-	items, _ := req["input"].([]any)
-	for _, it := range items {
-		m, _ := it.(map[string]any)
-		out = append(out, fmt.Sprint(m["type"]))
-	}
-	return out
 }
 
 func TestConverseReportsThinkingThenTalking(t *testing.T) {
@@ -733,20 +1071,25 @@ func TestConverseReportsModelFailureAsErrorState(t *testing.T) {
 	}
 }
 
-func TestConverseWithoutAPIKeyExplainsWithoutCallingModel(t *testing.T) {
-	fake := newFakeOpenAI(t, text("resp_1", "should not be used"))
-	a, _ := newAgent(t, fake, func(o *agent.Options) { o.APIKey = "" })
-
-	reply, _ := a.Converse(context.Background(), "conv-1", "hi")
-
-	if strings.TrimSpace(reply) == "" {
-		t.Errorf("reply is empty, want a spoken explanation")
+func TestConverseWithoutCredentialsExplainsWithoutCallingModel(t *testing.T) {
+	cases := map[string]func(*agent.Options){
+		"not ready":   func(o *agent.Options) { o.Ready = false },
+		"empty token": func(o *agent.Options) { o.Token = staticToken("") },
 	}
-	if n := len(fake.requests()); n != 0 {
-		t.Errorf("model requests = %d, want 0", n)
-	}
-	if snap := a.Snapshot(); snap == nil || snap.Ready {
-		t.Errorf("Snapshot() = %+v, want not ready", snap)
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := newFakeOpenAI(t, text("resp_1", "should not be used"))
+			a, _ := newAgent(t, fake, edit)
+
+			reply, err := a.Converse(context.Background(), "conv-1", "hi")
+
+			if strings.TrimSpace(reply) == "" || err == nil {
+				t.Errorf("reply %q err %v, want a spoken explanation and an error", reply, err)
+			}
+			if n := len(fake.requests()); n != 0 {
+				t.Errorf("model requests = %d, want 0", n)
+			}
+		})
 	}
 }
 
@@ -764,13 +1107,118 @@ func TestSnapshotIsIdleAndReportsCapabilitiesBeforeAnyTurn(t *testing.T) {
 	}
 }
 
-// request returns the i-th request the fake received, failing the test when
-// there were not that many.
-func request(t *testing.T, f *fakeOpenAI, i int) map[string]any {
-	t.Helper()
-	reqs := f.requests()
-	if len(reqs) <= i {
-		t.Fatalf("model received %d requests, want at least %d", len(reqs), i+1)
+func TestSetCapabilitiesTakesEffectOnTheNextTurnAndIsPublished(t *testing.T) {
+	var mu sync.Mutex
+	var published []types.AgentSnapshot
+	fake := newFakeOpenAI(t, text("resp_1", "ok"))
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.Ready = false
+		o.CalendarWritable = false
+		o.OnState = func(s *types.AgentSnapshot) {
+			mu.Lock()
+			published = append(published, *s)
+			mu.Unlock()
+		}
+	}, &recordingTool{name: "alpha"})
+
+	a.SetCapabilities(agent.Capabilities{
+		Ready:            true,
+		CalendarWritable: true,
+		Tools:            agent.NewRegistry(&recordingTool{name: "beta"}),
+	})
+
+	if snap := a.Snapshot(); snap.State != types.AgentIdle || !snap.Ready || !snap.CalendarWritable {
+		t.Errorf("Snapshot() = %+v, want idle, ready and calendar writable", snap)
 	}
-	return reqs[i]
+	mu.Lock()
+	if len(published) != 1 || !published[0].Ready || !published[0].CalendarWritable || published[0].State != types.AgentIdle {
+		t.Errorf("published = %+v, want one idle frame with the new capabilities", published)
+	}
+	mu.Unlock()
+
+	converse(t, a, "conv-1", "hi")
+
+	req := request(t, fake, 0)
+	if got := toolNames(req); !reflect.DeepEqual(got, []string{"beta"}) {
+		t.Errorf("tools = %v, want only the new registry's beta", got)
+	}
+	if s, _ := req["instructions"].(string); !strings.Contains(s, "add, change and delete") {
+		t.Errorf("instructions do not say calendar changes are possible:\n%s", s)
+	}
+
+	a.SetCapabilities(agent.Capabilities{Ready: false, Tools: agent.NewRegistry()})
+	if _, err := a.Converse(context.Background(), "conv-1", "again"); err == nil {
+		t.Errorf("Converse after losing credentials err = nil, want not ready")
+	}
+	if n := len(fake.requests()); n != 1 {
+		t.Errorf("model requests = %d, want no request once not ready", n)
+	}
+}
+
+func TestSetCapabilitiesIsSafeDuringTurns(t *testing.T) {
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "lookup", `{"x":1}`}),
+		text("resp_2", "ok"),
+	)
+	a, _ := newAgent(t, fake, nil, &recordingTool{name: "lookup", result: "x"})
+
+	var wg sync.WaitGroup
+	replies := make([]string, 10)
+	errs := make([]error, 10)
+	for i := range replies {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			replies[i], errs[i] = a.Converse(context.Background(), fmt.Sprintf("conv-%d", i), "hi")
+		}()
+		go func() {
+			defer wg.Done()
+			a.SetCapabilities(agent.Capabilities{Ready: true, CalendarWritable: i%2 == 0, Tools: agent.NewRegistry(&recordingTool{name: "lookup", result: "x"})})
+		}()
+	}
+	wg.Wait()
+
+	for i := range replies {
+		if errs[i] != nil || replies[i] != "ok" {
+			t.Errorf("turn %d = %q, %v; want the model's answer while capabilities change", i, replies[i], errs[i])
+		}
+	}
+	a.SetCapabilities(agent.Capabilities{Ready: true, CalendarWritable: true, Tools: agent.NewRegistry()})
+	if snap := a.Snapshot(); !snap.Ready || !snap.CalendarWritable {
+		t.Errorf("Snapshot() = %+v, want the last capabilities set", snap)
+	}
+}
+
+func TestConversationKeepsOnlyTheTenMostRecentTurns(t *testing.T) {
+	script := []scripted{calls("resp_tool", fnCall{"call_1", "lookup", `{"x":1}`})}
+	for i := 1; i <= 13; i++ {
+		script = append(script, text(fmt.Sprintf("resp_%d", i), fmt.Sprintf("answer %d", i)))
+	}
+	fake := newFakeOpenAI(t, script...)
+	a, clk := newAgent(t, fake, nil, &recordingTool{name: "lookup", result: "x"})
+
+	// Turn 1 uses a tool (two requests); turns 2-12 are plain.
+	for i := 1; i <= 12; i++ {
+		converse(t, a, "conv-1", fmt.Sprintf("turn %d", i))
+		clk.Advance(time.Minute)
+	}
+	converse(t, a, "conv-1", "turn 13")
+
+	last := transcript(request(t, fake, 13))
+	var users []string
+	for _, line := range last {
+		if strings.HasPrefix(line, "call ") || strings.HasPrefix(line, "output ") {
+			t.Errorf("dropped turn's tool item still sent: %s", line)
+		}
+		if strings.HasPrefix(line, "user: ") {
+			users = append(users, strings.TrimPrefix(line, "user: "))
+		}
+	}
+	want := []string{"turn 3", "turn 4", "turn 5", "turn 6", "turn 7", "turn 8", "turn 9", "turn 10", "turn 11", "turn 12", "turn 13"}
+	if !reflect.DeepEqual(users, want) {
+		t.Errorf("user turns sent = %v, want the ten most recent plus the new one %v", users, want)
+	}
+	if len(last) == 0 || last[0] != "user: turn 3" {
+		t.Errorf("history starts with %v, want it to start at turn 3", last)
+	}
 }
