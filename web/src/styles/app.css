@@ -463,6 +463,7 @@ input, select {
 .pool-temp-value, .hottub-temp-value { font-size: 2rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .pool-target, .hottub-target { color: var(--fg-muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .pool-empty, .hottub-empty { color: var(--fg-muted); text-align: center; }
+button.pool-widget,
 button.hottub-widget {
   text-align: left;
   font: inherit;
@@ -472,14 +473,16 @@ button.hottub-widget {
   cursor: pointer;
   width: 100%;
 }
+button.pool-widget:focus-visible,
 button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.hottub-modal-body { gap: 20px; }
-.hottub-modal-reading { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.hottub-modal-caption { color: var(--fg-muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.hottub-modal-temp { font-size: 2.75rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.hottub-modal-control { display: flex; align-items: center; gap: 16px; }
-.hottub-modal-target { min-width: 4.5ch; text-align: center; }
+.pool-modal-body, .hottub-modal-body { gap: 20px; }
+.pool-modal-reading, .hottub-modal-reading { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pool-modal-caption, .hottub-modal-caption { color: var(--fg-muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.pool-modal-temp, .hottub-modal-temp { font-size: 2.75rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pool-modal-control, .hottub-modal-control { display: flex; align-items: center; gap: 16px; }
+.pool-modal-target, .hottub-modal-target { min-width: 4.5ch; text-align: center; }
+.pool-arrow-btn,
 .hottub-arrow-btn {
   min-width: 72px;
   min-height: 72px;
@@ -491,9 +494,9 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   line-height: 1;
   cursor: pointer;
 }
-.hottub-arrow-btn:disabled { opacity: 0.3; cursor: default; }
-.hottub-arrow-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.hottub-modal-error { color: var(--danger, #c0392b); text-align: center; }
+.pool-arrow-btn:disabled, .hottub-arrow-btn:disabled { opacity: 0.3; cursor: default; }
+.pool-arrow-btn:focus-visible, .hottub-arrow-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pool-modal-error, .hottub-modal-error { color: var(--danger, #c0392b); text-align: center; }
 
 /* -------- scores (baseball, hockey) -------- */
 .baseball-widget,

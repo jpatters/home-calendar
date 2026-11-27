@@ -1,4 +1,13 @@
-import type { BaseballTeam, Config, GeoResult, HockeyTeam, HotTubSnapshot, TideStation } from "./types";
+import type {
+  AgentSnapshot,
+  BaseballTeam,
+  Config,
+  GeoResult,
+  HockeyTeam,
+  HotTubSnapshot,
+  PoolSnapshot,
+  TideStation,
+} from "./types";
 
 export async function getConfig(): Promise<Config> {
   const res = await fetch("/api/config");
@@ -64,6 +73,22 @@ export async function setHotTubTarget(targetF: number): Promise<HotTubSnapshot> 
     body: JSON.stringify({ targetF }),
   });
   if (!res.ok) throw new Error(`POST /api/hottub/target ${res.status}`);
+  return res.json();
+}
+
+export async function setPoolTarget(targetC: number): Promise<PoolSnapshot> {
+  const res = await fetch("/api/pool/target", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetC }),
+  });
+  if (!res.ok) throw new Error(`POST /api/pool/target ${res.status}`);
+  return res.json();
+}
+
+export async function getAgentStatus(): Promise<AgentSnapshot> {
+  const res = await fetch("/api/agent");
+  if (!res.ok) throw new Error(`GET /api/agent ${res.status}`);
   return res.json();
 }
 

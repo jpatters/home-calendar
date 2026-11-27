@@ -12,6 +12,8 @@ export function buildConfig(
     hotTubEnabled: boolean;
     calendarEnabled: boolean;
     clockEnabled: boolean;
+    agentEnabled: boolean;
+    agentTextInputEnabled: boolean;
     layout: unknown;
   }> = {},
 ): Config {
@@ -55,10 +57,10 @@ export function buildConfig(
       host: "192.168.1.50",
     },
     agent: {
-      enabled: false,
+      enabled: overrides.agentEnabled ?? false,
       model: "gpt-6.1-terra",
       effort: "low",
-      textInputEnabled: false,
+      textInputEnabled: overrides.agentTextInputEnabled ?? false,
       quietStart: "22:00",
       quietEnd: "07:00",
     },

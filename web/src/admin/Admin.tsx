@@ -12,12 +12,13 @@ import HockeyPanel from "./HockeyPanel";
 import PoolPanel from "./PoolPanel";
 import HotTubPanel from "./HotTubPanel";
 import DisplayPanel from "./DisplayPanel";
+import AssistantPanel from "./AssistantPanel";
 
 interface Props {
   live: LiveData;
 }
 
-type SectionId = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "display";
+type SectionId = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "assistant" | "display";
 
 interface Section {
   id: SectionId;
@@ -40,6 +41,7 @@ const SECTIONS: Section[] = [
   { id: "hockey", label: "Hockey", refresh: { noun: "hockey", run: refreshHockey, available: (c) => c.hockey.enabled && !!c.hockey.teamAbbr } },
   { id: "pool", label: "Pool", refresh: { noun: "pool", run: refreshPool, available: (c) => c.pool.enabled && !!c.pool.deviceUrl } },
   { id: "hottub", label: "Hot Tub", refresh: { noun: "hot tub", run: refreshHotTub, available: (c) => c.hotTub.enabled && !!c.hotTub.host } },
+  { id: "assistant", label: "Assistant" },
   { id: "display", label: "Display" },
 ];
 
@@ -227,6 +229,8 @@ function renderSection(
           onChange={(hotTub) => setDraft({ ...draft, hotTub })}
         />
       );
+    case "assistant":
+      return <AssistantPanel value={draft.agent} onChange={(agent) => setDraft({ ...draft, agent })} />;
     case "display":
       return (
         <DisplayPanel

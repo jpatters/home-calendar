@@ -112,6 +112,7 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
 	mux.HandleFunc("POST /api/hottub/refresh", s.handleHotTubRefresh)
 	mux.HandleFunc("POST /api/hottub/target", s.handleHotTubTarget)
+	mux.HandleFunc("GET /api/agent", s.handleGetAgent)
 	mux.HandleFunc("POST /api/agent/converse", s.handleAgentConverse)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 

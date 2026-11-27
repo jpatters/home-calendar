@@ -62,6 +62,12 @@ func googleCalendarClient(ctx context.Context) *gcal.Client {
 	return client
 }
 
+// handleGetAgent reports the agent's latest state, including whether it has
+// an API key and calendar write access, without revealing either secret.
+func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.agent.Snapshot())
+}
+
 // handleAgentConverse implements Home Assistant's Webhook Conversation
 // contract: it reads {conversation_id, query} and answers {"output": text},
 // which Home Assistant speaks. That integration treats any non-200 as a

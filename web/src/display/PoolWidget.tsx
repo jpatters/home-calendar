@@ -1,14 +1,12 @@
 import type { PoolSnapshot } from "../types";
+import { formatTemp } from "./poolFormat";
 
 interface Props {
   pool: PoolSnapshot | null;
+  onOpen: () => void;
 }
 
-function formatTemp(celsius: number): string {
-  return `${celsius.toFixed(1)}°C`;
-}
-
-export default function PoolWidget({ pool }: Props) {
+export default function PoolWidget({ pool, onOpen }: Props) {
   if (!pool) {
     return (
       <div className="widget pool-widget pool-widget-empty">
@@ -17,7 +15,7 @@ export default function PoolWidget({ pool }: Props) {
     );
   }
   return (
-    <div className="widget pool-widget">
+    <button type="button" className="widget pool-widget" aria-label="Pool details" onClick={onOpen}>
       <div className="pool-header">
         <span className="pool-label">Pool</span>
         <span
@@ -30,6 +28,6 @@ export default function PoolWidget({ pool }: Props) {
       {pool.targetC > 0 && (
         <div className="pool-target">Target {formatTemp(pool.targetC)}</div>
       )}
-    </div>
+    </button>
   );
 }

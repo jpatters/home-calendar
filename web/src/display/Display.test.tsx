@@ -136,6 +136,26 @@ describe("Display hot tub modal", () => {
   });
 });
 
+describe("Display pool modal", () => {
+  test("tapping the pool widget opens the pool dialog", () => {
+    const live = {
+      ...buildLive(buildConfig({ poolEnabled: true })),
+      pool: {
+        updatedAt: "2026-08-06T12:00:00Z",
+        temperatureC: 25.2,
+        targetC: 27,
+        minTargetC: 10,
+        maxTargetC: 40,
+        heating: true,
+      },
+    };
+    render(<Display live={live} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /pool details/i }));
+    expect(screen.getByRole("dialog", { name: /pool/i })).toBeTruthy();
+  });
+});
+
 describe("Display refresh button", () => {
   test("reloads the page when the refresh button is pressed", () => {
     const live = buildLive(buildConfig());

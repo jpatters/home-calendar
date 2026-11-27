@@ -308,3 +308,59 @@ func TestAgentConverseBroadcastsThinkingThenTalking(t *testing.T) {
 		t.Errorf("second agent frame = %+v, want talking with the reply", agentFrames[1])
 	}
 }
+
+func getAgent(t *testing.T, app *httptest.Server) (int, types.AgentSnapshot) {
+	t.Helper()
+	resp, err := http.Get(app.URL + "/api/agent")
+	if err != nil {
+		t.Fatalf("GET /api/agent: %v", err)
+	}
+	defer resp.Body.Close()
+	var snap types.AgentSnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+		t.Fatalf("decode /api/agent: %v", err)
+	}
+	return resp.StatusCode, snap
+}
+
+func TestGetAgentReportsReadyIdleAndReadOnlyCalendar(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "unused")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	status, snap := getAgent(t, app)
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if snap.State != types.AgentIdle || !snap.Ready || snap.CalendarWritable {
+		t.Errorf("agent = %+v, want idle, ready, calendar not writable (no Google credentials)", snap)
+	}
+}
+
+func TestGetAgentReportsNotReadyWithoutAPIKey(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "unused")
+	app := agentApp(t, true, "", openai.URL)
+
+	status, snap := getAgent(t, app)
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if snap.Ready {
+		t.Errorf("agent = %+v, want not ready without OPENAI_API_KEY", snap)
+	}
+}
+
+func TestGetAgentReflectsLatestConversationState(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "Hi there.")
+	app := agentApp(t, true, "sk-test", openai.URL)
+	if status, body := postConverse(t, app, `{"conversation_id":"c","query":"hello"}`); status != http.StatusOK {
+		t.Fatalf("converse status = %d, body %v", status, body)
+	}
+
+	_, snap := getAgent(t, app)
+
+	if snap.State != types.AgentTalking || snap.Heard != "hello" || snap.Reply != "Hi there." {
+		t.Errorf("agent = %+v, want talking with the last exchange", snap)
+	}
+}
