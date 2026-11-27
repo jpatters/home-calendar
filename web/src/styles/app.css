@@ -227,17 +227,55 @@ input, select {
   color: var(--fg-muted);
 }
 
-/* -------- display grid -------- */
-.display-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(300px, 1fr);
-  gap: 16px;
-  padding: 16px;
+/* -------- display dock -------- */
+.display {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
+  padding: 16px 16px 8px;
+  gap: 8px;
 }
 
-.display-grid[data-calendar-hidden="true"] {
-  grid-template-columns: 1fr;
+.display-dock {
+  flex: 1;
+  min-height: 0;
+}
+
+.display-dock .dockview-theme-light-spaced {
+  --dv-group-view-background-color: transparent;
+  --dv-tabs-and-actions-container-background-color: var(--bg);
+  --dv-tabs-and-actions-container-height: 44px;
+  --dv-tabs-and-actions-container-font-size: 0.95rem;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bg-widget);
+  --dv-activegroup-visiblepanel-tab-color: var(--fg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg-hover);
+  --dv-activegroup-hiddenpanel-tab-color: var(--fg-muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg-widget);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--fg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg-hover);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--fg-muted);
+  --dv-tab-divider-color: var(--border);
+  --dv-separator-border: transparent;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--accent);
+  --dv-drag-over-background-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  --dv-drag-over-border-color: var(--accent);
+  --dv-paneview-active-outline-color: transparent;
+  --dv-border-radius: 12px;
+  --dv-tab-border-radius: 8px;
+  --dv-scrollbar-background-color: var(--border);
+  --dv-icon-hover-background-color: var(--bg-hover);
+  background: transparent;
+  color: var(--fg);
+}
+
+.dock-panel {
+  height: 100%;
+  overflow: auto;
+}
+
+.dock-panel > .widget {
+  min-height: 100%;
 }
 
 .calendar-pane {
@@ -246,15 +284,9 @@ input, select {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   padding: 12px 16px 16px;
-}
-
-.widget-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
 }
 
 .widget {
@@ -524,14 +556,29 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 4px;
 }
-.reload-btn {
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-btn {
   padding: 0 12px;
+  min-height: 40px;
   font-size: 0.85rem;
   color: var(--fg-muted);
   background: transparent;
   border-radius: 999px;
+}
+.status-btn.primary {
+  color: var(--bg-widget);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.layout-error {
+  font-size: 0.85rem;
+  color: var(--danger);
 }
 .connection-indicator {
   display: flex;

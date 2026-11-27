@@ -106,6 +106,8 @@ export interface Config {
   pool: Pool;
   hotTub: HotTub;
   display: Display;
+  // The display's serialized dockview layout; absent means "use the default".
+  layout?: unknown;
 }
 
 export interface CalendarEvent {

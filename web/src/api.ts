@@ -16,6 +16,15 @@ export async function putConfig(c: Config): Promise<Config> {
   return res.json();
 }
 
+export async function putLayout(layout: object | null): Promise<void> {
+  const res = await fetch("/api/layout", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(layout),
+  });
+  if (!res.ok) throw new Error(`PUT /api/layout ${res.status}`);
+}
+
 export async function refreshCalendars(): Promise<void> {
   await fetch("/api/calendar/refresh", { method: "POST" });
 }

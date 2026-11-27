@@ -111,10 +111,14 @@ func (s *Store) Get() types.Config {
 	return cloneConfig(s.cfg)
 }
 
+// Replace swaps in a new config. The stored layout is kept: it is only
+// changed through SetLayout, so a client holding an older copy of the config
+// cannot wipe a layout saved since.
 func (s *Store) Replace(c types.Config) (types.Config, error) {
 	c = normalize(c)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	c.Layout = s.cfg.Layout
 	if err := s.save(c); err != nil {
 		return types.Config{}, err
 	}
@@ -238,5 +242,25 @@ func cloneConfig(c types.Config) types.Config {
 	cals := make([]types.Calendar, len(c.Calendars))
 	copy(cals, c.Calendars)
 	c.Calendars = cals
+	if c.Layout != nil {
+		c.Layout = append(json.RawMessage(nil), c.Layout...)
+	}
 	return c
+}
+
+// SetLayout stores the display layout. A nil layout clears it so the display
+// falls back to its default arrangement.
+func (s *Store) SetLayout(layout json.RawMessage) (types.Config, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := cloneConfig(s.cfg)
+	c.Layout = append(json.RawMessage(nil), layout...)
+	if len(c.Layout) == 0 {
+		c.Layout = nil
+	}
+	if err := s.save(c); err != nil {
+		return types.Config{}, err
+	}
+	s.cfg = c
+	return cloneConfig(c), nil
 }

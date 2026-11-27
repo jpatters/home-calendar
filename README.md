@@ -65,8 +65,15 @@ private network.
   network without host networking.
 - **Config**: single JSON file on a bind-mounted volume.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
-- **Refresh**: a small button at the bottom of the widget column reloads the
-  whole page, for when a wall display needs a kick.
+- **Layout**: the display is a [dockview](https://dockview.dev/) layout —
+  calendar on the left and widgets stacked in a column on the right by default.
+  It is locked during normal use. Tap **Edit layout** in the footer bar to show
+  tabs, then drag tabs to move, stack, or split widgets (on touch, long-press
+  to start a drag) and drag the dividers to resize; **Done** saves the layout
+  to the server config and every connected display picks it up. **Reset
+  layout** returns to the default arrangement.
+- **Refresh**: a small button in the footer bar reloads the whole page, for
+  when a wall display needs a kick.
 
 ## Quick start (Docker)
 
@@ -196,9 +203,15 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "mode": "light",
     "calendarEnabled": true,
     "clockEnabled": true
-  }
+  },
+  "layout": { "...": "dockview layout, managed by the display" }
 }
 ```
+
+`layout` is optional and written only by the display's **Edit layout** /
+**Done** buttons (via `PUT /api/layout`). The server treats it as opaque, and
+saving the config from admin never changes it. Omit it, or press **Reset
+layout**, to get the default arrangement.
 
 Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Pool, and
 Hot Tub each carry their own `enabled` field; the calendar and clock live under
@@ -241,6 +254,7 @@ assigns IDs, and triggers an immediate refresh.
 |--------|-------------------------------|-------------------------------------------|
 | GET    | `/api/config`                 | Return current config                     |
 | PUT    | `/api/config`                 | Replace config; broadcasts `config` frame |
+| PUT    | `/api/layout`                 | Save display layout (object, or `null` to reset); broadcasts `config` frame |
 | GET    | `/api/calendar/events`        | Current merged events from cache          |
 | POST   | `/api/calendar/refresh`       | Force an iCal refresh                     |
 | GET    | `/api/weather`                | Current weather snapshot                  |

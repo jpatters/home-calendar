@@ -317,3 +317,27 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	}
 	_ = json.NewEncoder(w).Encode(body)
 }
+
+// handlePutLayout saves the display's dockview layout. The body must be a JSON
+// object, or null to reset to the default layout. Unlike PUT /api/config it
+// does not restart fetchers: only the arrangement changed.
+func (s *Server) handlePutLayout(w http.ResponseWriter, r *http.Request) {
+	var layout json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&layout); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if string(layout) == "null" {
+		layout = nil
+	} else if layout[0] != '{' {
+		http.Error(w, "layout must be a JSON object or null", http.StatusBadRequest)
+		return
+	}
+	saved, err := s.cfg.SetLayout(layout)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.hub.Broadcast(Frame{Type: "config", Config: &saved})
+	writeJSON(w, http.StatusOK, saved)
+}
