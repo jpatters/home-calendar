@@ -2,7 +2,17 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import type { Agent, AgentSnapshot, AgentState, WeatherSnapshot } from "../../types";
 import PixelSprite from "./PixelSprite";
 import { sceneFor, type Pose } from "./scene";
-import { bed, outfits, palette, poses, precip, room, windowSky } from "./sprites";
+import { CHAR_H, CHAR_W, SLEEP_VISIBLE_ROWS, composeCharacter, type Face } from "./sprites/character";
+import {
+  ROOM_H,
+  ROOM_W,
+  SLEEP_X,
+  SLEEP_Y,
+  STAND_Y,
+  WANDER_MAX_X,
+  WANDER_MIN_X,
+  roomRects,
+} from "./sprites/room";
 
 interface Props {
   agent: AgentSnapshot | null;
@@ -15,7 +25,7 @@ const MS_PER_CHAR = 60;
 const MIN_TALK_MS = 2000;
 const MAX_TALK_MS = 12000;
 const SCENE_REFRESH_MS = 60 * 1000;
-const FRAME_MS = 400;
+const FRAME_MS = 200;
 const WANDER_MS = 4000;
 
 const POSE_LABEL: Record<Pose, string> = {
@@ -32,8 +42,19 @@ function talkEndsAt(agent: AgentSnapshot | null): number {
   return Date.parse(agent.at) + duration;
 }
 
-function width(grid: string[]): number {
-  return grid[0]?.length ?? 0;
+function faceFor(pose: Pose, frame: number): Face {
+  switch (pose) {
+    case "talk":
+      return frame % 2 === 0 ? "talk" : "idle";
+    case "think":
+      return "think";
+    case "confused":
+      return "confused";
+    case "sleep":
+      return "sleep";
+    default:
+      return frame % 18 >= 16 ? "blink" : "idle";
+  }
 }
 
 function pct(n: number, of: number): string {
@@ -95,18 +116,18 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     if (e.key === "Enter") send();
   };
 
-  const roomW = width(room);
-  const roomH = room.length;
-  const frames = poses[scene.pose];
-  const body = frames[frame % frames.length];
-  const bodyW = width(body);
-  const bodyH = body.length;
-  const sky = windowSky[scene.sky];
-  const bedX = roomW - width(bed) - 1;
-  const bedY = roomH - bed.length;
   const sleeping = scene.pose === "sleep";
-  const charX = sleeping ? bedX : Math.round(wander * (bedX - bodyW));
-  const charY = sleeping ? bedY : roomH - bodyH;
+  const sprite = composeCharacter(scene.outfit, faceFor(scene.pose, frame));
+  const grid = sleeping ? sprite.grid.slice(0, SLEEP_VISIBLE_ROWS) : sprite.grid;
+  const charX = sleeping ? SLEEP_X : Math.round(WANDER_MIN_X + wander * (WANDER_MAX_X - WANDER_MIN_X));
+  const charY = sleeping ? SLEEP_Y : STAND_Y;
+  const charH = sleeping ? SLEEP_VISIBLE_ROWS : CHAR_H;
+  const rects = roomRects({
+    sky: scene.sky,
+    precip: scene.precip,
+    tick: frame,
+    blanket: scene.outfit === "christmas" ? "#2e8b57" : "#5b7fd6",
+  });
 
   const bubble = scene.pose === "think" ? "…" : scene.pose === "talk" ? agent?.reply : null;
 
@@ -114,33 +135,35 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     <svg
       role="img"
       aria-label={`Assistant is ${POSE_LABEL[scene.pose]}`}
-      viewBox={`0 0 ${bodyW} ${bodyH}`}
+      viewBox={`0 0 ${CHAR_W} ${charH}`}
       className="agent-character-sprite"
     >
-      <PixelSprite grid={body} palette={palette} />
-      {!sleeping && <PixelSprite grid={outfits[scene.outfit]} palette={palette} />}
+      <PixelSprite grid={grid} palette={sprite.palette} />
     </svg>
   );
 
   return (
     <section className="widget agent-panel" aria-label="Assistant">
       <div className="agent-room">
-        <svg viewBox={`0 0 ${roomW} ${roomH}`} className="agent-room-sprite" aria-hidden="true">
-          <PixelSprite grid={room} palette={palette} />
-          <PixelSprite grid={sky} palette={palette} x={2} y={1} />
-          <PixelSprite grid={precip[scene.precip]} palette={palette} x={2} y={1} />
-          <PixelSprite grid={bed} palette={palette} x={bedX} y={bedY} />
+        <svg viewBox={`0 0 ${ROOM_W} ${ROOM_H}`} className="agent-room-sprite" aria-hidden="true">
+          <g shapeRendering="crispEdges">
+            {rects.map((r, i) => (
+              <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={r.fill} opacity={r.opacity} />
+            ))}
+          </g>
         </svg>
         <div
           className="agent-character"
           style={{
-            left: pct(charX, roomW),
-            top: pct(charY, roomH),
-            width: pct(bodyW, roomW),
-            height: pct(bodyH, roomH),
+            left: pct(charX, ROOM_W),
+            top: pct(charY, ROOM_H),
+            width: pct(CHAR_W, ROOM_W),
+            height: pct(charH, ROOM_H),
           }}
         >
           {bubble && <div className="agent-bubble">{bubble}</div>}
+          {scene.pose === "confused" && <div className="agent-mark" aria-hidden="true">?</div>}
+          {sleeping && <div className="agent-zzz" aria-hidden="true">z z z</div>}
           {settings.textInputEnabled ? (
             <button type="button" className="agent-talk-btn" aria-label="Talk to assistant" onClick={() => setInputOpen(true)}>
               {character}

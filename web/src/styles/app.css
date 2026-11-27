@@ -1158,6 +1158,28 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   background: var(--bg-widget);
   font-size: 0.9rem;
 }
+.agent-mark,
+.agent-zzz {
+  position: absolute;
+  bottom: 100%;
+  left: 80%;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: #2b2233;
+  pointer-events: none;
+}
+.agent-zzz {
+  font-size: 0.7rem;
+  animation: agent-drift 3s ease-in-out infinite;
+}
+@keyframes agent-drift {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-character { transition: none; }
+  .agent-zzz { animation: none; }
+}
 .agent-input {
   display: flex;
   gap: 8px;
