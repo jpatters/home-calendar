@@ -107,7 +107,8 @@ Images are `linux/amd64` only.
 
 On first run the app seeds an empty config at `./data/config.json`. Go to
 `/admin`, add your Google Calendar iCal URLs, search for your city in the
-**Weather** tab, and save. Changes are broadcast to the display instantly over
+**Weather** section (pick sections from the sidebar, or the ☰ menu on a
+phone), and save. Changes are broadcast to the display instantly over
 the WebSocket.
 
 ### Getting a Google Calendar iCal URL
@@ -217,8 +218,9 @@ Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Pool, and
 Hot Tub each carry their own `enabled` field; the calendar and clock live under
 `display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
 the server stops its background fetcher (so no API calls are made) and the
-display hides it. You can toggle widgets from the admin page — look for the
-"Show …" checkbox at the top of each panel. Configs written before these flags
+display hides it. You can toggle widgets from the admin page — open the widget's
+section from the sidebar and use the "Show …" checkbox at the top (the calendar
+and clock toggles are in the **Display** section). Configs written before these flags
 existed are treated as all-enabled when loaded, with one exception: the hot tub
 widget defaults to disabled, and configs from before it existed stay disabled
 until you turn it on in admin.

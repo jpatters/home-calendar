@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Tide, TideStation } from "../types";
 import { tideStationSearch } from "../api";
 
 interface Props {
   value: Tide;
   onChange: (t: Tide) => void;
+  actions?: ReactNode;
 }
 
-export default function TidePanel({ value, onChange }: Props) {
+export default function TidePanel({ actions, value, onChange }: Props) {
   const [query, setQuery] = useState(value.location);
   const [results, setResults] = useState<TideStation[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -60,7 +61,10 @@ export default function TidePanel({ value, onChange }: Props) {
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Tides (CHS)</h2>
+      <div className="panel-header">
+        <h2>Tides (CHS)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

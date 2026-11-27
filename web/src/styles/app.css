@@ -869,39 +869,137 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 
 /* -------- admin -------- */
 .admin {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.admin-topbar,
+.admin-backdrop { display: none; }
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 12px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+}
+.admin-title { font-size: 1.05rem; margin: 0 8px; }
+.admin-sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-sidebar nav button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+.admin-sidebar nav button:hover { background: var(--bg-hover); }
+.admin-sidebar nav button[aria-current="page"] {
+  background: var(--bg-hover);
+  color: var(--accent);
+  font-weight: 600;
+}
+.admin-back {
+  margin-top: auto;
+  padding: 12px 16px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.admin-main { min-width: 0; display: flex; flex-direction: column; }
+.admin-body {
+  flex: 1;
+  width: 100%;
   max-width: 960px;
   margin: 0 auto;
-  padding: 24px 20px 120px;
-  min-height: 100vh;
+  padding: 24px 20px;
+  box-sizing: border-box;
 }
-.admin-header {
+.admin-savebar {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
 }
-.admin-header h1 { font-size: 1.4rem; margin: 0; }
-.admin-header a { color: var(--accent); text-decoration: none; }
-.admin-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 20px 0 16px;
-  border-bottom: 1px solid var(--border);
-}
-.admin-tabs button {
-  border: none;
-  background: transparent;
-  padding: 12px 16px;
-  border-bottom: 2px solid transparent;
-  min-height: 48px;
-}
-.admin-tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
+.admin-savebar .error { color: var(--danger); flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.admin-savebar .saved { color: var(--success); }
+
+@media (max-width: 720px) {
+  .admin { display: flex; flex-direction: column; }
+  .admin-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-menu-btn {
+    width: 48px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 1.4rem;
+  }
+  .admin-topbar-title { font-weight: 600; }
+  .admin-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
+    overscroll-behavior: contain;
+  }
+  .admin.menu-open .admin-sidebar { transform: none; visibility: visible; }
+  .admin-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.4);
+    touch-action: none;
+  }
+  .admin-main { flex: 1; }
+  .admin-body { padding: 16px 12px; }
 }
 
 .panel { background: var(--bg-surface); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .panel h2 { margin: 0 0 8px; font-size: 1.15rem; }
+@media (max-width: 720px) {
+  .panel { padding: 16px; }
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+.panel-header h2 { margin: 0; min-width: 0; }
+.refresh-btn { flex: none; min-height: 40px; padding: 0 12px; }
 .hint { color: var(--fg-muted); margin: 0 0 16px; }
+.hint code { overflow-wrap: anywhere; }
 
 .panel-disabled .form-grid,
 .panel-disabled .hint,
@@ -943,8 +1041,9 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 }
 .calendar-row .color { padding: 0; height: 44px; }
 @media (max-width: 720px) {
-  .calendar-row { grid-template-columns: 60px 1fr auto; }
-  .calendar-row .url { grid-column: 1 / -1; }
+  .calendar-row { grid-template-columns: 60px minmax(0, 1fr) auto; }
+  .calendar-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+  .calendar-row .url { grid-column: 1 / -1; order: 1; }
 }
 
 .form-grid {
@@ -978,19 +1077,3 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .geo-results button:hover { background: var(--bg-hover); }
 .panel .error { color: var(--danger); margin: 0 0 16px; }
 
-.admin-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border);
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-.admin-footer .actions, .admin-footer .save { display: flex; gap: 8px; align-items: center; }
-.admin-footer .error { color: var(--danger); }
-.admin-footer .saved { color: var(--success); }

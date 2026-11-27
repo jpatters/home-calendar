@@ -1,14 +1,19 @@
+import type { ReactNode } from "react";
 import type { Pool } from "../types";
 
 interface Props {
   value: Pool;
   onChange: (p: Pool) => void;
+  actions?: ReactNode;
 }
 
-export default function PoolPanel({ value, onChange }: Props) {
+export default function PoolPanel({ actions, value, onChange }: Props) {
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Pool (ESPHome)</h2>
+      <div className="panel-header">
+        <h2>Pool (ESPHome)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input
