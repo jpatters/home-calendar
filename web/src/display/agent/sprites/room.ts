@@ -9,7 +9,7 @@ export const FLOOR_Y = 54;
 export const STAND_Y = FLOOR_Y + 6 - 28;
 /** Horizontal range Ziggy wanders across (left edge of the sprite). */
 export const WANDER_MIN_X = 44;
-export const WANDER_MAX_X = 60;
+export const WANDER_MAX_X = 56;
 /** Top-left of Ziggy's head on the pillow when asleep. */
 export const SLEEP_X = 82;
 export const SLEEP_Y = 31;

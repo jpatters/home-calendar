@@ -36,8 +36,14 @@ const POSE_LABEL: Record<Pose, string> = {
   confused: "confused",
 };
 
-function talkEndsAt(agent: AgentSnapshot | null): number {
-  if (!agent || agent.state !== "talking") return 0;
+// Talking and apologizing after an error both "speak" the reply: the bubble
+// stays up long enough to read it, then the assistant goes back to idle.
+function speaks(state: AgentState | undefined): boolean {
+  return state === "talking" || state === "error";
+}
+
+function speechEndsAt(agent: AgentSnapshot | null): number {
+  if (!agent || !speaks(agent.state)) return 0;
   const duration = Math.min(MAX_TALK_MS, Math.max(MIN_TALK_MS, agent.reply.length * MS_PER_CHAR));
   return Date.parse(agent.at) + duration;
 }
@@ -69,9 +75,9 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const [draft, setDraft] = useState("");
 
   const now = Date.now();
-  const talkUntil = talkEndsAt(agent);
-  const agentState: AgentState =
-    agent?.state === "talking" ? (talkUntil > now ? "talking" : "idle") : (agent?.state ?? "idle");
+  const talkUntil = speechEndsAt(agent);
+  const reported = agent?.state ?? "idle";
+  const agentState: AgentState = speaks(reported) && talkUntil <= now ? "idle" : reported;
 
   const scene = sceneFor({
     now: new Date(now),
@@ -129,7 +135,8 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     blanket: scene.outfit === "christmas" ? "#2e8b57" : "#5b7fd6",
   });
 
-  const bubble = scene.pose === "think" ? "…" : scene.pose === "talk" ? agent?.reply : null;
+  const bubble =
+    scene.pose === "think" ? "…" : scene.pose === "talk" || scene.pose === "confused" ? agent?.reply : null;
 
   const character = (
     <svg
@@ -152,6 +159,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
             ))}
           </g>
         </svg>
+        {bubble && <div className="agent-bubble">{bubble}</div>}
         <div
           className="agent-character"
           style={{
@@ -161,7 +169,6 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
             height: pct(charH, ROOM_H),
           }}
         >
-          {bubble && <div className="agent-bubble">{bubble}</div>}
           {scene.pose === "confused" && <div className="agent-mark" aria-hidden="true">?</div>}
           {sleeping && <div className="agent-zzz" aria-hidden="true">z z z</div>}
           {settings.textInputEnabled ? (

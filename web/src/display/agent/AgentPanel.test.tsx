@@ -167,9 +167,42 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
   });
 
-  test("looks confused on error", () => {
-    render(<AgentPanel agent={snapshot({ state: "error" })} weather={null} settings={settings()} />);
+  test("looks confused on error and shows the apology", () => {
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "error", reply: "I'm not set up yet." })}
+        weather={null}
+        settings={settings()}
+      />,
+    );
     expect(screen.getByRole("img", { name: "Assistant is confused" })).toBeTruthy();
+    expect(screen.getByText("I'm not set up yet.")).toBeTruthy();
+  });
+
+  test("recovers from an error once the apology has been shown", () => {
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "error", reply: "I'm not set up yet." })}
+        weather={null}
+        settings={settings()}
+      />,
+    );
+    advance(2100);
+    expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
+    expect(screen.queryByText("I'm not set up yet.")).toBeNull();
+  });
+
+  test("an error from before the page loaded is not shown", () => {
+    const longAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "error", reply: "Something broke.", at: longAgo })}
+        weather={null}
+        settings={settings()}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
+    expect(screen.queryByText("Something broke.")).toBeNull();
   });
 
   test("offers no way to type when text input is disabled", () => {
