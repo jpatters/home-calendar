@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 // tool adapts a typed handler to agent.Tool. Args is decoded from the
@@ -37,6 +38,7 @@ func object(props map[string]any) map[string]any {
 	for name := range props {
 		required = append(required, name)
 	}
+	sort.Strings(required)
 	return map[string]any{
 		"type":                 "object",
 		"properties":           props,

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jpatters/home-calendar/internal/agent"
 )
@@ -44,6 +45,9 @@ func setHotTubTarget(d Deps) agent.Tool {
 			cfg := d.Config().HotTub
 			if !cfg.Enabled || d.HotTub == nil {
 				return nil, errHotTubOff
+			}
+			if s := d.HotTub.Snapshot(); s != nil && (a.TargetF < s.MinTargetF || a.TargetF > s.MaxTargetF) {
+				return nil, fmt.Errorf("%v°F is outside the hot tub's %v–%v°F range", a.TargetF, s.MinTargetF, s.MaxTargetF)
 			}
 			return d.HotTub.SetTarget(ctx, cfg, a.TargetF)
 		},

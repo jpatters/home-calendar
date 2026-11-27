@@ -14,6 +14,9 @@ import (
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
+// maxConverseBody bounds a converse request; a spoken query is far smaller.
+const maxConverseBody = 64 << 10
+
 const agentDisabledReply = "I'm switched off right now. You can turn me on in the calendar's settings."
 
 // newAgent builds Ziggy from the environment: OPENAI_API_KEY (and the SDK's
@@ -78,7 +81,7 @@ func (s *Server) handleAgentConverse(w http.ResponseWriter, r *http.Request) {
 		ConversationID string `json:"conversation_id"`
 		Query          string `json:"query"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Query) == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxConverseBody)).Decode(&body); err != nil || strings.TrimSpace(body.Query) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"output": "I didn't catch that."})
 		return
 	}

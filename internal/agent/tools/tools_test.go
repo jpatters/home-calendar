@@ -56,6 +56,28 @@ func TestAllOffersEveryToolWithAStrictSchema(t *testing.T) {
 	}
 }
 
+func TestAllBuildsIdenticalSchemasEveryTime(t *testing.T) {
+	d, _ := googleDeps(t)
+	schemas := func() string {
+		var b strings.Builder
+		for _, tool := range tools.All(d) {
+			raw, err := json.Marshal(tool.Schema())
+			if err != nil {
+				t.Fatalf("%s schema does not marshal: %v", tool.Name(), err)
+			}
+			b.Write(raw)
+		}
+		return b.String()
+	}
+
+	first := schemas()
+	for range 20 {
+		if again := schemas(); again != first {
+			t.Fatalf("schemas differ between calls:\n%s\n%s", first, again)
+		}
+	}
+}
+
 func requiredList(v any) []string {
 	switch r := v.(type) {
 	case []string:
@@ -340,29 +362,21 @@ func TestUpdateEventPatchesTheMatchedEvent(t *testing.T) {
 	}
 }
 
-func TestUpdateEventSendsOnlyTheFieldsBeingChanged(t *testing.T) {
-	d, google := googleDeps(t, storedDentist)
+func TestUpdateEventMovingAllDayEventKeepsItAllDayWithInclusiveEnd(t *testing.T) {
+	d, google := googleDeps(t, `{"id":"pd","summary":"PD Day","start":{"date":"2026-11-27"},"end":{"date":"2026-11-28"}}`)
 
-	mustCall(t, d, "update_event", `{"calendar":"Family","title":"Dentist","original_start":"2026-11-27T15:00","new_start":null,"new_end":null,"new_title":"Orthodontist","location":null,"all_day":null}`)
+	mustCall(t, d, "update_event", `{"calendar":"Family","title":"PD Day","original_start":"2026-11-27","new_start":"2026-12-03","new_end":"2026-12-04","new_title":null,"location":null,"all_day":null}`)
 
 	w := google.onlyWrite(t)
-	if w.Method != http.MethodPatch {
-		t.Fatalf("request = %s %s, want a patch", w.Method, w.Path)
-	}
-	if w.Body["summary"] != "Orthodontist" {
-		t.Errorf("body = %v, want the new title", w.Body)
-	}
-	for _, untouched := range []string{"start", "end", "location"} {
-		if v, ok := w.Body[untouched]; ok {
-			t.Errorf("patch sent %s = %v, want it left alone", untouched, v)
-		}
+	if field(w.Body, "start", "date") != "2026-12-03" || field(w.Body, "end", "date") != "2026-12-05" {
+		t.Errorf("start/end = %v / %v, want all-day 2026-12-03 to 2026-12-05 (exclusive)", w.Body["start"], w.Body["end"])
 	}
 }
 
 func TestUpdateEventReportsAmbiguousMatchWithoutWriting(t *testing.T) {
 	d, google := googleDeps(t, storedDentist, storedDentistLate)
 
-	err := mustFail(t, d, "update_event", `{"calendar":"Family","title":"Dentist","original_start":"2026-11-27T17:00","new_start":null,"new_end":null,"new_title":"Orthodontist","location":null,"all_day":null}`)
+	err := mustFail(t, d, "update_event", `{"calendar":"Family","title":"Dentist","original_start":"2026-11-27","new_start":null,"new_end":null,"new_title":"Orthodontist","location":null,"all_day":null}`)
 
 	if !strings.Contains(err.Error(), "15:00") || !strings.Contains(err.Error(), "19:00") {
 		t.Errorf("error %q should list both candidates so Ziggy can ask which", err)
@@ -393,6 +407,33 @@ func TestDeleteEventDeletesTheMatchedEvent(t *testing.T) {
 	w := google.onlyWrite(t)
 	if w.Method != http.MethodDelete || w.Path != "/calendar/v3/calendars/"+familyCalID+"/events/ev1" {
 		t.Errorf("request = %s %s, want delete of ev1 on Family", w.Method, w.Path)
+	}
+}
+
+// practiceInstances are two instances of a practice recurring daily at 18:00.
+var practiceInstances = []string{
+	`{"id":"practice_20261126","recurringEventId":"practice","summary":"Practice","start":{"dateTime":"2026-11-26T18:00:00-04:00"},"end":{"dateTime":"2026-11-26T19:00:00-04:00"}}`,
+	`{"id":"practice_20261127","recurringEventId":"practice","summary":"Practice","start":{"dateTime":"2026-11-27T18:00:00-04:00"},"end":{"dateTime":"2026-11-27T19:00:00-04:00"}}`,
+}
+
+func TestDeleteEventByDateFindsThatDaysInstance(t *testing.T) {
+	d, google := googleDeps(t, practiceInstances...)
+
+	mustCall(t, d, "delete_event", `{"calendar":"Family","title":"Practice","start":"2026-11-27"}`)
+
+	w := google.onlyWrite(t)
+	if w.Method != http.MethodDelete || !strings.HasSuffix(w.Path, "/events/practice_20261127") {
+		t.Errorf("request = %s %s, want delete of the 27th's instance", w.Method, w.Path)
+	}
+}
+
+func TestDeleteEventByTimeDoesNotMatchTheNeighbouringDay(t *testing.T) {
+	d, google := googleDeps(t, practiceInstances...)
+
+	mustFail(t, d, "delete_event", `{"calendar":"Family","title":"Practice","start":"2026-11-27T06:00"}`)
+
+	if w := google.writes(); len(w) != 0 {
+		t.Errorf("writes = %+v, want none", w)
 	}
 }
 
@@ -510,6 +551,19 @@ func TestSetHotTubTargetWritesToTheConfiguredTub(t *testing.T) {
 	}
 	if s := decode[types.HotTubSnapshot](t, out); s.TargetF != 100 {
 		t.Errorf("output %s should report the new target", out)
+	}
+}
+
+func TestSetHotTubTargetRefusesTargetOutsideTheTubsLimits(t *testing.T) {
+	d, tub := hotTubDeps(t, true)
+
+	err := mustFail(t, d, "set_hot_tub_target", `{"target_f":120}`)
+
+	if !strings.Contains(err.Error(), "104") {
+		t.Errorf("error %q should state the tub's limit", err)
+	}
+	if len(tub.writes) != 0 {
+		t.Errorf("writes = %v, want none", tub.writes)
 	}
 }
 

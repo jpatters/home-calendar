@@ -136,6 +136,23 @@ func (f *fakeCalendarAPI) only(t *testing.T) recorded {
 	return f.reqs[0]
 }
 
+// patch returns the one PATCH request received.
+func (f *fakeCalendarAPI) patch(t *testing.T) recorded {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var patches []recorded
+	for _, r := range f.reqs {
+		if r.Method == http.MethodPatch {
+			patches = append(patches, r)
+		}
+	}
+	if len(patches) != 1 {
+		t.Fatalf("expected exactly one PATCH, got %d: %+v", len(patches), f.reqs)
+	}
+	return patches[0]
+}
+
 func newClient(t *testing.T, routes map[string]cannedResponse) (*gcal.Client, *fakeCalendarAPI) {
 	t.Helper()
 	return newClientWithEvents(t, routes)
@@ -446,6 +463,9 @@ func TestCreateEventReturnsErrorOnAPIFailure(t *testing.T) {
 
 // --- FindEvent ---
 
+// dec1 is the whole of 2026-12-01 in Toronto (UTC-5).
+var dec1From, dec1To = time.Date(2026, 12, 1, 5, 0, 0, 0, time.UTC), time.Date(2026, 12, 2, 5, 0, 0, 0, time.UTC)
+
 const (
 	dentistAt3pm    = `{"id":"dentist","summary":"Dentist","location":"Main St","start":{"dateTime":"2026-12-01T15:00:00-05:00"},"end":{"dateTime":"2026-12-01T16:00:00-05:00"}}`
 	dentistFollowUp = `{"id":"followup","summary":"Dentist follow-up","start":{"dateTime":"2026-12-01T11:00:00-05:00"},"end":{"dateTime":"2026-12-01T11:30:00-05:00"}}`
@@ -458,7 +478,7 @@ const (
 func TestFindEventRequestsExpandedRecurringInstances(t *testing.T) {
 	c, api := newClientWithEvents(t, nil, dentistAt3pm)
 
-	if _, err := c.FindEvent(context.Background(), familyCal, "Dentist", time.Date(2026, 12, 1, 17, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := c.FindEvent(context.Background(), familyCal, "Dentist", dec1From, dec1To); err != nil {
 		t.Fatalf("FindEvent: %v", err)
 	}
 	req := api.only(t)
@@ -470,12 +490,24 @@ func TestFindEventRequestsExpandedRecurringInstances(t *testing.T) {
 	}
 }
 
+func TestFindEventSearchesOnlyTheGivenWindow(t *testing.T) {
+	c, _ := newClientWithEvents(t, nil, dentistAt3pm)
+	at3pm := time.Date(2026, 12, 1, 20, 0, 0, 0, time.UTC)
+
+	if _, err := c.FindEvent(context.Background(), familyCal, "Dentist", at3pm.Add(-time.Hour), at3pm.Add(time.Hour)); err != nil {
+		t.Errorf("window around 3pm: %v, want the 3pm appointment", err)
+	}
+	_, err := c.FindEvent(context.Background(), familyCal, "Dentist", at3pm.Add(2*time.Hour), at3pm.Add(4*time.Hour))
+	if !errors.Is(err, gcal.ErrNotFound) {
+		t.Errorf("window after the appointment: err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestFindEventReturnsCaseInsensitiveTitleMatchNearTime(t *testing.T) {
 	c, _ := newClientWithEvents(t, nil, dentistFollowUp, dentistAt3pm, dentistNextWeek)
 
-	// Noon in Toronto on Dec 1; the 3pm appointment is within the window,
-	// the one two days later is not.
-	got, err := c.FindEvent(context.Background(), familyCal, "dentist", time.Date(2026, 12, 1, 17, 0, 0, 0, time.UTC))
+	// The 3pm appointment is on Dec 1; the one two days later is not.
+	got, err := c.FindEvent(context.Background(), familyCal, "dentist", dec1From, dec1To)
 	if err != nil {
 		t.Fatalf("FindEvent: %v", err)
 	}
@@ -490,7 +522,7 @@ func TestFindEventReturnsCaseInsensitiveTitleMatchNearTime(t *testing.T) {
 
 func TestFindEventReturnsAllDayEvent(t *testing.T) {
 	c, _ := newClientWithEvents(t, nil, pdDay)
-	got, err := c.FindEvent(context.Background(), familyCal, "PD Day", time.Date(2026, 12, 4, 12, 0, 0, 0, time.UTC))
+	got, err := c.FindEvent(context.Background(), familyCal, "PD Day", dec1From.AddDate(0, 0, 3), dec1To.AddDate(0, 0, 3))
 	if err != nil {
 		t.Fatalf("FindEvent: %v", err)
 	}
@@ -500,7 +532,6 @@ func TestFindEventReturnsAllDayEvent(t *testing.T) {
 }
 
 func TestFindEventReturnsErrNotFound(t *testing.T) {
-	around := time.Date(2026, 12, 1, 17, 0, 0, 0, time.UTC)
 	for name, events := range map[string][]string{
 		"empty calendar":       nil,
 		"only a similar title": {dentistFollowUp},
@@ -508,7 +539,7 @@ func TestFindEventReturnsErrNotFound(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, _ := newClientWithEvents(t, nil, events...)
-			_, err := c.FindEvent(context.Background(), familyCal, "Dentist", around)
+			_, err := c.FindEvent(context.Background(), familyCal, "Dentist", dec1From, dec1To)
 			if !errors.Is(err, gcal.ErrNotFound) {
 				t.Errorf("err = %v, want ErrNotFound", err)
 			}
@@ -519,7 +550,7 @@ func TestFindEventReturnsErrNotFound(t *testing.T) {
 func TestFindEventReturnsErrAmbiguousListingCandidates(t *testing.T) {
 	c, _ := newClientWithEvents(t, nil, swimAM, swimPM)
 
-	_, err := c.FindEvent(context.Background(), familyCal, "Swim Practice", time.Date(2026, 12, 1, 17, 0, 0, 0, time.UTC))
+	_, err := c.FindEvent(context.Background(), familyCal, "Swim Practice", dec1From, dec1To)
 	if !errors.Is(err, gcal.ErrAmbiguous) {
 		t.Fatalf("err = %v, want ErrAmbiguous", err)
 	}
@@ -580,6 +611,7 @@ func TestUpdateEventCanClearLocation(t *testing.T) {
 func TestUpdateEventMovesTimedEvent(t *testing.T) {
 	loc := toronto(t)
 	c, api := newClient(t, map[string]cannedResponse{
+		"GET " + eventsPath(familyCal) + "/evt1":   {200, dentistAt3pm},
 		"PATCH " + eventsPath(familyCal) + "/evt1": {200, patchedEvent},
 	})
 	start := time.Date(2026, 12, 2, 10, 0, 0, 0, loc)
@@ -590,7 +622,7 @@ func TestUpdateEventMovesTimedEvent(t *testing.T) {
 		t.Fatalf("UpdateEvent: %v", err)
 	}
 
-	req := api.only(t)
+	req := api.patch(t)
 	dt, err := time.Parse(time.RFC3339, str(req.Body, "start", "dateTime"))
 	if err != nil || !dt.Equal(start) {
 		t.Errorf("start.dateTime = %q, want %v", str(req.Body, "start", "dateTime"), start)
@@ -662,21 +694,32 @@ func TestUpdateEventWithOnlyStartKeepsDuration(t *testing.T) {
 		t.Fatalf("UpdateEvent: %v", err)
 	}
 
-	api.mu.Lock()
-	reqs := append([]recorded(nil), api.reqs...)
-	api.mu.Unlock()
-	var patch *recorded
-	for i := range reqs {
-		if reqs[i].Method == http.MethodPatch {
-			patch = &reqs[i]
-		}
-	}
-	if patch == nil {
-		t.Fatalf("no PATCH sent; requests = %+v", reqs)
-	}
+	patch := api.patch(t)
 	end, err := time.Parse(time.RFC3339, str(patch.Body, "end", "dateTime"))
 	if err != nil || !end.Equal(start.Add(90*time.Minute)) {
 		t.Errorf("end.dateTime = %q, want %v (original 90 min duration)", str(patch.Body, "end", "dateTime"), start.Add(90*time.Minute))
+	}
+}
+
+func TestUpdateEventMovingAllDayEventWithoutAllDayKeepsItAllDay(t *testing.T) {
+	loc := toronto(t)
+	c, api := newClient(t, map[string]cannedResponse{
+		"GET " + eventsPath(familyCal) + "/pd":   {200, pdDay},
+		"PATCH " + eventsPath(familyCal) + "/pd": {200, `{"id":"pd","summary":"PD Day","start":{"date":"2026-12-10"},"end":{"date":"2026-12-12"}}`},
+	})
+	start := time.Date(2026, 12, 10, 0, 0, 0, 0, loc)
+	end := time.Date(2026, 12, 12, 0, 0, 0, 0, loc)
+
+	if _, err := c.UpdateEvent(context.Background(), familyCal, "pd", gcal.EventPatch{Start: &start, End: &end}); err != nil {
+		t.Fatalf("UpdateEvent: %v", err)
+	}
+
+	patch := api.patch(t)
+	if str(patch.Body, "start", "date") != "2026-12-10" || str(patch.Body, "end", "date") != "2026-12-12" {
+		t.Errorf("start/end = %v / %v, want dates 2026-12-10 / 2026-12-12", patch.Body["start"], patch.Body["end"])
+	}
+	if _, ok := field(patch.Body, "start", "dateTime"); ok && str(patch.Body, "start", "dateTime") != "" {
+		t.Errorf("start = %v, want no dateTime for an all-day event", patch.Body["start"])
 	}
 }
 

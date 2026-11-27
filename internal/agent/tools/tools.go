@@ -17,7 +17,7 @@ type EventSource interface {
 // CalendarWriter is satisfied by *gcal.Client.
 type CalendarWriter interface {
 	CreateEvent(ctx context.Context, calID string, e gcal.NewEvent) (gcal.Event, error)
-	FindEvent(ctx context.Context, calID, title string, around time.Time) (gcal.Event, error)
+	FindEvent(ctx context.Context, calID, title string, from, to time.Time) (gcal.Event, error)
 	UpdateEvent(ctx context.Context, calID, eventID string, patch gcal.EventPatch) (gcal.Event, error)
 	DeleteEvent(ctx context.Context, calID, eventID string) error
 }

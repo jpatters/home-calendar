@@ -34,6 +34,9 @@ var ErrInvalidTarget = errors.New("pool: invalid target temperature")
 type Fetcher struct {
 	client *http.Client
 
+	// ioMu serialises polls and writes so a poll that started before a write
+	// cannot publish its older reading after the write's.
+	ioMu     sync.Mutex
 	mu       sync.RWMutex
 	snapshot *types.PoolSnapshot
 	lastErr  error
@@ -87,6 +90,8 @@ func (f *Fetcher) RefreshNow(ctx context.Context, p types.Pool) {
 // SetTarget changes the pool heater's setpoint and publishes the reading taken
 // afterwards.
 func (f *Fetcher) SetTarget(ctx context.Context, p types.Pool, targetC float64) (*types.PoolSnapshot, error) {
+	f.ioMu.Lock()
+	defer f.ioMu.Unlock()
 	snap, err := SetTarget(ctx, f.client, p.DeviceURL, targetC)
 	if err != nil {
 		return nil, err
@@ -134,6 +139,8 @@ func (f *Fetcher) fetch(ctx context.Context, p types.Pool) {
 		}
 		return
 	}
+	f.ioMu.Lock()
+	defer f.ioMu.Unlock()
 	snap, err := Search(ctx, f.client, p.DeviceURL)
 	if err != nil {
 		// The ESP reboots/OTAs and drops wifi periodically; keep the last

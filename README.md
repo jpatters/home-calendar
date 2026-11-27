@@ -377,6 +377,7 @@ admin saves config. The client reconnects with exponential backoff.
 | `LISTEN_ADDR`                 | `:8080`             | Listen address |
 | `OPENAI_API_KEY`              | (none)              | Required for the assistant. Without it Ziggy only says it isn't set up. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | (none)              | Optional. Google service account key, as the JSON itself or a path to the file. Enables adding, changing and deleting calendar events. |
+| `TZ`                          | UTC                 | IANA time zone (e.g. `America/Halifax`). Set it so Ziggy reads and books times in local time. |
 
 ## Assistant setup (Ziggy)
 
@@ -384,6 +385,8 @@ admin saves config. The client reconnects with exponential backoff.
    Docker Compose, export it in your shell or put it in a `.env` file next to
    `docker-compose.yml`; the compose file passes it through. The admin
    **Assistant** tab shows whether the key is present (never its value).
+   Also set `TZ` (e.g. `TZ=America/Halifax`) so Ziggy uses local time;
+   without it the container runs in UTC and events are booked in UTC.
 2. **Calendar changes (optional).** Without this Ziggy can read the calendars
    but not change them.
    - In Google Cloud, enable the Google Calendar API, create a service account,

@@ -25,11 +25,6 @@ var (
 	ErrAmbiguous = errors.New("gcal: more than one event matches")
 )
 
-// findWindow is how far either side of the given time FindEvent searches.
-// Twelve hours covers "the dentist appointment tomorrow" style references to
-// a day without reaching into the neighbouring days.
-const findWindow = 12 * time.Hour
-
 const dateLayout = "2006-01-02"
 
 // NewEvent describes an event to create. For all-day events only the dates
@@ -56,8 +51,9 @@ type Event struct {
 }
 
 // EventPatch lists the fields to change on an existing event; nil fields are
-// left as they are. A Start without an End keeps the event's duration. Start
-// and End are sent as timed values unless AllDay is true.
+// left as they are. A Start without an End keeps the event's duration. When
+// AllDay is nil, Start and End take the event's current all-day-ness (End is
+// then the exclusive end date for an all-day event).
 type EventPatch struct {
 	Title    *string
 	Start    *time.Time
@@ -144,14 +140,14 @@ func (c *Client) CreateEvent(ctx context.Context, calID string, e NewEvent) (Eve
 }
 
 // FindEvent returns the one event titled title (compared case-insensitively,
-// ignoring surrounding space) that overlaps the 24 hours centred on around.
-// Recurring events are expanded so the result is a single instance.
-func (c *Client) FindEvent(ctx context.Context, calID, title string, around time.Time) (Event, error) {
+// ignoring surrounding space) that overlaps [from, to). Recurring events are
+// expanded so the result is a single instance.
+func (c *Client) FindEvent(ctx context.Context, calID, title string, from, to time.Time) (Event, error) {
 	list, err := c.events.List(calID).
 		SingleEvents(true).
 		Q(title).
-		TimeMin(around.Add(-findWindow).Format(time.RFC3339)).
-		TimeMax(around.Add(findWindow).Format(time.RFC3339)).
+		TimeMin(from.Format(time.RFC3339)).
+		TimeMax(to.Format(time.RFC3339)).
 		Context(ctx).Do()
 	if err != nil {
 		return Event{}, apiError("list events", err)
@@ -170,7 +166,7 @@ func (c *Client) FindEvent(ctx context.Context, calID, title string, around time
 	}
 	switch len(matches) {
 	case 0:
-		return Event{}, fmt.Errorf("%w: %q near %s", ErrNotFound, title, around.Format(time.RFC3339))
+		return Event{}, fmt.Errorf("%w: %q between %s and %s", ErrNotFound, title, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	case 1:
 		return matches[0], nil
 	}
@@ -200,7 +196,8 @@ func (c *Client) UpdateEvent(ctx context.Context, calID, eventID string, patch E
 		return Event{}, errors.New("gcal: changing AllDay requires Start")
 	}
 	end := patch.End
-	if patch.Start != nil && end == nil {
+	keepDuration := patch.Start != nil && end == nil
+	if keepDuration || (patch.AllDay == nil && end != nil) {
 		existing, err := c.events.Get(calID, eventID).Context(ctx).Do()
 		if err != nil {
 			return Event{}, apiError("get event", err)
@@ -212,8 +209,10 @@ func (c *Client) UpdateEvent(ctx context.Context, calID, eventID string, patch E
 		if patch.AllDay == nil {
 			allDay = current.AllDay
 		}
-		e := patch.Start.Add(current.End.Sub(current.Start))
-		end = &e
+		if keepDuration {
+			e := patch.Start.Add(current.End.Sub(current.Start))
+			end = &e
+		}
 	}
 	if patch.Start != nil {
 		body.Start = eventTime(*patch.Start, allDay, true)

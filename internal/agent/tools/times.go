@@ -41,3 +41,20 @@ func parseEnd(s string, loc *time.Location) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// timedMatchWindow is how far either side of a stated start time an event
+// lookup searches.
+const timedMatchWindow = time.Hour
+
+// lookupWindow reads the start of an existing event as a search window: a
+// date covers that whole local day, and a time covers an hour either side.
+func lookupWindow(s string, loc *time.Location) (from, to time.Time, err error) {
+	t, dateOnly, err := parseTime(s, loc)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if dateOnly {
+		return t, t.AddDate(0, 0, 1), nil
+	}
+	return t.Add(-timedMatchWindow), t.Add(timedMatchWindow), nil
+}

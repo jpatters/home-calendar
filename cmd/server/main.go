@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/server"
@@ -17,6 +18,8 @@ import (
 func main() {
 	configPath := envOr("CONFIG_PATH", "/data/config.json")
 	addr := envOr("LISTEN_ADDR", ":8080")
+
+	log.Printf("local time zone: %s (TZ=%q)", time.Now().Format("MST -07:00"), os.Getenv("TZ"))
 
 	store, err := config.Open(configPath)
 	if err != nil {

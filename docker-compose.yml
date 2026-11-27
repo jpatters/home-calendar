@@ -10,4 +10,5 @@ services:
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      TZ: ${TZ:-}
     restart: unless-stopped

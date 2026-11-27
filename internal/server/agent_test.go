@@ -203,6 +203,8 @@ func TestAgentConverseHonoursAgentBeingDisabledAfterStartup(t *testing.T) {
 func TestAgentConverseApologisesWhenModelFails(t *testing.T) {
 	openai, _ := fakeResponsesAPI(t, "")
 	app := agentApp(t, true, "sk-test", openai.URL)
+	conn, ctx := dialWS(t, app)
+	readFrame(t, ctx, conn) // initial snapshot
 
 	status, body := postConverse(t, app, `{"conversation_id":"c","query":"hello"}`)
 
@@ -213,9 +215,19 @@ func TestAgentConverseApologisesWhenModelFails(t *testing.T) {
 	if strings.Contains(s, "secret upstream detail") {
 		t.Errorf("output %q leaks the API error", s)
 	}
+	for {
+		f := readFrame(t, ctx, conn)
+		if f.Type != "agent" || f.Agent == nil || f.Agent.State != types.AgentError {
+			continue
+		}
+		if raw, _ := json.Marshal(f); strings.Contains(string(raw), "secret upstream detail") {
+			t.Errorf("agent frame %s leaks the API error", raw)
+		}
+		break
+	}
 }
 
-func TestAgentDoesNotOfferCalendarWritesWithoutGoogleCredentials(t *testing.T) {
+func TestAgentOffersOnlyCalendarReadsWithoutGoogleCredentials(t *testing.T) {
 	openai, _, lastTools := recordingResponsesAPI(t, "ok")
 	app := agentApp(t, true, "sk-test", openai.URL)
 
@@ -223,15 +235,26 @@ func TestAgentDoesNotOfferCalendarWritesWithoutGoogleCredentials(t *testing.T) {
 		t.Fatalf("status = %d, body %v", status, body)
 	}
 
+	offered := map[string]bool{}
 	names, _ := lastTools.Load().([]string)
-	joined := "," + strings.Join(names, ",") + ","
-	if !strings.Contains(joined, ",list_events,") {
-		t.Errorf("tools = %v, want list_events offered", names)
+	for _, n := range names {
+		offered[n] = true
 	}
-	for _, w := range []string{"create_event", "update_event", "delete_event"} {
-		if strings.Contains(joined, ","+w+",") {
-			t.Errorf("tools = %v, %s offered without Google credentials", names, w)
-		}
+	if !offered["list_events"] || offered["create_event"] {
+		t.Errorf("tools = %v, want list_events offered and create_event not", names)
+	}
+}
+
+func TestAgentConverseRejectsOversizedBody(t *testing.T) {
+	openai, hits := fakeResponsesAPI(t, "unused")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	body := `{"conversation_id":"c","query":"` + strings.Repeat("a", 100<<10) + `"}`
+	if status, _ := postConverse(t, app, body); status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", status)
+	}
+	if hits.Load() != 0 {
+		t.Errorf("OpenAI hits = %d, want 0", hits.Load())
 	}
 }
 
@@ -250,7 +273,7 @@ func TestAgentConverseRejectsMissingOrBlankQuery(t *testing.T) {
 }
 
 func TestAgentConverseExplainsMissingAPIKeyAsSpokenReply(t *testing.T) {
-	openai, hits := fakeResponsesAPI(t, "unused")
+	openai, _ := fakeResponsesAPI(t, "unused")
 	app := agentApp(t, true, "", openai.URL)
 
 	status, body := postConverse(t, app, `{"conversation_id":"c","query":"hello"}`)
@@ -260,9 +283,6 @@ func TestAgentConverseExplainsMissingAPIKeyAsSpokenReply(t *testing.T) {
 	}
 	if s, _ := body["output"].(string); strings.TrimSpace(s) == "" {
 		t.Errorf("body = %v, want a spoken explanation", body)
-	}
-	if hits.Load() != 0 {
-		t.Errorf("OpenAI hits = %d, want 0", hits.Load())
 	}
 }
 

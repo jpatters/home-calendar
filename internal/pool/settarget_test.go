@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/types"
@@ -115,27 +116,41 @@ func TestSetTargetReturnsAndPublishesReadingTakenAfterWrite(t *testing.T) {
 	}
 }
 
-func TestSetTargetRejectsTargetOutsideDeviceLimitsWithoutWriting(t *testing.T) {
-	dev := &fakeThermostat{target: 27, limits: &[2]float64{15, 35}}
-	p := startThermostat(t, dev)
-
-	var published int
-	f := pool.New(func(*types.PoolSnapshot) { published++ })
-
-	for _, target := range []float64{14.5, 35.5} {
-		snap, err := f.SetTarget(context.Background(), p, target)
-		if !errors.Is(err, pool.ErrInvalidTarget) {
-			t.Errorf("target %v: err = %v, want ErrInvalidTarget", target, err)
-		}
-		if snap != nil {
-			t.Errorf("target %v: expected nil snapshot, got %+v", target, snap)
-		}
+func TestSetTargetEnforcesDeviceLimitsInclusively(t *testing.T) {
+	cases := []struct {
+		target float64
+		ok     bool
+	}{
+		{14.5, false},
+		{15, true},
+		{35, true},
+		{35.5, false},
 	}
-	if sets := dev.setRequests(); len(sets) != 0 {
-		t.Errorf("expected no set requests, got %v", sets)
-	}
-	if published != 0 {
-		t.Errorf("expected nothing published, got %d", published)
+	for _, tc := range cases {
+		t.Run(strconv.FormatFloat(tc.target, 'f', -1, 64), func(t *testing.T) {
+			dev := &fakeThermostat{target: 27, limits: &[2]float64{15, 35}}
+			p := startThermostat(t, dev)
+			var published int
+			f := pool.New(func(*types.PoolSnapshot) { published++ })
+
+			snap, err := f.SetTarget(context.Background(), p, tc.target)
+
+			if !tc.ok {
+				if !errors.Is(err, pool.ErrInvalidTarget) || snap != nil {
+					t.Errorf("got %+v, %v; want ErrInvalidTarget and no snapshot", snap, err)
+				}
+				if sets := dev.setRequests(); len(sets) != 0 || published != 0 {
+					t.Errorf("set requests %v, published %d; want none", sets, published)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("SetTarget: %v", err)
+			}
+			if snap.TargetC != tc.target {
+				t.Errorf("TargetC = %v, want %v", snap.TargetC, tc.target)
+			}
+		})
 	}
 }
 
@@ -207,18 +222,85 @@ func TestSearchFallsBackToDefaultLimitsWhenDeviceReportsNone(t *testing.T) {
 	}
 }
 
-func TestSetTargetAcceptsTargetsExactlyAtLimits(t *testing.T) {
-	dev := &fakeThermostat{target: 27, limits: &[2]float64{15, 35}}
-	p := startThermostat(t, dev)
-	f := pool.New(nil)
+// slowPollThermostat answers its first reading from the moment the request
+// arrived but holds the response until release is closed, like a poll that
+// is still in flight when a write happens.
+type slowPollThermostat struct {
+	*fakeThermostat
+	once    sync.Once
+	arrived chan struct{}
+	release chan struct{}
+}
 
-	for _, target := range []float64{15, 35} {
-		snap, err := f.SetTarget(context.Background(), p, target)
-		if err != nil {
-			t.Fatalf("SetTarget(%v): %v", target, err)
-		}
-		if snap.TargetC != target {
-			t.Errorf("TargetC = %v, want %v", snap.TargetC, target)
-		}
+func (d *slowPollThermostat) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	first := false
+	if r.Method == http.MethodGet {
+		d.once.Do(func() { first = true })
+	}
+	if !first {
+		d.fakeThermostat.ServeHTTP(w, r)
+		return
+	}
+	rec := httptest.NewRecorder()
+	d.fakeThermostat.ServeHTTP(rec, r)
+	close(d.arrived)
+	<-d.release
+	for k, v := range rec.Header() {
+		w.Header()[k] = v
+	}
+	w.WriteHeader(rec.Code)
+	w.Write(rec.Body.Bytes())
+}
+
+func TestSetTargetIsNotOverwrittenByAPollAlreadyInFlight(t *testing.T) {
+	dev := &slowPollThermostat{
+		fakeThermostat: &fakeThermostat{target: 27, limits: &[2]float64{15, 35}},
+		arrived:        make(chan struct{}),
+		release:        make(chan struct{}),
+	}
+	srv := httptest.NewServer(dev)
+	t.Cleanup(srv.Close)
+	p := types.Pool{Enabled: true, DeviceURL: srv.URL}
+	var mu sync.Mutex
+	var published []float64
+	f := pool.New(func(s *types.PoolSnapshot) {
+		mu.Lock()
+		published = append(published, s.TargetC)
+		mu.Unlock()
+	})
+
+	polled := make(chan struct{})
+	go func() {
+		f.RefreshNow(context.Background(), p)
+		close(polled)
+	}()
+	<-dev.arrived
+	written := make(chan error, 1)
+	go func() {
+		_, err := f.SetTarget(context.Background(), p, 30)
+		written <- err
+	}()
+	// Let the write finish first if it can; if it waits for the poll, the
+	// poll is released after a short pause.
+	var err error
+	select {
+	case err = <-written:
+		close(dev.release)
+	case <-time.After(300 * time.Millisecond):
+		close(dev.release)
+		err = <-written
+	}
+	<-polled
+	if err != nil {
+		t.Fatalf("SetTarget: %v", err)
+	}
+
+	if s := f.Snapshot(); s == nil || s.TargetC != 30 {
+		t.Errorf("Snapshot() = %+v, want TargetC 30 from the write", s)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(published) == 0 || published[len(published)-1] != 30 {
+		t.Errorf("published targets = %v, want the write's reading last", published)
 	}
 }

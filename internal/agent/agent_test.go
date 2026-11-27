@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -234,22 +235,6 @@ func TestConverseReturnsModelTextAnswer(t *testing.T) {
 	}
 }
 
-func TestConverseSendsConfiguredModelAndEffort(t *testing.T) {
-	fake := newFakeOpenAI(t, text("resp_1", "ok"))
-	a, _ := newAgent(t, fake, nil)
-
-	converse(t, a, "conv-1", "hello")
-
-	req := request(t, fake, 0)
-	if req["model"] != "gpt-test" {
-		t.Errorf("model = %v, want gpt-test", req["model"])
-	}
-	reasoning, _ := req["reasoning"].(map[string]any)
-	if reasoning["effort"] != "medium" {
-		t.Errorf("reasoning = %v, want effort medium", req["reasoning"])
-	}
-}
-
 func TestConverseOffersRegisteredToolsAsStrictFunctions(t *testing.T) {
 	fake := newFakeOpenAI(t, text("resp_1", "ok"))
 	a, _ := newAgent(t, fake, nil, &recordingTool{name: "alpha"}, &recordingTool{name: "beta"})
@@ -269,8 +254,9 @@ func TestConverseOffersRegisteredToolsAsStrictFunctions(t *testing.T) {
 		}
 		names = append(names, fmt.Sprint(tool["name"]))
 	}
+	sort.Strings(names)
 	if strings.Join(names, ",") != "alpha,beta" {
-		t.Errorf("tools = %v, want [alpha beta] in registry order", names)
+		t.Errorf("tools = %v, want alpha and beta", names)
 	}
 }
 
@@ -478,6 +464,10 @@ func TestConverseRereadsModelAndEffortEveryTurn(t *testing.T) {
 	})
 
 	converse(t, a, "conv-1", "hi")
+	first := request(t, fake, 0)
+	if reasoning, _ := first["reasoning"].(map[string]any); first["model"] != "gpt-test" || reasoning["effort"] != "medium" {
+		t.Errorf("first turn model=%v reasoning=%v, want gpt-test / medium", first["model"], first["reasoning"])
+	}
 	mu.Lock()
 	cfg.Agent.Model = "gpt-other"
 	cfg.Agent.Effort = "high"
@@ -625,6 +615,58 @@ func TestConverseReportsThinkingThenTalking(t *testing.T) {
 	}
 	if got := a.Snapshot(); got == nil || got.State != types.AgentTalking || got.Reply != "It is sunny." {
 		t.Errorf("Snapshot() = %+v, want the talking state", got)
+	}
+}
+
+func TestConcurrentTurnsOnOneConversationEachGetAReplyAndPublishInOrder(t *testing.T) {
+	var mu sync.Mutex
+	var states []types.AgentSnapshot
+	talking := 0
+	secondTalking := make(chan struct{})
+	fake := newFakeOpenAI(t, text("resp_1", "ok"))
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		// The first turn to finish is slow to publish its reply: it waits
+		// (briefly) for the other turn's reply to be published first.
+		o.OnState = func(s *types.AgentSnapshot) {
+			mu.Lock()
+			if s.State == types.AgentTalking {
+				talking++
+				if talking == 1 {
+					mu.Unlock()
+					select {
+					case <-secondTalking:
+					case <-time.After(500 * time.Millisecond):
+					}
+					mu.Lock()
+				} else {
+					close(secondTalking)
+				}
+			}
+			states = append(states, *s)
+			mu.Unlock()
+		}
+	})
+
+	var wg sync.WaitGroup
+	replies := make([]string, 2)
+	for i := range replies {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			replies[i], _ = a.Converse(context.Background(), "conv-1", fmt.Sprintf("question %d", i))
+		}()
+	}
+	wg.Wait()
+
+	for i, r := range replies {
+		if r != "ok" {
+			t.Errorf("turn %d reply = %q, want the model's answer", i, r)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if last, snap := states[len(states)-1], a.Snapshot(); last != *snap {
+		t.Errorf("last published state = %+v, but Snapshot() = %+v", last, *snap)
 	}
 }
 

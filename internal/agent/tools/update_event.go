@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"time"
 
 	"github.com/jpatters/home-calendar/internal/agent"
 	"github.com/jpatters/home-calendar/internal/gcal"
@@ -25,7 +26,7 @@ func updateEvent(d Deps) agent.Tool {
 		schema: object(map[string]any{
 			"calendar":       prop("string", "Calendar name."),
 			"title":          prop("string", "The event's current title."),
-			"original_start": prop("string", "When the event currently starts (the day is enough for an all-day event). "+timeFormatHelp),
+			"original_start": prop("string", "When the event currently starts: the day alone searches that whole day; a time matches within an hour. "+timeFormatHelp),
 			"new_start":      nullable("string", "New start, or null. Moving the start without a new end keeps the duration. "+timeFormatHelp),
 			"new_end":        nullable("string", "New end, or null. For all-day events the last day (inclusive). "+timeFormatHelp),
 			"new_title":      nullable("string", "New title, or null."),
@@ -37,7 +38,7 @@ func updateEvent(d Deps) agent.Tool {
 			if err != nil {
 				return nil, err
 			}
-			around, _, err := parseTime(a.OriginalStart, d.Location)
+			from, to, err := lookupWindow(a.OriginalStart, d.Location)
 			if err != nil {
 				return nil, err
 			}
@@ -49,19 +50,23 @@ func updateEvent(d Deps) agent.Tool {
 				}
 				patch.Start = &start
 			}
+			var end time.Time
 			if a.NewEnd != nil {
-				end, _, err := parseTime(*a.NewEnd, d.Location)
-				if err != nil {
+				if end, _, err = parseTime(*a.NewEnd, d.Location); err != nil {
 					return nil, err
 				}
-				if a.AllDay != nil && *a.AllDay {
+			}
+			found, err := d.Calendar.FindEvent(ctx, calID, a.Title, from, to)
+			if err != nil {
+				return nil, err
+			}
+			if a.NewEnd != nil {
+				// new_end is the last day of an all-day event; the API wants
+				// the day after.
+				if (a.AllDay == nil && found.AllDay) || (a.AllDay != nil && *a.AllDay) {
 					end = end.AddDate(0, 0, 1)
 				}
 				patch.End = &end
-			}
-			found, err := d.Calendar.FindEvent(ctx, calID, a.Title, around)
-			if err != nil {
-				return nil, err
 			}
 			updated, err := d.Calendar.UpdateEvent(ctx, calID, found.ID, patch)
 			if err != nil {
