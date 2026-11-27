@@ -269,13 +269,22 @@ input, select {
   color: var(--fg);
 }
 
+/* Each panel is a size container: widgets scale their type with the panel
+   (cqmin/cqi/cqh units) and the per-widget @container rules below hide
+   lower-priority details as the panel shrinks. */
 .dock-panel {
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
+  container: panel / size;
 }
 
 .dock-panel > .widget {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: clamp(8px, 5cqmin, 20px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .calendar-pane {
@@ -549,6 +558,144 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .scores-outs,
 .scores-period,
 .scores-clock { font-variant-numeric: tabular-nums; }
+
+/* -------- responsive panels -------- */
+.dock-panel .widget > *,
+.dock-panel .weather-current > *,
+.dock-panel .scores-section > * { min-width: 0; }
+
+/* clock: the time and date always show, scaled to the panel */
+.dock-panel .clock-widget { gap: 0.4em; }
+.dock-panel .clock-time {
+  font-size: clamp(1.25rem, min(19cqi, 42cqh), 8rem);
+  white-space: nowrap;
+}
+.dock-panel .clock-date {
+  margin-top: 0;
+  font-size: clamp(0.7rem, min(5.5cqi, 9cqh), 1.6rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container panel (min-aspect-ratio: 3) {
+  .dock-panel .clock-widget { flex-direction: row; align-items: baseline; justify-content: center; gap: 0.75em; }
+  .dock-panel .clock-time { font-size: clamp(1.25rem, min(11cqi, 62cqh), 8rem); }
+  .dock-panel .clock-date { font-size: clamp(0.7rem, min(3.5cqi, 16cqh), 1.6rem); }
+}
+
+/* weather: forecast rows go first, then meta, location and label */
+.dock-panel .weather-widget { gap: clamp(4px, 3cqh, 12px); }
+.dock-panel .weather-icon { font-size: clamp(1.5rem, 16cqmin, 4rem); }
+.dock-panel .weather-temp { font-size: clamp(1.25rem, 14cqmin, 3rem); margin-top: 0; line-height: 1.1; }
+.dock-panel .weather-meta,
+.dock-panel .weather-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-panel .daily-row { grid-template-columns: minmax(2.5em, 60px) 32px 1fr; gap: 8px; }
+@container panel (max-height: 400px) { .dock-panel .daily-row:nth-child(3) { display: none; } }
+@container panel (max-height: 360px) { .dock-panel .daily-row:nth-child(2) { display: none; } }
+@container panel (max-height: 320px) { .dock-panel .weather-daily { display: none; } }
+@container panel (max-height: 240px) { .dock-panel .weather-meta { display: none; } }
+@container panel (max-height: 190px) { .dock-panel .weather-location { display: none; } }
+@container panel (max-height: 140px) {
+  .dock-panel .weather-label { display: none; }
+  .dock-panel .weather-current { display: flex; align-items: center; justify-content: center; gap: 0.5em; }
+}
+@container panel (min-aspect-ratio: 2) and (min-width: 380px) and (min-height: 110px) {
+  .dock-panel .weather-widget { flex-direction: row; align-items: center; gap: 5cqi; }
+  .dock-panel .weather-current { flex: 1; }
+  .dock-panel .weather-daily {
+    display: flex; flex: 1; border-top: none; padding-top: 0;
+    border-left: 1px solid var(--border); padding-left: 5cqi; gap: 4px;
+  }
+  .dock-panel .daily-row:nth-child(n) { display: grid; }
+  .dock-panel .weather-label,
+  .dock-panel .weather-meta,
+  .dock-panel .weather-location { display: none; }
+}
+
+/* tide: the next event always shows; later events, the current height and the
+   location go as the panel shrinks */
+.dock-panel .tide-widget { gap: clamp(4px, 2.5cqh, 8px); }
+.dock-panel .tide-current { font-size: clamp(1rem, 6cqmin, 1.4rem); }
+.dock-panel .tide-event { font-size: clamp(0.9rem, 5cqmin, 1.25rem); }
+.dock-panel .tide-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-panel .tide-event { grid-template-columns: 20px auto 1fr auto; gap: 8px; }
+.dock-panel .tide-time,
+.dock-panel .tide-height { white-space: nowrap; }
+@container panel (max-width: 260px) {
+  .dock-panel .tide-event { grid-template-columns: 20px 1fr auto; }
+  .dock-panel .tide-type { display: none; }
+}
+@container panel (max-width: 170px) {
+  .dock-panel .tide-event { grid-template-columns: 20px 1fr; }
+  .dock-panel .tide-height { display: none; }
+}
+@container panel (max-height: 260px) { .dock-panel .tide-event:nth-child(4) { display: none; } }
+@container panel (max-height: 225px) { .dock-panel .tide-event:nth-child(3) { display: none; } }
+@container panel (max-height: 190px) { .dock-panel .tide-location { display: none; } }
+@container panel (max-height: 160px) { .dock-panel .tide-event:nth-child(2) { display: none; } }
+@container panel (max-height: 120px) { .dock-panel .tide-current { display: none; } }
+@container panel (min-aspect-ratio: 2.5) and (min-width: 420px) {
+  .dock-panel .tide-events { flex-direction: row; flex-wrap: wrap; column-gap: 24px; }
+  .dock-panel .tide-event:nth-child(n) { display: grid; }
+  .dock-panel .tide-event:nth-child(n+3) { display: none; }
+}
+
+/* snow day: the percentage always shows */
+.dock-panel .snowday-icon { font-size: clamp(1.25rem, 14cqmin, 3rem); }
+.dock-panel .snowday-percent { font-size: clamp(1.5rem, 18cqmin, 3.5rem); }
+.dock-panel .snowday-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container panel (max-height: 250px) { .dock-panel .snowday-meta { display: none; } }
+@container panel (max-height: 205px) { .dock-panel .snowday-category { display: none; } }
+@container panel (max-height: 160px) { .dock-panel .snowday-icon { display: none; } }
+@container panel (max-height: 110px) { .dock-panel .snowday-label { display: none; } }
+@container panel (min-aspect-ratio: 2.5) and (min-height: 90px) {
+  .dock-panel .snowday-widget {
+    display: grid; grid-template-columns: auto auto; grid-auto-flow: column;
+    grid-template-rows: auto auto; justify-content: center; align-content: center; column-gap: 0.5em;
+  }
+  .dock-panel .snowday-icon { display: inline-flex; grid-row: 1 / span 2; font-size: clamp(1.5rem, 40cqh, 3.5rem); }
+  .dock-panel .snowday-category,
+  .dock-panel .snowday-meta { display: none; }
+}
+
+/* pool / hot tub: the temperature and heating state always show */
+.dock-panel .pool-temp-value,
+.dock-panel .hottub-temp-value { font-size: clamp(1.5rem, min(22cqi, 30cqh), 4rem); }
+@container panel (max-height: 130px) {
+  .dock-panel .pool-target,
+  .dock-panel .hottub-target { display: none; }
+}
+
+/* scores: the latest (or live) result always shows; meta lines go first,
+   then the Next section. Wide panels put the sections side by side. */
+.dock-panel .scores-scoreline,
+.dock-panel .scores-matchup { flex-wrap: wrap; row-gap: 0; font-size: clamp(1rem, 6.5cqmin, 1.6rem); }
+.dock-panel .scores-score { font-size: 1.15em; }
+.dock-panel .scores-meta { font-size: clamp(0.8rem, 4cqmin, 1.05rem); }
+@container panel (max-height: 190px) or (max-width: 200px) { .dock-panel .scores-meta { display: none; } }
+@container panel (max-height: 130px) or ((max-width: 170px) and (max-height: 160px)) {
+  .dock-panel .scores-section:nth-child(2) { display: none; }
+}
+@container panel (min-aspect-ratio: 2.2) and (min-width: 400px) {
+  .dock-panel .baseball-widget,
+  .dock-panel .hockey-widget { flex-direction: row; align-items: center; gap: 6cqi; }
+  .dock-panel .scores-section { flex: 1; }
+  .dock-panel .scores-section:nth-child(2) { display: flex; }
+}
+
+.dock-panel .baseball-widget-empty,
+.dock-panel .hockey-widget-empty { text-align: center; }
+
+/* calendar: header weather, then the title, give way as the panel narrows */
+@container panel (max-width: 700px) { .dock-panel .calendar-day-weather { display: none; } }
+@container panel (max-width: 560px) {
+  .dock-panel .calendar-title { font-size: 1.1rem; }
+  .dock-panel .calendar-toolbar button { min-width: 40px; padding: 0 10px; }
+}
+@container panel (max-width: 440px) {
+  .dock-panel .calendar-title { display: none; }
+  .dock-panel .calendar-toolbar { flex-wrap: wrap; justify-content: center; }
+}
 
 /* -------- connection dot -------- */
 .status-row {

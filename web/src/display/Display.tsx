@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   DockviewDefaultTab,
   DockviewReact,
@@ -28,6 +28,7 @@ import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 import { reloadPage } from "../browser";
 import { putLayout } from "../api";
+import { usePreservedScroll } from "./usePreservedScroll";
 import {
   applyLayout,
   buildDefaultLayout,
@@ -59,10 +60,21 @@ function useDisplay(): DisplayContextValue {
   return ctx;
 }
 
+function PanelFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  usePreservedScroll(ref);
+  return (
+    <div className="dock-panel" ref={ref}>
+      {children}
+    </div>
+  );
+}
+
 function CalendarPanel() {
   const { live, selectEvent, selectDay } = useDisplay();
   return (
-    <div className="calendar-pane">
+    <PanelFrame>
+      <div className="calendar-pane">
       <CalendarView
         events={live.events}
         defaultView={live.config?.display.defaultView ?? "week"}
@@ -70,14 +82,15 @@ function CalendarPanel() {
         onDayClick={selectDay}
         weather={live.weather}
         weatherConfig={live.config?.weather}
-      />
-    </div>
+        />
+      </div>
+    </PanelFrame>
   );
 }
 
 function panel(render: (ctx: DisplayContextValue) => JSX.Element) {
   return function WidgetPanel(_: IDockviewPanelProps) {
-    return <div className="dock-panel">{render(useDisplay())}</div>;
+    return <PanelFrame>{render(useDisplay())}</PanelFrame>;
   };
 }
 
@@ -114,6 +127,12 @@ const DOCK_THEME: DockviewTheme = {
   name: "home",
   gap: 16,
   colorScheme: undefined,
+};
+
+// The default 10px band along the dock's outer edge is too thin for a finger.
+const EDGE_DROP_ZONE = {
+  activationSize: { type: "pixels" as const, value: 40 },
+  size: { type: "pixels" as const, value: 40 },
 };
 
 function setLocked(api: DockviewApi, locked: boolean): void {
@@ -219,6 +238,7 @@ export default function Display({ live }: Props) {
             theme={DOCK_THEME}
             dndStrategy="pointer"
             disableFloatingGroups
+            dndEdges={EDGE_DROP_ZONE}
           />
         </div>
 
