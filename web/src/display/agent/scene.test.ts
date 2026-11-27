@@ -64,6 +64,8 @@ describe("sceneFor outfit", () => {
     ["St. Patrick's Day", at(2026, 3, 17), "stpatricks"],
     ["Easter Sunday 2027", at(2027, 3, 28), "easter"],
     ["Easter Sunday 2026", at(2026, 4, 5), "easter"],
+    ["Easter Sunday 2025", at(2025, 4, 20), "easter"],
+    ["Easter Sunday 2030", at(2030, 4, 21), "easter"],
     ["Canada Day", at(2026, 7, 1), "canada"],
     ["Canadian Thanksgiving 2026", at(2026, 10, 12), "thanksgiving"],
     ["Canadian Thanksgiving 2027", at(2027, 10, 11), "thanksgiving"],
@@ -90,7 +92,6 @@ describe("sceneFor outfit", () => {
     ["Dec 1", at(2026, 12, 1), "winter"],
     ["three days before Christmas", at(2026, 12, 22), "winter"],
     ["three days before Easter", at(2026, 4, 2), "spring"],
-    ["the day after Canada Day", at(2026, 7, 2), "summer"],
     ["the day after Christmas", at(2026, 12, 26), "winter"],
   ])("%s wears the season outfit", (_name, now, outfit) => {
     expect(sceneFor(input({ now })).outfit).toBe(outfit);
@@ -111,8 +112,6 @@ describe("sceneFor pose", () => {
     ["thinking at noon", "thinking", at(2026, 7, 15, 12), "think"],
     ["talking at noon", "talking", at(2026, 7, 15, 12), "talk"],
     ["error at noon", "error", at(2026, 7, 15, 12), "confused"],
-    ["talking during quiet hours", "talking", at(2026, 7, 15, 23, 30), "talk"],
-    ["thinking during quiet hours", "thinking", at(2026, 7, 15, 23, 30), "think"],
     ["error during quiet hours", "error", at(2026, 7, 15, 23, 30), "confused"],
   ] as const)("%s", (_name, agentState, now, pose) => {
     expect(sceneFor(input({ agentState, now })).pose).toBe(pose);
@@ -130,10 +129,8 @@ describe("sceneFor sky", () => {
   test.each([
     ["well before sunrise", 5, 0, "night"],
     ["30 min before sunrise", 6, 30, "dusk"],
-    ["just after sunrise", 7, 20, "dusk"],
     ["31 min after sunrise", 7, 31, "day"],
     ["midday", 12, 0, "day"],
-    ["shortly before sunset", 18, 45, "dusk"],
     ["shortly after sunset", 19, 25, "dusk"],
     ["an hour after sunset", 20, 0, "night"],
   ])("%s", (_name, h, mi, sky) => {

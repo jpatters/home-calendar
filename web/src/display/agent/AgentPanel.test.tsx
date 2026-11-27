@@ -61,39 +61,19 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("img", { name: "Assistant is talking" })).toBeTruthy();
   });
 
-  test("a short reply talks for the 2 second minimum, then returns to idle", () => {
-    render(
-      <AgentPanel agent={snapshot({ state: "talking", reply: "Hello there!" })} weather={null} settings={settings()} />,
-    );
+  test.each([
+    ["a short reply talks for the 2 second minimum", "Hello there!", 2000],
+    ["talking time scales with reply length", "a".repeat(100), 6000],
+    ["a very long reply talks for at most 12 seconds", "b".repeat(400), 12000],
+  ])("%s, then returns to idle", (_name, reply, ms) => {
+    render(<AgentPanel agent={snapshot({ state: "talking", reply })} weather={null} settings={settings()} />);
 
-    advance(1900);
-    expect(screen.getByText("Hello there!")).toBeTruthy();
+    advance(ms - 100);
+    expect(screen.getByText(reply)).toBeTruthy();
 
     advance(200);
-    expect(screen.queryByText("Hello there!")).toBeNull();
+    expect(screen.queryByText(reply)).toBeNull();
     expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
-  });
-
-  test("talking time scales with reply length", () => {
-    const reply = "a".repeat(100);
-    render(<AgentPanel agent={snapshot({ state: "talking", reply })} weather={null} settings={settings()} />);
-
-    advance(5900);
-    expect(screen.getByText(reply)).toBeTruthy();
-
-    advance(200);
-    expect(screen.queryByText(reply)).toBeNull();
-  });
-
-  test("a very long reply talks for at most 12 seconds", () => {
-    const reply = "b".repeat(400);
-    render(<AgentPanel agent={snapshot({ state: "talking", reply })} weather={null} settings={settings()} />);
-
-    advance(11900);
-    expect(screen.getByText(reply)).toBeTruthy();
-
-    advance(200);
-    expect(screen.queryByText(reply)).toBeNull();
   });
 
   test("a new talking snapshot with the same reply restarts the talking time", () => {
@@ -278,5 +258,27 @@ describe("AgentPanel", () => {
     });
 
     expect(sent).toEqual([]);
+  });
+
+  test("a send that cannot reach the server shows a confused apology, then returns to idle", async () => {
+    const apology = "I couldn't reach the server. Try again.";
+    openInput(async () => {
+      throw new Error("network down");
+    });
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "hello?" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    });
+
+    expect(screen.getByRole("img", { name: "Assistant is confused" })).toBeTruthy();
+    expect(screen.getByText(apology)).toBeTruthy();
+
+    advance(apology.length * 60 - 100);
+    expect(screen.getByText(apology)).toBeTruthy();
+
+    advance(200);
+    expect(screen.queryByText(apology)).toBeNull();
+    expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
   });
 });

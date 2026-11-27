@@ -27,6 +27,9 @@ const MAX_TALK_MS = 12000;
 const SCENE_REFRESH_MS = 60 * 1000;
 const FRAME_MS = 200;
 const WANDER_MS = 4000;
+const SEND_FAILED_REPLY = "I couldn't reach the server. Try again.";
+
+type Speech = Pick<AgentSnapshot, "state" | "reply" | "at">;
 
 const POSE_LABEL: Record<Pose, string> = {
   idle: "idle",
@@ -42,7 +45,7 @@ function speaks(state: AgentState | undefined): boolean {
   return state === "talking" || state === "error";
 }
 
-function speechEndsAt(agent: AgentSnapshot | null): number {
+function speechEndsAt(agent: Speech | null): number {
   if (!agent || !speaks(agent.state)) return 0;
   const duration = Math.min(MAX_TALK_MS, Math.max(MIN_TALK_MS, agent.reply.length * MS_PER_CHAR));
   return Date.parse(agent.at) + duration;
@@ -73,10 +76,13 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const [wander, setWander] = useState(0.5);
   const [inputOpen, setInputOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [sendFailure, setSendFailure] = useState<Speech | null>(null);
 
   const now = Date.now();
-  const talkUntil = speechEndsAt(agent);
-  const reported = agent?.state ?? "idle";
+  const speech: Speech | null =
+    sendFailure && (!agent || Date.parse(sendFailure.at) >= Date.parse(agent.at)) ? sendFailure : agent;
+  const talkUntil = speechEndsAt(speech);
+  const reported = speech?.state ?? "idle";
   const agentState: AgentState = speaks(reported) && talkUntil <= now ? "idle" : reported;
 
   const scene = sceneFor({
@@ -115,7 +121,9 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     if (!text) return;
     setInputOpen(false);
     setDraft("");
-    onSend?.(text).catch(() => {});
+    onSend?.(text).catch(() => {
+      setSendFailure({ state: "error", reply: SEND_FAILED_REPLY, at: new Date().toISOString() });
+    });
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -136,7 +144,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   });
 
   const bubble =
-    scene.pose === "think" ? "…" : scene.pose === "talk" || scene.pose === "confused" ? agent?.reply : null;
+    scene.pose === "think" ? "…" : scene.pose === "talk" || scene.pose === "confused" ? speech?.reply : null;
 
   const character = (
     <svg

@@ -58,19 +58,16 @@ describe("PoolModal", () => {
     expect(screen.getByText("27.0°C")).toBeTruthy();
   });
 
-  test("each raise tap shows the target half a degree higher immediately", () => {
+  test.each([
+    ["raise", "higher", raise, "27.5°C", "28.0°C"],
+    ["lower", "lower", lower, "26.5°C", "26.0°C"],
+  ])("each %s tap shows the target half a degree %s immediately", (_dir, _word, tap, once, twice) => {
     render(<PoolModal pool={snapshot()} onClose={() => {}} />);
-    raise();
-    expect(screen.getByText("27.5°C")).toBeTruthy();
-    raise();
-    expect(screen.getByText("28.0°C")).toBeTruthy();
+    tap();
+    expect(screen.getByText(once)).toBeTruthy();
+    tap();
+    expect(screen.getByText(twice)).toBeTruthy();
     expect(screen.queryByText("27.0°C")).toBeNull();
-  });
-
-  test("each lower tap shows the target half a degree lower immediately", () => {
-    render(<PoolModal pool={snapshot()} onClose={() => {}} />);
-    lower();
-    expect(screen.getByText("26.5°C")).toBeTruthy();
   });
 
   test("sends the final target once after a burst of taps", async () => {
@@ -94,21 +91,15 @@ describe("PoolModal", () => {
     expect(screen.getByText("27.0°C")).toBeTruthy();
   });
 
-  test("cannot raise above the heater's maximum", () => {
-    render(<PoolModal pool={snapshot({ targetC: 39.5 })} onClose={() => {}} />);
-    const btn = screen.getByRole("button", { name: /raise target/i }) as HTMLButtonElement;
+  test.each([
+    ["raise above the heater's maximum", /raise target/i, raise, 39.5, "40.0°C"],
+    ["lower below the heater's minimum", /lower target/i, lower, 10.5, "10.0°C"],
+  ])("cannot %s", (_name, buttonName, tap, targetC, limit) => {
+    render(<PoolModal pool={snapshot({ targetC })} onClose={() => {}} />);
+    const btn = screen.getByRole("button", { name: buttonName }) as HTMLButtonElement;
     expect(btn.disabled).toBe(false);
-    raise();
-    expect(screen.getByText("40.0°C")).toBeTruthy();
-    expect(btn.disabled).toBe(true);
-  });
-
-  test("cannot lower below the heater's minimum", () => {
-    render(<PoolModal pool={snapshot({ targetC: 10.5 })} onClose={() => {}} />);
-    const btn = screen.getByRole("button", { name: /lower target/i }) as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
-    lower();
-    expect(screen.getByText("10.0°C")).toBeTruthy();
+    tap();
+    expect(screen.getByText(limit)).toBeTruthy();
     expect(btn.disabled).toBe(true);
   });
 

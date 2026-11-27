@@ -1,4 +1,3 @@
-import Holidays from "date-holidays";
 import type { AgentState, WeatherSnapshot } from "../../types";
 
 export type Pose = "idle" | "think" | "talk" | "sleep" | "confused";
@@ -33,34 +32,48 @@ export interface Scene {
   precip: Precip;
 }
 
-const EASTER_SUNDAY = "easter";
-const THANKSGIVING = "2nd monday after 10-01";
+/** Easter Sunday (Gregorian) via the anonymous Meeus/Jones/Butcher algorithm. */
+function easterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
 
-const holidays = new Holidays("CA");
-holidays.setHoliday(EASTER_SUNDAY, { name: "Easter Sunday", type: "observance" });
-holidays.setHoliday(THANKSGIVING, { name: "Thanksgiving", type: "observance" });
-
-const OUTFIT_BY_RULE: Record<string, OutfitId> = {
-  "01-01": "newyear",
-  "02-14": "valentines",
-  "03-17": "stpatricks",
-  [EASTER_SUNDAY]: "easter",
-  "07-01": "canada",
-  "10-31 18:00": "halloween",
-  [THANKSGIVING]: "thanksgiving",
-  "12-25": "christmas",
-};
+/** Canadian Thanksgiving: the second Monday of October. */
+function thanksgiving(year: number): Date {
+  const firstWeekday = new Date(year, 9, 1).getDay();
+  const firstMonday = 1 + ((8 - firstWeekday) % 7);
+  return new Date(year, 9, firstMonday + 7);
+}
 
 const holidayOutfitsByYear = new Map<number, Map<string, OutfitId>>();
 
 function holidayOutfits(year: number): Map<string, OutfitId> {
   let byDate = holidayOutfitsByYear.get(year);
   if (!byDate) {
-    byDate = new Map();
-    for (const h of holidays.getHolidays(year)) {
-      const outfit = OUTFIT_BY_RULE[h.rule];
-      if (outfit) byDate.set(h.date.slice(0, 10), outfit);
-    }
+    const at = (month: number, day: number) => localDate(new Date(year, month - 1, day));
+    byDate = new Map<string, OutfitId>([
+      [at(1, 1), "newyear"],
+      [at(2, 14), "valentines"],
+      [at(3, 17), "stpatricks"],
+      [localDate(easterSunday(year)), "easter"],
+      [at(7, 1), "canada"],
+      [localDate(thanksgiving(year)), "thanksgiving"],
+      [at(10, 31), "halloween"],
+      [at(12, 25), "christmas"],
+    ]);
     holidayOutfitsByYear.set(year, byDate);
   }
   return byDate;

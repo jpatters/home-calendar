@@ -13,6 +13,7 @@ const EFFORTS: AgentEffort[] = ["none", "minimal", "low", "medium", "high", "xhi
 // reports whether they are present and never shows or accepts their values.
 export default function AssistantPanel({ value, onChange }: Props) {
   const [status, setStatus] = useState<AgentSnapshot | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,7 +21,9 @@ export default function AssistantPanel({ value, onChange }: Props) {
       (s) => {
         if (!cancelled) setStatus(s);
       },
-      () => {},
+      () => {
+        if (!cancelled) setStatusFailed(true);
+      },
     );
     return () => {
       cancelled = true;
@@ -48,6 +51,7 @@ export default function AssistantPanel({ value, onChange }: Props) {
           Let people type to Ziggy on the display
         </label>
       </div>
+      {statusFailed && <div className="hint">Status unavailable</div>}
       {status && (
         <div className="hint">
           <div>{`OpenAI key: ${status.ready ? "set" : "missing"} (OPENAI_API_KEY)`}</div>

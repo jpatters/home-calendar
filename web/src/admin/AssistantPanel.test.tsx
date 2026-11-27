@@ -63,30 +63,42 @@ function renderPanel(value: Agent = agentConfig()) {
 }
 
 describe("AssistantPanel", () => {
-  test("the enable toggle propagates", () => {
-    const changed = renderPanel(agentConfig({ enabled: false }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /enable ziggy/i }));
-    expect(changed()?.enabled).toBe(true);
+  test.each<[string, () => void, Partial<Agent>]>([
+    ["the enable toggle", () => fireEvent.click(screen.getByRole("checkbox", { name: /enable ziggy/i })), { enabled: true }],
+    [
+      "the text box toggle",
+      () => fireEvent.click(screen.getByRole("checkbox", { name: /let people type to ziggy on the display/i })),
+      { textInputEnabled: true },
+    ],
+    [
+      "the model",
+      () => fireEvent.change(screen.getByRole("textbox", { name: /model/i }), { target: { value: "gpt-7" } }),
+      { model: "gpt-7" },
+    ],
+    [
+      "the reasoning effort",
+      () => fireEvent.change(screen.getByRole("combobox", { name: /reasoning effort/i }), { target: { value: "high" } }),
+      { effort: "high" },
+    ],
+    [
+      "quiet hours start",
+      () => fireEvent.change(screen.getByLabelText(/quiet hours start/i), { target: { value: "21:30" } }),
+      { quietStart: "21:30" },
+    ],
+    [
+      "quiet hours end",
+      () => fireEvent.change(screen.getByLabelText(/quiet hours end/i), { target: { value: "06:45" } }),
+      { quietEnd: "06:45" },
+    ],
+  ])("editing %s propagates", (_name, edit, expected) => {
+    const initial = agentConfig();
+    const changed = renderPanel(initial);
+    edit();
+    expect(changed()).toEqual({ ...initial, ...expected });
   });
 
-  test("the text box toggle propagates", () => {
-    const changed = renderPanel(agentConfig({ textInputEnabled: false }));
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /let people type to ziggy on the display/i }),
-    );
-    expect(changed()?.textInputEnabled).toBe(true);
-  });
-
-  test("editing the model propagates", () => {
-    const changed = renderPanel();
-    fireEvent.change(screen.getByRole("textbox", { name: /model/i }), {
-      target: { value: "gpt-7" },
-    });
-    expect(changed()?.model).toBe("gpt-7");
-  });
-
-  test("offers every reasoning effort and propagates the choice", () => {
-    const changed = renderPanel();
+  test("offers every reasoning effort", () => {
+    renderPanel();
     const select = screen.getByRole("combobox", { name: /reasoning effort/i }) as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.value)).toEqual([
       "none",
@@ -97,16 +109,13 @@ describe("AssistantPanel", () => {
       "xhigh",
       "max",
     ]);
-    fireEvent.change(select, { target: { value: "high" } });
-    expect(changed()?.effort).toBe("high");
   });
 
-  test("editing quiet hours propagates", () => {
-    const changed = renderPanel();
-    fireEvent.change(screen.getByLabelText(/quiet hours start/i), { target: { value: "21:30" } });
-    expect(changed()?.quietStart).toBe("21:30");
-    fireEvent.change(screen.getByLabelText(/quiet hours end/i), { target: { value: "06:45" } });
-    expect(changed()?.quietEnd).toBe("06:45");
+  test("says the status is unavailable when it cannot be fetched", async () => {
+    fetchMock.mockImplementation(async () => new Response("boom", { status: 500 }));
+    renderPanel();
+    expect(await screen.findByText("Status unavailable")).toBeTruthy();
+    expect(screen.queryByText(/openai key:/i)).toBeNull();
   });
 
   test("shows the saved settings", () => {
