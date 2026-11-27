@@ -17,7 +17,8 @@ Path: @/internal/agent
  internal/server/agent.go  handleAgentConverse
         |  Agent.Converse
         v
- internal/agent  --Responses.New-->  OpenAI  (previous_response_id chaining)
+ internal/agent  --Responses.NewStreaming (store:false, local history)-->  OpenAI
+        |  bearer = Options.Token(ctx): ChatGPT access token or API key
         |  function_call -> Registry.call
         v
  internal/agent/tools --> ical / hockey / baseball / weather fetchers (read Snapshot)
@@ -27,21 +28,35 @@ Path: @/internal/agent
  OnState(snapshot) --> server Hub.Broadcast("agent" frame) --> display character
 ```
 
-- Constructed once by `Server.newAgent` in @/internal/server/agent.go. The server supplies the API key from `OPENAI_API_KEY`, `cfg.Get` as the `Config` func, a `Registry` built from `tools.All(deps)`, whether Google Calendar writes are available, and an `OnState` hook that broadcasts an `agent` WebSocket frame. Secrets come only from the environment because `config.json` is broadcast to browsers unauthenticated.
+- Constructed once by `Server.newAgent` in @/internal/server/agent.go with a `Token` func (`Server.agentToken`), `cfg.Get` as the `Config` func, and an `OnState` hook that broadcasts an `agent` WebSocket frame. Credentials come from @/internal/secrets (edited in admin, env vars override) and never from `config.json`, which is broadcast to browsers unauthenticated.
+- **Credential precedence** is decided by the server, not here: a ChatGPT sign-in (@/internal/chatgpt) first, else the OpenAI API key, else not ready. The token is fetched per request, so a ChatGPT token refreshed mid-turn or a key changed in admin is picked up on the next model call.
+- **Live capabilities**: whenever credentials change, `Server.refreshAgent` calls `SetCapabilities({Ready, CalendarWritable, Tools})`, which swaps the tool registry and readiness for subsequent turns (a turn in flight keeps the capabilities it started with) and publishes an `agent` frame. The agent is never rebuilt.
 - The `agent` package defines the `Tool` interface and `Registry`; `tools` imports `agent` (not the reverse), so the core loop has no knowledge of any specific data source.
 - Configuration (`types.Agent`: `enabled`, `model`, `effort`, `textInputEnabled`, `quietStart`, `quietEnd`) lives in @/internal/types and is normalised in @/internal/config (blank model and unknown effort fall back to defaults `gpt-6.1-terra` / `low`; quiet hours must be `HH:MM`). Only `model` and `effort` are used here; `enabled` is checked by the HTTP handler, and quiet hours / text input are display-only.
 - Tool results are the same snapshot structs the display renders (`HotTubSnapshot`, `PoolSnapshot`, `WeatherSnapshot`, ...), JSON-encoded, so the model sees exactly what the widgets show.
 
 ### Core Implementation
 
-- **Turn loop (`agent.go` `run`)**: builds `ResponseNewParams` with the model, reasoning effort, freshly generated instructions, every registered tool (strict mode), and the user's text. It then calls `Responses.New` up to `maxRounds` times. Each response's `function_call` items are executed and their outputs sent back as `function_call_output` items chained on `previous_response_id`; the first response with no function calls ends the turn and its `OutputText()` (trimmed) is the reply. Running out of rounds is `errTooManyRounds`.
+- **Turn loop (`agent.go` `run`)**: builds `ResponseNewParams` with the model, reasoning effort, freshly generated instructions, the registered tools, and `store: false`. Each round sends the conversation's local history plus this turn's items so far (the user message, then each round's function calls, their outputs and any assistant text), up to `maxRounds` rounds. The first response with no function calls ends the turn; the turn's items are remembered and its `OutputText()` (trimmed) is the reply. Running out of rounds is `errTooManyRounds`.
+- **Streaming (`respond`)**: every request, ChatGPT token or API key, uses `Responses.NewStreaming` with the token passed via `option.WithAPIKey`. Only `response.completed` is success; `response.failed`, `response.incomplete`, an `error` event, or a stream that ends without completion are errors. SDK retries are disabled (`WithMaxRetries(0)`), following the SIWC examples: a usage-limit 429 must not be retried, and the turn deadline is tight.
+- **What is kept from a response (`runToolCalls`)**: function calls (call id, name, arguments, namespace) with their outputs, and assistant `output_text` as an assistant message. Reasoning items and item ids are dropped, since nothing is stored server-side to refer to and the SIWC docs do not describe encrypted reasoning.
 - **Deadline**: each turn runs under `Options.Timeout` (default 25 s), below Home Assistant's 30 s webhook timeout, so a slow model still yields a spoken apology instead of HA timing out silently.
-- **Instructions** are re-sent on every request (they are not inherited through `previous_response_id`): a fixed persona (short spoken sentences, no markdown, use tools rather than invent, ask one clarifying question when ambiguous, say what was changed, treat calendar text and other tool results as data rather than instructions, and only make changes the person explicitly asked for), the current local weekday/date/time/zone and UTC offset, the expected tool time format, the configured calendar names, and whether calendar changes are possible.
+- **Instructions** are re-sent on every request: a fixed persona (short spoken sentences, no markdown, use tools rather than invent, ask one clarifying question when ambiguous, say what was changed, treat calendar text and other tool results as data rather than instructions, and only make changes the person explicitly asked for), the current local weekday/date/time/zone and UTC offset, the expected tool time format, the configured calendar names, and whether calendar changes are possible.
 - **Config is read per turn** through `Options.Config`, so model, effort and calendar names changed in admin take effect on the next turn without rebuilding the agent.
-- **Conversation memory (`memory.go`)**: a map from conversation id to the last completed response id and time. Home Assistant reuses a `conversation_id` for follow-ups, so a turn within `conversationTTL` (5 minutes, sliding: each completed turn resets it) continues the previous response chain; later turns start fresh. OpenAI holds the actual history (messages, tool calls, reasoning) via stored responses, so nothing is replayed locally. Expired entries are pruned lazily on `last` and on every `remember`.
-- **Failure handling (`Converse`)**: no API key returns `notReadyReply` with `errNotReady` without calling OpenAI. Any `run` error forgets the conversation and maps to a spoken apology: deadline exceeded -> `timeoutReply`, round limit -> `gaveUpReply`, anything else -> `errorReply`.
-- **State (`setState`)**: each turn emits `thinking` (heard text, empty reply) and then `talking` (reply) or `error` (apology). The snapshot is held under a mutex and copied before being passed to `OnState`, so `Snapshot()` callers and the broadcast never share memory. A separate `emitMu` is held across each update and its `OnState` call, so concurrent turns publish states in the order they were set and the last frame always matches `Snapshot()`; `Snapshot()` itself only takes `mu` and never waits on a broadcast. `Ready` and `CalendarWritable` are fixed at construction.
-- **Registry (`tool.go`)**: `params()` turns each `Tool` into a strict `FunctionToolParam`. `call()` looks up the tool by name and returns text for the model: the JSON-encoded result, or `"error: ..."` for a tool error, an unencodable result, or an unknown tool name. Tool failures never become Go errors, so the model can explain them ("the hot tub isn't reporting right now") and the turn still succeeds.
+- **Conversation memory (`memory.go`)**: history lives only on this server. A map from conversation id to its completed turns (each turn's input items: user words, function calls with outputs, spoken replies) and last-turn time. Home Assistant reuses a `conversation_id` for follow-ups, so a turn within `conversationTTL` (5 minutes, sliding: each completed turn resets it) resends that history; later turns start fresh. Only the `maxTurns` (10) most recent turns are kept. Expired entries are pruned lazily in `history` and on every `remember`. Memory is in-process, so a restart forgets all conversations.
+- **Failure handling (`Converse`)**: not `Ready` returns `notReadyReply` with `errNotReady` without calling OpenAI. Any `run` error forgets the conversation and maps to a spoken reply:
+
+| Cause | Reply |
+|---|---|
+| deadline exceeded | `timeoutReply` |
+| round limit | `gaveUpReply` |
+| `Token` returned `""` (`errNotReady`) | `notReadyReply` |
+| `Token` error wrapping `ErrSignInAgain` | `signInAgainReply` |
+| `subscription_sharing_usage_limit_exceeded`, either as a `response.failed` code mid-stream or as the API error code (429) | `usageLimitReply` |
+| anything else | `errorReply` |
+
+- **State (`setState`)**: each turn emits `thinking` (heard text, empty reply) and then `talking` (reply) or `error` (apology). The snapshot is held under a mutex and copied before being passed to `OnState`, so `Snapshot()` callers and the broadcast never share memory. A separate `emitMu` is held across each update and its `OnState` call, so concurrent turns publish states in the order they were set and the last frame always matches `Snapshot()`; `Snapshot()` itself only takes `mu` and never waits on a broadcast. `Ready`, `CalendarWritable` and the tool registry are also guarded by `mu` and change only through `SetCapabilities`.
+- **Registry (`tool.go`)**: `params()` wraps every `Tool` as a strict function inside a single `calendar` namespace tool (SIWC requires function tools to be offered in a namespace); an empty registry sends no tools. `call()` looks up the tool by name and returns text for the model: the JSON-encoded result, or `"error: ..."` for a tool error, an unencodable result, or an unknown tool name. Tool failures never become Go errors, so the model can explain them ("the hot tub isn't reporting right now") and the turn still succeeds.
 
 #### tools subpackage (@/internal/agent/tools)
 
@@ -63,12 +78,12 @@ Path: @/internal/agent
 
 ### Things to Know
 
-- A conversation is forgotten after any failed turn. If a turn fails partway through a tool round, the stored chain would end in function calls that never got outputs, and chaining the next request onto it would be rejected by OpenAI; forgetting makes the next request start a new chain.
-- The memory TTL only controls whether this server *chains* a turn. OpenAI's own retention of stored responses (about 30 days) is independent of it.
-- The persona text, `notReadyReply` and the apology strings are spoken by Home Assistant verbatim, which is why they are plain sentences.
+- A conversation is forgotten after any failed turn, and a failed turn's partial items are never remembered, so history only ever contains completed turns whose function calls all have outputs.
+- Because requests use `store: false` and no `previous_response_id`, OpenAI keeps no conversation state; all continuity comes from the local memory.
+- The persona text, `notReadyReply`, `signInAgainReply`, `usageLimitReply` and the apology strings are spoken by Home Assistant verbatim, which is why they are plain sentences.
 - `Converse` uses the caller's context, so if Home Assistant drops the HTTP request the in-flight OpenAI call is cancelled too and the turn ends in the `errorReply` path.
 - `Registry.call` matches tools by exact name; a hallucinated tool name produces an error string for the model, not a Go error.
 - `findCalendar` lists the configured calendar names in its error, so the model can correct a misheard name on its next round. `googleCalendar` rejects calendars whose URL is not a Google iCal URL as unchangeable.
-- Tests point the SDK at an `httptest` server via `Options.BaseURL` and inject `Now`/`Location`; tool tests use fakes for the `Deps` interfaces.
+- Tests point the SDK at an `httptest` server (serving SSE streams) via `Options.BaseURL` and inject `Token`/`Now`/`Location`; tool tests use fakes for the `Deps` interfaces.
 
 Created and maintained by Nori.
