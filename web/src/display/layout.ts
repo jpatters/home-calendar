@@ -1,4 +1,4 @@
-import type { DockviewApi, SerializedDockview } from "dockview-react";
+import { themeLightSpaced, type DockviewApi, type DockviewTheme, type SerializedDockview } from "dockview-react";
 import type { Config } from "../types";
 
 // Panel ids double as dockview component names and are persisted in saved
@@ -34,6 +34,13 @@ export const WIDGETS: WidgetDef[] = [
   { id: "pool", title: "Pool", enabled: (c) => c?.pool.enabled ?? true },
   { id: "hottub", title: "Hot tub", enabled: (c) => c?.hotTub.enabled ?? false },
 ];
+
+export const DOCK_THEME: DockviewTheme = {
+  ...themeLightSpaced,
+  name: "home",
+  gap: 16,
+  colorScheme: undefined,
+};
 
 const WIDGET_COLUMN_FRACTION = 0.25;
 const WIDGET_COLUMN_MIN_PX = 300;
@@ -95,4 +102,31 @@ export function applyLayout(api: DockviewApi, saved: unknown, ids: WidgetId[]): 
     return;
   }
   reconcilePanels(api, ids);
+}
+
+type SerializedNode = SerializedDockview["grid"]["root"];
+
+// Dockview (8.10) saves each panel's on-screen size, which is already reduced
+// by its share of the gaps, but on load it treats the saved sizes as the full
+// sizes the gaps are still taken out of. Left alone, every save/load cycle
+// shrinks the total and rescales it, so larger panels creep larger. Adding
+// each panel's gap share back makes the saved layout load at its saved size.
+export function serializeLayout(api: DockviewApi): SerializedDockview {
+  const layout = api.toJSON();
+  return { ...layout, grid: { ...layout.grid, root: restoreGapShares(layout.grid.root) } };
+}
+
+function restoreGapShares(node: SerializedNode): SerializedNode {
+  if (node.type !== "branch") return node;
+  const children = node.data as SerializedNode[];
+  const visible = children.filter((c) => c.visible !== false).length;
+  const share = visible > 1 ? (DOCK_THEME.gap ?? 0) * (visible - 1) / visible : 0;
+  return {
+    ...node,
+    data: children.map((child) => {
+      const restored = restoreGapShares(child);
+      if (child.visible === false || restored.size === undefined) return restored;
+      return { ...restored, size: restored.size + share };
+    }),
+  };
 }

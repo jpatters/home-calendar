@@ -705,6 +705,40 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   gap: 8px;
   padding: 0 4px;
 }
+/* Edit mode: draw the dividers between panels so they can be found and
+   dragged. Dockview already widens their hit area on touch screens. */
+.display.editing .dv-sash-container > .dv-sash { background-color: var(--border); }
+.display.editing .dv-sash-container > .dv-sash.dv-disabled,
+.display.editing .dv-sash-container > .dv-sash.dv-disabled:hover,
+.display.editing .dv-sash-container > .dv-sash.dv-disabled:active {
+  background-color: var(--border);
+  opacity: 0.4;
+}
+.display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):active {
+  background-color: var(--accent);
+  transition-delay: 0s;
+}
+@media (hover: hover) {
+  .display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):hover {
+    background-color: var(--accent);
+    transition-delay: 0s;
+  }
+  .display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after { background: var(--accent); }
+}
+.display.editing .dv-sash-container > .dv-sash::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--fg-muted);
+  pointer-events: none;
+}
+.display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):active::after { background: var(--accent); }
+.display.editing .dv-horizontal > .dv-sash-container > .dv-sash::after { width: 8px; height: 40px; }
+.display.editing .dv-vertical > .dv-sash-container > .dv-sash::after { width: 40px; height: 8px; }
+
 .status-actions {
   display: flex;
   align-items: center;

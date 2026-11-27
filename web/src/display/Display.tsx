@@ -2,10 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import {
   DockviewDefaultTab,
   DockviewReact,
-  themeLightSpaced,
   type DockviewApi,
   type DockviewReadyEvent,
-  type DockviewTheme,
   type IDockviewPanelHeaderProps,
   type IDockviewPanelProps,
 } from "dockview-react";
@@ -32,8 +30,10 @@ import { usePreservedScroll } from "./usePreservedScroll";
 import {
   applyLayout,
   buildDefaultLayout,
+  DOCK_THEME,
   enabledWidgetIds,
   reconcilePanels,
+  serializeLayout,
   type WidgetId,
 } from "./layout";
 
@@ -122,13 +122,6 @@ function Tab(props: IDockviewPanelHeaderProps) {
   return <DockviewDefaultTab {...props} hideClose />;
 }
 
-const DOCK_THEME: DockviewTheme = {
-  ...themeLightSpaced,
-  name: "home",
-  gap: 16,
-  colorScheme: undefined,
-};
-
 // The default 10px band along the dock's outer edge is too thin for a finger.
 const EDGE_DROP_ZONE = {
   activationSize: { type: "pixels" as const, value: 40 },
@@ -208,7 +201,7 @@ export default function Display({ live }: Props) {
 
   const done = () => {
     const api = apiRef.current;
-    if (api) void save(api.toJSON());
+    if (api) void save(serializeLayout(api));
   };
 
   const reset = () => {
@@ -229,7 +222,7 @@ export default function Display({ live }: Props) {
 
   return (
     <DisplayContext.Provider value={ctx}>
-      <div className="display">
+      <div className={editing ? "display editing" : "display"}>
         <div className="display-dock">
           <DockviewReact
             components={PANELS}
