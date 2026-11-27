@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import AssistantPanel from "./AssistantPanel";
 import Admin from "./Admin";
 import { buildConfig, buildLive } from "../display/displayFixtures";
-import type { Agent, AgentSnapshot, Config } from "../types";
+import type { Agent, AgentAuth, Config } from "../types";
 
 function agentConfig(overrides: Partial<Agent> = {}): Agent {
   return {
@@ -18,34 +18,74 @@ function agentConfig(overrides: Partial<Agent> = {}): Agent {
   };
 }
 
-function agentStatus(overrides: Partial<AgentSnapshot> = {}): AgentSnapshot {
+interface AuthOverrides {
+  using?: AgentAuth["using"];
+  chatgpt?: Partial<AgentAuth["chatgpt"]>;
+  apiKey?: Partial<AgentAuth["apiKey"]>;
+  google?: Partial<AgentAuth["google"]>;
+}
+
+function agentAuth(overrides: AuthOverrides = {}): AgentAuth {
   return {
-    state: "idle",
-    heard: "",
-    reply: "",
-    at: "2026-11-26T12:00:00Z",
-    ready: true,
-    calendarWritable: false,
-    ...overrides,
+    using: overrides.using ?? "none",
+    chatgpt: { signedIn: false, email: "", ...overrides.chatgpt },
+    apiKey: { set: false, fromEnv: false, ...overrides.apiKey },
+    google: { set: false, fromEnv: false, serviceAccountEmail: "", ...overrides.google },
   };
 }
 
-let status: AgentSnapshot = agentStatus();
+const AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize?client_id=abc&state=xyz";
+const SERVICE_ACCOUNT_EMAIL = "ziggy@home-calendar.iam.gserviceaccount.com";
+
+type Handler = (init?: RequestInit) => Response | Promise<Response>;
+
+let auth: AgentAuth = agentAuth();
+let routes: Record<string, Handler> = {};
 const fetchMock = vi.fn();
 
-// GET /api/agent answers with `status`; PUT /api/config echoes the body.
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
+
+function bodyOf(init?: RequestInit): unknown {
+  return JSON.parse(String(init?.body));
+}
+
+function pathOf(url: unknown): string {
+  return new URL(String(url), "http://localhost").pathname;
+}
+
+// The server's credential endpoints, backed by `auth`; tests replace entries
+// in `routes` to simulate rejections. PUT /api/config echoes the body.
 // Anything else 404s.
+function defaultRoutes(): Record<string, Handler> {
+  const using = (a: AgentAuth): AgentAuth["using"] =>
+    a.chatgpt.signedIn ? "chatgpt" : a.apiKey.set ? "apiKey" : "none";
+  const update = (next: AuthOverrides) => {
+    const merged = agentAuth({ ...auth, ...next });
+    auth = { ...merged, using: using(merged) };
+    return json(auth);
+  };
+  return {
+    "GET /api/agent/auth": () => json(auth),
+    "POST /api/agent/auth/chatgpt/start": () => json({ authorizeUrl: AUTHORIZE_URL }),
+    "POST /api/agent/auth/chatgpt/complete": () => update({ chatgpt: { signedIn: true, email: "jordan@example.com" } }),
+    "DELETE /api/agent/auth/chatgpt": () => update({ chatgpt: { signedIn: false, email: "" } }),
+    "PUT /api/agent/auth/api-key": () => update({ apiKey: { set: true, fromEnv: false } }),
+    "DELETE /api/agent/auth/api-key": () => update({ apiKey: { set: false, fromEnv: false } }),
+    "PUT /api/agent/auth/google": () =>
+      update({ google: { set: true, fromEnv: false, serviceAccountEmail: SERVICE_ACCOUNT_EMAIL } }),
+    "DELETE /api/agent/auth/google": () => update({ google: { set: false, fromEnv: false, serviceAccountEmail: "" } }),
+    "PUT /api/config": (init) => new Response(String(init?.body), { status: 200 }),
+  };
+}
+
 beforeEach(() => {
-  status = agentStatus();
+  auth = agentAuth();
+  routes = defaultRoutes();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    const path = String(url);
-    if (path.endsWith("/api/agent") && (init?.method ?? "GET") === "GET") {
-      return new Response(JSON.stringify(status), { status: 200 });
-    }
-    if (path.endsWith("/api/config") && init?.method === "PUT") {
-      return new Response(String(init.body), { status: 200 });
-    }
-    return new Response("not found", { status: 404 });
+    const handler = routes[`${init?.method ?? "GET"} ${pathOf(url)}`];
+    return handler ? handler(init) : new Response("not found", { status: 404 });
   });
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -53,8 +93,32 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
+
+function requests(method: string, path: string) {
+  return fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? "GET") === method && pathOf(url) === path);
+}
+
+function group(name: string) {
+  return within(screen.getByRole("group", { name }));
+}
+
+// Holds a route's response until release() is called, so a test can act while
+// the request is in flight.
+function holdRoute(key: string) {
+  const original = routes[key];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  routes[key] = async (init) => {
+    await gate;
+    return original(init);
+  };
+  return () => act(async () => release());
+}
 
 function renderPanel(value: Agent = agentConfig()) {
   let captured: Agent | null = null;
@@ -111,13 +175,6 @@ describe("AssistantPanel", () => {
     ]);
   });
 
-  test("says the status is unavailable when it cannot be fetched", async () => {
-    fetchMock.mockImplementation(async () => new Response("boom", { status: 500 }));
-    renderPanel();
-    expect(await screen.findByText("Status unavailable")).toBeTruthy();
-    expect(screen.queryByText(/openai key:/i)).toBeNull();
-  });
-
   test("shows the saved settings", () => {
     renderPanel(agentConfig({ model: "gpt-x", effort: "medium", quietStart: "23:00", quietEnd: "08:00" }));
     expect((screen.getByRole("textbox", { name: /model/i }) as HTMLInputElement).value).toBe("gpt-x");
@@ -126,29 +183,257 @@ describe("AssistantPanel", () => {
     expect((screen.getByLabelText(/quiet hours end/i) as HTMLInputElement).value).toBe("08:00");
   });
 
-  test("reports the OpenAI key as set and calendar changes as unavailable", async () => {
-    status = agentStatus({ ready: true, calendarWritable: false });
+});
+
+describe("AssistantPanel connection", () => {
+  test.each<[AgentAuth["using"], string]>([
+    ["chatgpt", "Using: ChatGPT subscription"],
+    ["apiKey", "Using: API key"],
+    ["none", "Not connected"],
+  ])("summarizes the connection in use (%s)", async (using, summary) => {
+    auth = agentAuth({ using });
     renderPanel();
-    expect(await screen.findByText(/openai key: set \(OPENAI_API_KEY\)/i)).toBeTruthy();
-    expect(
-      await screen.findByText(/calendar changes: unavailable \(GOOGLE_SERVICE_ACCOUNT_JSON\)/i),
-    ).toBeTruthy();
+    expect(await screen.findByText(summary)).toBeTruthy();
   });
 
-  test("reports the OpenAI key as missing and calendar changes as available", async () => {
-    status = agentStatus({ ready: false, calendarWritable: true });
+  test("says the status is unavailable when it cannot be fetched", async () => {
+    routes["GET /api/agent/auth"] = () => json({ error: "boom" }, 500);
     renderPanel();
-    expect(await screen.findByText(/openai key: missing \(OPENAI_API_KEY\)/i)).toBeTruthy();
-    expect(
-      await screen.findByText(/calendar changes: available \(GOOGLE_SERVICE_ACCOUNT_JSON\)/i),
-    ).toBeTruthy();
+    expect(await screen.findByText("Status unavailable")).toBeTruthy();
+    expect(screen.queryByText(/using:/i)).toBeNull();
+    expect(screen.queryByText("Not connected")).toBeNull();
+    expect(screen.queryByRole("group", { name: "ChatGPT account" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "OpenAI API key" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Google Calendar" })).toBeNull();
   });
 
-  test("has no field for entering a secret", async () => {
+  test("links to the setup instructions in a new tab", async () => {
     renderPanel();
-    await screen.findByText(/openai key:/i);
-    expect(screen.queryByLabelText(/key|secret|token|credential|service account/i)).toBeNull();
-    expect(document.querySelector('input[type="password"]')).toBeNull();
+    const link = (await screen.findByRole("link", { name: "Setup instructions" })) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("https://github.com/jpatters/home-calendar#assistant-setup-ziggy");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toMatch(/noopener/);
+  });
+
+  describe("ChatGPT account", () => {
+    test("starting sign-in opens the authorize URL in a new tab and offers it as a link", async () => {
+      const open = vi.spyOn(window, "open").mockReturnValue(null);
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" }));
+
+      await waitFor(() => expect(open).toHaveBeenCalled());
+      expect(requests("POST", "/api/agent/auth/chatgpt/start")).toHaveLength(1);
+      expect(open.mock.calls[0][0]).toBe(AUTHORIZE_URL);
+      const fallback = chatgpt.getAllByRole("link").find((l) => l.getAttribute("href") === AUTHORIZE_URL);
+      expect(fallback).toBeTruthy();
+      expect(chatgpt.getByLabelText("Paste the address from the sign-in tab")).toBeTruthy();
+      expect(chatgpt.getByText(/paste it here/i)).toBeTruthy();
+    });
+
+    test("finishing sign-in sends the pasted address and shows the signed-in account", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" }));
+      const field = await chatgpt.findByLabelText("Paste the address from the sign-in tab");
+      const redirect = "http://localhost:1455/auth/callback?code=c0de&state=xyz";
+      fireEvent.change(field, { target: { value: redirect } });
+      fireEvent.click(chatgpt.getByRole("button", { name: "Finish sign-in" }));
+
+      expect(await chatgpt.findByText("Signed in as jordan@example.com")).toBeTruthy();
+      const [, init] = requests("POST", "/api/agent/auth/chatgpt/complete")[0];
+      expect(bodyOf(init)).toEqual({ redirectUrl: redirect });
+      expect(chatgpt.getByRole("button", { name: "Sign out" })).toBeTruthy();
+      expect(chatgpt.queryByRole("button", { name: "Sign in with ChatGPT" })).toBeNull();
+      expect(screen.getByText("Using: ChatGPT subscription")).toBeTruthy();
+    });
+
+    test("shows the server's error when finishing sign-in is rejected", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      routes["POST /api/agent/auth/chatgpt/complete"] = () =>
+        json({ error: "That address doesn't contain a sign-in code" }, 400);
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" }));
+      fireEvent.change(await chatgpt.findByLabelText("Paste the address from the sign-in tab"), {
+        target: { value: "http://localhost:1455/nope" },
+      });
+      fireEvent.click(chatgpt.getByRole("button", { name: "Finish sign-in" }));
+
+      expect(await chatgpt.findByText("That address doesn't contain a sign-in code")).toBeTruthy();
+      expect(chatgpt.queryByText(/signed in as/i)).toBeNull();
+    });
+
+    test("finish sign-in stays disabled until an address is pasted", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" }));
+      await chatgpt.findByLabelText("Paste the address from the sign-in tab");
+      const finish = chatgpt.getByRole("button", { name: "Finish sign-in" }) as HTMLButtonElement;
+
+      expect(finish.disabled).toBe(true);
+      fireEvent.click(finish);
+      expect(requests("POST", "/api/agent/auth/chatgpt/complete")).toHaveLength(0);
+    });
+
+    test("clicking sign-in twice while it is starting sends one request", async () => {
+      const open = vi.spyOn(window, "open").mockReturnValue(null);
+      const release = holdRoute("POST /api/agent/auth/chatgpt/start");
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      const signIn = chatgpt.getByRole("button", { name: "Sign in with ChatGPT" });
+      fireEvent.click(signIn);
+      fireEvent.click(signIn);
+      await release();
+
+      await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+      expect(requests("POST", "/api/agent/auth/chatgpt/start")).toHaveLength(1);
+    });
+
+    test("signing out forgets the account and offers sign-in again", async () => {
+      auth = agentAuth({ using: "chatgpt", chatgpt: { signedIn: true, email: "jordan@example.com" } });
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      await chatgpt.findByText("Signed in as jordan@example.com");
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign out" }));
+
+      expect(await chatgpt.findByRole("button", { name: "Sign in with ChatGPT" })).toBeTruthy();
+      expect(requests("DELETE", "/api/agent/auth/chatgpt")).toHaveLength(1);
+      expect(chatgpt.queryByText(/signed in as/i)).toBeNull();
+      expect(screen.getByText("Not connected")).toBeTruthy();
+    });
+  });
+
+  describe("OpenAI API key", () => {
+    test("saving sends the key, reports it saved, and clears the field", async () => {
+      renderPanel();
+      const apiKey = await waitFor(() => group("OpenAI API key"));
+      await apiKey.findByText("Not set");
+      const input = apiKey.getByLabelText(/api key/i) as HTMLInputElement;
+      expect(input.type).toBe("password");
+      fireEvent.change(input, { target: { value: "sk-secret-123" } });
+      fireEvent.click(apiKey.getByRole("button", { name: "Save" }));
+
+      expect(await apiKey.findByText("Saved")).toBeTruthy();
+      const [, init] = requests("PUT", "/api/agent/auth/api-key")[0];
+      expect(bodyOf(init)).toEqual({ key: "sk-secret-123" });
+      expect(input.value).toBe("");
+      expect(screen.getByText("Using: API key")).toBeTruthy();
+    });
+
+    test("clearing removes the saved key", async () => {
+      auth = agentAuth({ using: "apiKey", apiKey: { set: true } });
+      renderPanel();
+      const apiKey = await waitFor(() => group("OpenAI API key"));
+      await apiKey.findByText("Saved");
+      fireEvent.click(apiKey.getByRole("button", { name: "Clear" }));
+
+      expect(await apiKey.findByText("Not set")).toBeTruthy();
+      expect(requests("DELETE", "/api/agent/auth/api-key")).toHaveLength(1);
+      expect(screen.getByText("Not connected")).toBeTruthy();
+    });
+
+    test("clicking save twice while saving sends one request", async () => {
+      const release = holdRoute("PUT /api/agent/auth/api-key");
+      renderPanel();
+      const apiKey = await waitFor(() => group("OpenAI API key"));
+      fireEvent.change(apiKey.getByLabelText(/api key/i), { target: { value: "sk-secret-123" } });
+      const save = apiKey.getByRole("button", { name: "Save" });
+      fireEvent.click(save);
+      fireEvent.click(save);
+      await release();
+
+      expect(await apiKey.findByText("Saved")).toBeTruthy();
+      expect(requests("PUT", "/api/agent/auth/api-key")).toHaveLength(1);
+    });
+
+    test("shows the server's error when the key is rejected", async () => {
+      routes["PUT /api/agent/auth/api-key"] = () => json({ error: "key must not be empty" }, 400);
+      renderPanel();
+      const apiKey = await waitFor(() => group("OpenAI API key"));
+      const input = (await apiKey.findByLabelText(/api key/i)) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "   " } });
+      fireEvent.click(apiKey.getByRole("button", { name: "Save" }));
+
+      expect(await apiKey.findByText("key must not be empty")).toBeTruthy();
+      expect(apiKey.queryByText("Saved")).toBeNull();
+    });
+
+    test("is locked when the key comes from the environment", async () => {
+      auth = agentAuth({ using: "apiKey", apiKey: { set: true, fromEnv: true } });
+      renderPanel();
+      const apiKey = await waitFor(() => group("OpenAI API key"));
+      expect(await apiKey.findByText("Set by environment (OPENAI_API_KEY)")).toBeTruthy();
+      expect((apiKey.getByLabelText(/api key/i) as HTMLInputElement).disabled).toBe(true);
+      expect((apiKey.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((apiKey.getByRole("button", { name: "Clear" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  describe("Google Calendar", () => {
+    const KEY_JSON = JSON.stringify({
+      type: "service_account",
+      client_email: SERVICE_ACCOUNT_EMAIL,
+      private_key: "-----BEGIN PRIVATE KEY-----\nsecretstuff\n-----END PRIVATE KEY-----\n",
+    });
+
+    test("reports when no key is saved", async () => {
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      expect(await google.findByText("Not set")).toBeTruthy();
+      expect(google.queryByText(/share each calendar/i)).toBeNull();
+    });
+
+    test("saving sends the JSON key, clears the field, and says which account to share with", async () => {
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      const textarea = (await google.findByLabelText("Service account JSON key")) as HTMLTextAreaElement;
+      expect(textarea.tagName).toBe("TEXTAREA");
+      fireEvent.change(textarea, { target: { value: KEY_JSON } });
+      fireEvent.click(google.getByRole("button", { name: "Save" }));
+
+      expect(
+        await google.findByText(`Share each calendar with ${SERVICE_ACCOUNT_EMAIL} (Make changes to events)`),
+      ).toBeTruthy();
+      const [, init] = requests("PUT", "/api/agent/auth/google")[0];
+      expect(bodyOf(init)).toEqual({ json: KEY_JSON });
+      expect(textarea.value).toBe("");
+    });
+
+    test("shows the server's error when the JSON key is rejected", async () => {
+      routes["PUT /api/agent/auth/google"] = () => json({ error: "not a service account key" }, 400);
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      fireEvent.change(await google.findByLabelText("Service account JSON key"), { target: { value: "{}" } });
+      fireEvent.click(google.getByRole("button", { name: "Save" }));
+
+      expect(await google.findByText("not a service account key")).toBeTruthy();
+      expect(google.queryByText(/share each calendar/i)).toBeNull();
+    });
+
+    test("clearing removes the saved key", async () => {
+      auth = agentAuth({ google: { set: true, serviceAccountEmail: SERVICE_ACCOUNT_EMAIL } });
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      await google.findByText(`Share each calendar with ${SERVICE_ACCOUNT_EMAIL} (Make changes to events)`);
+      fireEvent.click(google.getByRole("button", { name: "Clear" }));
+
+      expect(await google.findByText("Not set")).toBeTruthy();
+      expect(google.queryByText(/share each calendar/i)).toBeNull();
+      expect(requests("DELETE", "/api/agent/auth/google")).toHaveLength(1);
+    });
+
+    test("is locked when the key comes from the environment", async () => {
+      auth = agentAuth({ google: { set: true, fromEnv: true, serviceAccountEmail: SERVICE_ACCOUNT_EMAIL } });
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      expect(await google.findByText("Set by environment (GOOGLE_SERVICE_ACCOUNT_JSON)")).toBeTruthy();
+      expect((google.getByLabelText("Service account JSON key") as HTMLTextAreaElement).disabled).toBe(true);
+      expect((google.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((google.getByRole("button", { name: "Clear" }) as HTMLButtonElement).disabled).toBe(true);
+    });
   });
 });
 
@@ -167,7 +452,7 @@ describe("Admin assistant tab", () => {
       target: { value: "gpt-7" },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(within(screen.getByRole("contentinfo")).getByRole("button", { name: "Save" }));
     });
 
     const put = fetchMock.mock.calls.find(
@@ -176,5 +461,25 @@ describe("Admin assistant tab", () => {
     expect(put).toBeTruthy();
     const saved: Config = JSON.parse(String(put![1].body));
     expect(saved.agent).toEqual({ ...config.agent, enabled: true, model: "gpt-7" });
+  });
+
+  test("credentials save immediately without the main Save and without touching the config", async () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Admin live={buildLive(buildConfig())} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Assistant" }));
+    const mainSave = within(screen.getByRole("contentinfo")).getByRole("button", { name: "Save" }) as HTMLButtonElement;
+    expect(mainSave.disabled).toBe(true);
+    const apiKey = await waitFor(() => group("OpenAI API key"));
+    fireEvent.change(apiKey.getByLabelText(/api key/i), { target: { value: "sk-live-456" } });
+    fireEvent.click(apiKey.getByRole("button", { name: "Save" }));
+
+    expect(await apiKey.findByText("Saved")).toBeTruthy();
+    expect(requests("PUT", "/api/agent/auth/api-key")).toHaveLength(1);
+    expect(requests("PUT", "/api/config")).toHaveLength(0);
+    expect(mainSave.disabled).toBe(true);
   });
 });

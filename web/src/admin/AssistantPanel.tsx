@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Agent, AgentEffort, AgentSnapshot } from "../types";
-import { getAgentStatus } from "../api";
+import type { Agent, AgentAuth, AgentEffort } from "../types";
+import { getAgentAuth } from "../api";
+import AssistantConnection from "./AssistantConnection";
 
 interface Props {
   value: Agent;
@@ -9,17 +10,15 @@ interface Props {
 
 const EFFORTS: AgentEffort[] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
-// Secrets are configured only through the server's environment; this panel
-// reports whether they are present and never shows or accepts their values.
 export default function AssistantPanel({ value, onChange }: Props) {
-  const [status, setStatus] = useState<AgentSnapshot | null>(null);
+  const [auth, setAuth] = useState<AgentAuth | null>(null);
   const [statusFailed, setStatusFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getAgentStatus().then(
-      (s) => {
-        if (!cancelled) setStatus(s);
+    getAgentAuth().then(
+      (a) => {
+        if (!cancelled) setAuth(a);
       },
       () => {
         if (!cancelled) setStatusFailed(true);
@@ -52,14 +51,7 @@ export default function AssistantPanel({ value, onChange }: Props) {
         </label>
       </div>
       {statusFailed && <div className="hint">Status unavailable</div>}
-      {status && (
-        <div className="hint">
-          <div>{`OpenAI key: ${status.ready ? "set" : "missing"} (OPENAI_API_KEY)`}</div>
-          <div>
-            {`Calendar changes: ${status.calendarWritable ? "available" : "unavailable"} (GOOGLE_SERVICE_ACCOUNT_JSON)`}
-          </div>
-        </div>
-      )}
+      {auth && <AssistantConnection auth={auth} onAuth={setAuth} />}
       <div className="form-grid">
         <label>
           <span>Model</span>

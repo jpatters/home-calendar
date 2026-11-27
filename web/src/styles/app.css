@@ -1046,6 +1046,24 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   pointer-events: none;
 }
 
+.assistant-connection { margin: 0 0 16px; }
+.assistant-connection h3 { margin: 0 0 8px; font-size: 1rem; }
+.panel-disabled .assistant-connection .hint { opacity: 1; pointer-events: auto; }
+.assistant-connection fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.assistant-connection legend { font-weight: 500; padding: 0 4px; }
+.assistant-connection label { display: flex; flex-direction: column; gap: 6px; }
+.assistant-connection label span { color: var(--fg-muted); font-size: 0.85rem; }
+.assistant-connection .hint { margin: 0; overflow-wrap: anywhere; }
+.credential-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 .toggle-row {
   display: flex;
   gap: 16px;

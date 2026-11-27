@@ -1,5 +1,5 @@
 import type {
-  AgentSnapshot,
+  AgentAuth,
   BaseballTeam,
   Config,
   GeoResult,
@@ -86,10 +86,51 @@ export async function setPoolTarget(targetC: number): Promise<PoolSnapshot> {
   return res.json();
 }
 
-export async function getAgentStatus(): Promise<AgentSnapshot> {
-  const res = await fetch("/api/agent");
-  if (!res.ok) throw new Error(`GET /api/agent ${res.status}`);
+// The credential endpoints answer errors with {"error": "message"}; that
+// message is what the admin shows, so it becomes the thrown error's message.
+async function agentAuthRequest<T = AgentAuth>(method: string, path: string, body?: object): Promise<T> {
+  const res = await fetch(`/api/agent/auth${path}`, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error || `${method} /api/agent/auth${path} ${res.status}`);
+  }
   return res.json();
+}
+
+export function getAgentAuth(): Promise<AgentAuth> {
+  return agentAuthRequest("GET", "");
+}
+
+export function startChatGPTSignIn(): Promise<{ authorizeUrl: string }> {
+  return agentAuthRequest("POST", "/chatgpt/start");
+}
+
+export function completeChatGPTSignIn(redirectUrl: string): Promise<AgentAuth> {
+  return agentAuthRequest("POST", "/chatgpt/complete", { redirectUrl });
+}
+
+export function signOutChatGPT(): Promise<AgentAuth> {
+  return agentAuthRequest("DELETE", "/chatgpt");
+}
+
+export function putAgentApiKey(key: string): Promise<AgentAuth> {
+  return agentAuthRequest("PUT", "/api-key", { key });
+}
+
+export function clearAgentApiKey(): Promise<AgentAuth> {
+  return agentAuthRequest("DELETE", "/api-key");
+}
+
+export function putAgentGoogle(json: string): Promise<AgentAuth> {
+  return agentAuthRequest("PUT", "/google", { json });
+}
+
+export function clearAgentGoogle(): Promise<AgentAuth> {
+  return agentAuthRequest("DELETE", "/google");
 }
 
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {

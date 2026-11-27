@@ -279,6 +279,13 @@ export interface AgentSnapshot {
   calendarWritable: boolean;
 }
 
+export interface AgentAuth {
+  using: "chatgpt" | "apiKey" | "none";
+  chatgpt: { signedIn: boolean; email: string };
+  apiKey: { set: boolean; fromEnv: boolean };
+  google: { set: boolean; fromEnv: boolean; serviceAccountEmail: string };
+}
+
 export type WSFrame =
   | {
       type: "snapshot";
