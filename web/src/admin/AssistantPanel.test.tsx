@@ -304,6 +304,25 @@ describe("AssistantPanel connection", () => {
       expect(chatgpt.queryByText(/signed in as/i)).toBeNull();
       expect(screen.getByText("Not connected")).toBeTruthy();
     });
+
+    test("tells you when OpenAI didn't confirm the sign-out", async () => {
+      auth = agentAuth({ using: "chatgpt", chatgpt: { signedIn: true, email: "jordan@example.com" } });
+      routes["DELETE /api/agent/auth/chatgpt"] = () =>
+        json({ ...agentAuth(), warning: "OpenAI didn't confirm the sign-out; revoke access from your ChatGPT settings." });
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      await chatgpt.findByText("Signed in as jordan@example.com");
+      fireEvent.click(chatgpt.getByRole("button", { name: "Sign out" }));
+
+      expect(await chatgpt.findByText(/didn't confirm the sign-out/)).toBeTruthy();
+      expect(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeTruthy();
+    });
+
+    test("notes that the plan is the signed-in person's to use", async () => {
+      renderPanel();
+      const chatgpt = await waitFor(() => group("ChatGPT account"));
+      expect(chatgpt.getByText(/uses your ChatGPT plan/i)).toBeTruthy();
+    });
   });
 
   describe("OpenAI API key", () => {

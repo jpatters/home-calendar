@@ -31,7 +31,9 @@ export default function AssistantPanel({ value, onChange }: Props) {
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Assistant (Ziggy)</h2>
+      <div className="panel-header">
+        <h2>Assistant (Ziggy)</h2>
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

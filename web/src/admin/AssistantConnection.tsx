@@ -63,8 +63,10 @@ function ChatGPTAccount({ auth, onAuth }: Props) {
   const { busy, error, run } = useAction();
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const [redirectUrl, setRedirectUrl] = useState("");
+  const [warning, setWarning] = useState("");
 
   const start = async () => {
+    setWarning("");
     const res = await run(startChatGPTSignIn);
     if (!res) return;
     setAuthorizeUrl(res.authorizeUrl);
@@ -81,12 +83,19 @@ function ChatGPTAccount({ auth, onAuth }: Props) {
 
   const signOut = async () => {
     const next = await run(signOutChatGPT);
-    if (next) onAuth(next);
+    if (!next) return;
+    setWarning(next.warning ?? "");
+    onAuth(next);
   };
 
   return (
     <fieldset>
       <legend>ChatGPT account</legend>
+      <div className="hint">
+        Ziggy uses your ChatGPT plan for everyone who talks to it. OpenAI's Sign in with ChatGPT terms expect only
+        the signed-in person's own activity to use their plan, so use an API key if others in the house will talk to
+        Ziggy.
+      </div>
       {auth.chatgpt.signedIn ? (
         <div className="credential-row">
           <span>{`Signed in as ${auth.chatgpt.email}`}</span>
@@ -117,6 +126,7 @@ function ChatGPTAccount({ auth, onAuth }: Props) {
           )}
         </>
       )}
+      {warning && <div className="error">{warning}</div>}
       {error && <div className="error">{error}</div>}
     </fieldset>
   );

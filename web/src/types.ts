@@ -284,6 +284,8 @@ export interface AgentAuth {
   chatgpt: { signedIn: boolean; email: string };
   apiKey: { set: boolean; fromEnv: boolean };
   google: { set: boolean; fromEnv: boolean; serviceAccountEmail: string };
+  /** Present only after a sign-out OpenAI didn't confirm. */
+  warning?: string;
 }
 
 export type WSFrame =
