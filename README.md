@@ -421,15 +421,28 @@ key" or "Not connected").
    Ziggy, use an API key instead.
 3. **Calendar changes (optional).** Without this Ziggy can read the calendars
    but not change them.
-   - In Google Cloud, enable the Google Calendar API, create a service account,
-     and download a JSON key for it.
-   - Paste the whole JSON key into **Google Calendar** in admin and press
-     **Save**. Admin then shows the service account's email address.
-   - In Google Calendar, share **each** calendar Ziggy should be able to edit
-     with that email address, with the permission **Make changes to events**.
-   - Calendars are matched by the names you gave them in admin, and the Google
-     calendar is identified from its iCal URL, so only calendars added with a
-     Google Calendar iCal address can be changed.
+   1. In the Google Cloud console,
+      [create a project](https://console.cloud.google.com/projectcreate) (any
+      name, such as "Home calendar"), or pick an existing one.
+   2. [Enable the Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)
+      for that project.
+   3. Open [Service accounts](https://console.cloud.google.com/iam-admin/serviceaccounts),
+      choose **Create service account**, name it (e.g. "ziggy") and press
+      **Done** — it needs no roles or permissions.
+   4. Open the new service account → **Keys** tab → **Add key → Create new
+      key → JSON**. Your browser downloads a `.json` file; keep it private.
+   5. Open the file in a text editor, copy everything, paste it into
+      **Google Calendar** in admin and press **Save**. Admin then shows the
+      service account's email address.
+   6. In [Google Calendar settings](https://calendar.google.com/calendar/r/settings),
+      open **each** calendar Ziggy should be able to change → **Share with
+      specific people or groups → Add people and groups**, enter that email
+      address and choose **Make changes to events**.
+
+   The same steps are shown in admin under **How to get a service account
+   key**. Calendars are matched by the names you gave them in admin, and the
+   Google calendar is identified from its iCal URL, so only calendars added
+   with a Google Calendar iCal address can be changed.
 4. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
    reasoning effort and quiet hours, and press **Save**. (Connection changes
    apply immediately and don't need Save.)

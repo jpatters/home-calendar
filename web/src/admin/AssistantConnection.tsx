@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AgentAuth } from "../types";
 import {
   clearAgentApiKey,
@@ -141,9 +141,10 @@ interface SecretProps extends Props {
   save: (secret: string) => Promise<AgentAuth>;
   clear: () => Promise<AgentAuth>;
   savedNote?: string;
+  help?: ReactNode;
 }
 
-function SecretField({ onAuth, legend, label, envVar, state, multiline, save, clear, savedNote }: SecretProps) {
+function SecretField({ onAuth, legend, label, envVar, state, multiline, save, clear, savedNote, help }: SecretProps) {
   const { busy, error, run } = useAction();
   const [secret, setSecret] = useState("");
   const locked = state.fromEnv;
@@ -165,6 +166,7 @@ function SecretField({ onAuth, legend, label, envVar, state, multiline, save, cl
   return (
     <fieldset>
       <legend>{legend}</legend>
+      {help}
       <label>
         <span>{label}</span>
         {multiline ? (
@@ -225,6 +227,63 @@ function GoogleCalendar({ auth, onAuth }: Props) {
       save={putAgentGoogle}
       clear={clearAgentGoogle}
       savedNote={`Share each calendar with ${auth.google.serviceAccountEmail} (Make changes to events)`}
+      help={<GoogleKeySteps />}
     />
+  );
+}
+
+function ConsoleLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+// Step-by-step setup for the Google service-account key that lets Ziggy change
+// calendar events; reading calendars works without it.
+function GoogleKeySteps() {
+  return (
+    <details className="setup-steps">
+      <summary>How to get a service account key</summary>
+      <ol>
+        <li>
+          In the Google Cloud console,{" "}
+          <ConsoleLink href="https://console.cloud.google.com/projectcreate">create a project</ConsoleLink> (any
+          name, such as "Home calendar"), or pick an existing one.
+        </li>
+        <li>
+          <ConsoleLink href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com">
+            Enable the Google Calendar API
+          </ConsoleLink>{" "}
+          for that project.
+        </li>
+        <li>
+          Open{" "}
+          <ConsoleLink href="https://console.cloud.google.com/iam-admin/serviceaccounts">Service accounts</ConsoleLink>{" "}
+          and choose <strong>Create service account</strong>. Give it a name such as "ziggy", then press{" "}
+          <strong>Done</strong>; it needs no roles or permissions.
+        </li>
+        <li>
+          Open the new service account, go to the <strong>Keys</strong> tab, and choose{" "}
+          <strong>Add key → Create new key → JSON</strong>. Your browser downloads a <code>.json</code> file.
+        </li>
+        <li>
+          Open that file in a text editor, copy everything in it, paste it below, and press <strong>Save</strong>.
+          The service account's email address then appears here.
+        </li>
+        <li>
+          In{" "}
+          <ConsoleLink href="https://calendar.google.com/calendar/r/settings">Google Calendar settings</ConsoleLink>,
+          open each calendar Ziggy should be able to change, go to{" "}
+          <strong>Share with specific people or groups → Add people and groups</strong>, enter that email address,
+          and choose <strong>Make changes to events</strong>.
+        </li>
+      </ol>
+      <p className="hint">
+        Only calendars added in admin with their Google "Secret address in iCal format" can be changed. Keep the
+        downloaded file private; it grants access to every calendar you share with it.
+      </p>
+    </details>
   );
 }

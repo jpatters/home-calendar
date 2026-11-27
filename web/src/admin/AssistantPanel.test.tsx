@@ -392,6 +392,18 @@ describe("AssistantPanel connection", () => {
   });
 
   describe("Google Calendar", () => {
+    test("explains how to create the key, linking to the Google Cloud console pages", async () => {
+      renderPanel();
+      const google = await waitFor(() => group("Google Calendar"));
+      fireEvent.click(google.getByText("How to get a service account key"));
+
+      const hrefs = google.getAllByRole("link").map((a) => a.getAttribute("href"));
+      expect(hrefs).toContain("https://console.cloud.google.com/apis/library/calendar-json.googleapis.com");
+      expect(hrefs).toContain("https://console.cloud.google.com/iam-admin/serviceaccounts");
+      expect(google.getByText(/Add key/)).toBeTruthy();
+      expect(google.getByText(/Make changes to events/)).toBeTruthy();
+    });
+
     const KEY_JSON = JSON.stringify({
       type: "service_account",
       client_email: SERVICE_ACCOUNT_EMAIL,
