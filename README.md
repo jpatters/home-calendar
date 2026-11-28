@@ -350,7 +350,10 @@ lie within the `minTargetC`–`maxTargetC` range the snapshot reports (`400`
 otherwise), and the fresh reading is broadcast as a `pool` frame.
 
 `POST /api/agent/converse` takes `{"conversation_id": "...", "query": "..."}`
-and answers `200 {"output": "..."}` with the text to speak. It answers `200`
+and answers `200 {"output": "..."}` with the text to speak. With
+`"stream": true` (Webhook Conversation's response streaming) it answers
+newline-delimited JSON instead: `{"type": "item", "content": "..."}` with the
+whole reply, then `{"type": "end"}`. It answers `200`
 even when the assistant is disabled, isn't connected, or fails — the `output`
 then explains the problem — because Home Assistant speaks nothing on an error
 status. Only a missing or blank `query` gets `400`. Follow-ups within five
@@ -455,7 +458,8 @@ key" or "Not connected").
      Conversation**, then on its page **Add Entry → Conversation Agent** with
      **Webhook URL** `http://<host>:8080/api/agent/converse` (the host port
      you mapped in `docker-compose.yml`), **Output Field** `output`,
-     **Timeout** 30, **Enable Response Streaming** off, and **System Prompt**
+     **Timeout** 30, **Enable Response Streaming** either way (Ziggy sends
+     the whole reply at once), and **System Prompt**
      empty (Ziggy has its own).
    - Under **Settings → Voice assistants**, choose that agent as the
      conversation agent of an Assist pipeline.

@@ -119,18 +119,33 @@ func (s *Server) handleAgentConverse(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ConversationID string `json:"conversation_id"`
 		Query          string `json:"query"`
+		Stream         bool   `json:"stream"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxConverseBody)).Decode(&body); err != nil || strings.TrimSpace(body.Query) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"output": "I didn't catch that."})
 		return
 	}
 	if !s.cfg.Get().Agent.Enabled {
-		writeJSON(w, http.StatusOK, map[string]string{"output": agentDisabledReply})
+		writeSpoken(w, body.Stream, agentDisabledReply)
 		return
 	}
 	reply, err := s.agent.Converse(r.Context(), body.ConversationID, strings.TrimSpace(body.Query))
 	if err != nil {
 		log.Printf("agent: %v", err)
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"output": reply})
+	writeSpoken(w, body.Stream, reply)
+}
+
+// writeSpoken answers Home Assistant's Webhook Conversation integration: a
+// single {"output"} object, or, when it asked to stream, newline-delimited
+// JSON with the whole reply as one item followed by an end marker.
+func writeSpoken(w http.ResponseWriter, stream bool, reply string) {
+	if !stream {
+		writeJSON(w, http.StatusOK, map[string]string{"output": reply})
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	enc := json.NewEncoder(w)
+	_ = enc.Encode(map[string]string{"type": "item", "content": reply})
+	_ = enc.Encode(map[string]string{"type": "end"})
 }

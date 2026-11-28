@@ -210,6 +210,57 @@ func TestAgentConverseReturnsSpokenReplyForHomeAssistant(t *testing.T) {
 	}
 }
 
+// With response streaming enabled (the integration's default), Home Assistant
+// sends "stream": true and reads newline-delimited JSON items.
+func TestAgentConverseStreamsTheReplyWhenHomeAssistantAsks(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "It's sunny and minus three.")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	resp, err := http.Post(app.URL+"/api/agent/converse", "application/json",
+		bytes.NewBufferString(`{"conversation_id":"01J8","query":"What's the weather?","stream":true}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	want := []string{`{"content":"It's sunny and minus three.","type":"item"}`, `{"type":"end"}`}
+	if len(lines) != len(want) {
+		t.Fatalf("lines = %q, want %q", lines, want)
+	}
+	for i := range want {
+		var got, exp any
+		if err := json.Unmarshal([]byte(lines[i]), &got); err != nil {
+			t.Fatalf("line %d %q is not JSON: %v", i, lines[i], err)
+		}
+		_ = json.Unmarshal([]byte(want[i]), &exp)
+		if fmt.Sprint(got) != fmt.Sprint(exp) {
+			t.Errorf("line %d = %s, want %s", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestAgentConverseStreamsSpokenRefusalsToo(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "unused")
+	app := agentApp(t, false, "sk-test", openai.URL)
+
+	resp, err := http.Post(app.URL+"/api/agent/converse", "application/json",
+		bytes.NewBufferString(`{"conversation_id":"c","query":"hello","stream":true}`))
+	if err != nil {
+		t.Fatalf("POST: %v", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+
+	if !strings.HasPrefix(string(raw), `{"content":`) || !strings.HasSuffix(strings.TrimSpace(string(raw)), `{"type":"end"}`) {
+		t.Errorf("body = %s, want a streamed item then end", raw)
+	}
+}
+
 // Home Assistant's webhook conversation integration treats any non-200 as a
 // failure and speaks nothing, so refusals are 200s with a spoken output.
 func TestAgentConverseExplainsWhenAgentDisabled(t *testing.T) {
