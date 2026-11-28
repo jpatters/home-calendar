@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
 import type { Calendar } from "../types";
 
 interface Props {
   value: Calendar[];
   onChange: (c: Calendar[]) => void;
+  actions?: ReactNode;
 }
 
 const DEFAULT_COLORS = ["#4285f4", "#0b8043", "#d50000", "#f4511e", "#8e24aa", "#3f51b5"];
@@ -12,7 +14,7 @@ function randomId(): string {
   return Math.random().toString(36).slice(2);
 }
 
-export default function CalendarsPanel({ value, onChange }: Props) {
+export default function CalendarsPanel({ actions, value, onChange }: Props) {
   const update = (i: number, patch: Partial<Calendar>) => {
     const next = value.slice();
     next[i] = { ...next[i], ...patch };
@@ -37,7 +39,10 @@ export default function CalendarsPanel({ value, onChange }: Props) {
 
   return (
     <div className="panel">
-      <h2>Calendars</h2>
+      <div className="panel-header">
+        <h2>Calendars</h2>
+        {actions}
+      </div>
       <p className="hint">
         Paste the "Secret address in iCal format" URL from each Google Calendar's settings. Each calendar's events are merged into the display.
       </p>

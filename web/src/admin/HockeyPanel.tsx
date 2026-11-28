@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Hockey, HockeyTeam } from "../types";
 import { hockeyTeamSearch } from "../api";
 
 interface Props {
   value: Hockey;
   onChange: (h: Hockey) => void;
+  actions?: ReactNode;
 }
 
-export default function HockeyPanel({ value, onChange }: Props) {
+export default function HockeyPanel({ actions, value, onChange }: Props) {
   const [query, setQuery] = useState(value.teamName);
   const [results, setResults] = useState<HockeyTeam[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -60,7 +61,10 @@ export default function HockeyPanel({ value, onChange }: Props) {
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Hockey (NHL)</h2>
+      <div className="panel-header">
+        <h2>Hockey (NHL)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

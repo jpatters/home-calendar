@@ -1,14 +1,19 @@
+import type { ReactNode } from "react";
 import type { HotTub } from "../types";
 
 interface Props {
   value: HotTub;
   onChange: (h: HotTub) => void;
+  actions?: ReactNode;
 }
 
-export default function HotTubPanel({ value, onChange }: Props) {
+export default function HotTubPanel({ actions, value, onChange }: Props) {
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Hot tub (in.touch2)</h2>
+      <div className="panel-header">
+        <h2>Hot tub (in.touch2)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

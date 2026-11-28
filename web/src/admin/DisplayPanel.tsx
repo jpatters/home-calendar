@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Display } from "../types";
 import { MODE_LABELS, MODES, PALETTE_LABELS, PALETTES } from "../theme";
 
@@ -5,12 +6,16 @@ interface Props {
   value: Display;
   onChange: (d: Display) => void;
   autoAvailable: boolean;
+  actions?: ReactNode;
 }
 
-export default function DisplayPanel({ value, onChange, autoAvailable }: Props) {
+export default function DisplayPanel({ actions, value, onChange, autoAvailable }: Props) {
   return (
     <div className="panel">
-      <h2>Display</h2>
+      <div className="panel-header">
+        <h2>Display</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

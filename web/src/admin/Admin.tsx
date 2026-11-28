@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Config } from "../types";
 import type { LiveData } from "../useLiveData";
@@ -17,11 +17,37 @@ interface Props {
   live: LiveData;
 }
 
-type Tab = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "display";
+type SectionId = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "display";
+
+interface Section {
+  id: SectionId;
+  label: string;
+  // Refresh is offered from the saved config, matching when the server's
+  // refresh endpoint will accept the request.
+  refresh?: {
+    noun: string;
+    run: () => Promise<void>;
+    available: (c: Config) => boolean;
+  };
+}
+
+const SECTIONS: Section[] = [
+  { id: "calendars", label: "Calendars", refresh: { noun: "calendars", run: refreshCalendars, available: (c) => c.display.calendarEnabled } },
+  { id: "weather", label: "Weather", refresh: { noun: "weather", run: refreshWeather, available: (c) => c.weather.enabled } },
+  { id: "tide", label: "Tide", refresh: { noun: "tide", run: refreshTide, available: (c) => c.tide.enabled } },
+  { id: "snowday", label: "Snow Day", refresh: { noun: "snow day", run: refreshSnowDay, available: (c) => c.snowDay.enabled } },
+  { id: "baseball", label: "Baseball", refresh: { noun: "baseball", run: refreshBaseball, available: (c) => c.baseball.enabled && c.baseball.teamId !== 0 } },
+  { id: "hockey", label: "Hockey", refresh: { noun: "hockey", run: refreshHockey, available: (c) => c.hockey.enabled && !!c.hockey.teamAbbr } },
+  { id: "pool", label: "Pool", refresh: { noun: "pool", run: refreshPool, available: (c) => c.pool.enabled && !!c.pool.deviceUrl } },
+  { id: "hottub", label: "Hot Tub", refresh: { noun: "hot tub", run: refreshHotTub, available: (c) => c.hotTub.enabled && !!c.hotTub.host } },
+  { id: "display", label: "Display" },
+];
 
 export default function Admin({ live }: Props) {
   const [draft, setDraft] = useState<Config | null>(live.config);
-  const [tab, setTab] = useState<Tab>("calendars");
+  const [sectionId, setSectionId] = useState<SectionId>("calendars");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -29,6 +55,17 @@ export default function Admin({ live }: Props) {
   useEffect(() => {
     if (live.config && !draft) setDraft(live.config);
   }, [live.config, draft]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   if (!draft) {
     return <div className="loading">Loading admin…</div>;
@@ -49,125 +86,159 @@ export default function Admin({ live }: Props) {
   };
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(live.config);
+  const section = SECTIONS.find((s) => s.id === sectionId)!;
+  const refresh = section.refresh;
+
+  const actions =
+    refresh && live.config && refresh.available(live.config) ? (
+      <button
+        type="button"
+        className="refresh-btn"
+        aria-label={`Refresh ${refresh.noun} now`}
+        onClick={() => void refresh.run()}
+      >
+        <span aria-hidden="true">↻ </span>Refresh
+      </button>
+    ) : null;
+
+  const choose = (id: SectionId) => {
+    setSectionId(id);
+    setMenuOpen(false);
+  };
 
   return (
-    <div className="admin">
-      <header className="admin-header">
-        <h1>Home Calendar · Admin</h1>
-        <nav>
-          <Link to="/">← back to display</Link>
-        </nav>
+    <div className={`admin${menuOpen ? " menu-open" : ""}`}>
+      <header className="admin-topbar">
+        <button
+          type="button"
+          ref={menuButtonRef}
+          className="admin-menu-btn"
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+          aria-controls="admin-sidebar"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+        <span className="admin-topbar-title">{section.label}</span>
       </header>
 
-      <div className="admin-tabs">
-        <button className={tab === "calendars" ? "active" : ""} onClick={() => setTab("calendars")}>Calendars</button>
-        <button className={tab === "weather" ? "active" : ""} onClick={() => setTab("weather")}>Weather</button>
-        <button className={tab === "tide" ? "active" : ""} onClick={() => setTab("tide")}>Tide</button>
-        <button className={tab === "snowday" ? "active" : ""} onClick={() => setTab("snowday")}>Snow Day</button>
-        <button className={tab === "baseball" ? "active" : ""} onClick={() => setTab("baseball")}>Baseball</button>
-        <button className={tab === "hockey" ? "active" : ""} onClick={() => setTab("hockey")}>Hockey</button>
-        <button className={tab === "pool" ? "active" : ""} onClick={() => setTab("pool")}>Pool</button>
-        <button className={tab === "hottub" ? "active" : ""} onClick={() => setTab("hottub")}>Hot Tub</button>
-        <button className={tab === "display" ? "active" : ""} onClick={() => setTab("display")}>Display</button>
-      </div>
+      <aside id="admin-sidebar" className="admin-sidebar">
+        <h1 className="admin-title">Home Calendar · Admin</h1>
+        <nav aria-label="Settings sections">
+          <ul>
+            {SECTIONS.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  aria-current={s.id === sectionId ? "page" : undefined}
+                  onClick={() => choose(s.id)}
+                >
+                  {s.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <Link className="admin-back" to="/">
+          ← Back to display
+        </Link>
+      </aside>
+      {menuOpen && <div className="admin-backdrop" onClick={() => setMenuOpen(false)} />}
 
-      <div className="admin-body">
-        {tab === "calendars" && (
-          <CalendarsPanel
-            value={draft.calendars}
-            onChange={(calendars) => setDraft({ ...draft, calendars })}
-          />
-        )}
-        {tab === "weather" && (
-          <WeatherPanel
-            value={draft.weather}
-            onChange={(weather) => setDraft({ ...draft, weather })}
-          />
-        )}
-        {tab === "tide" && (
-          <TidePanel
-            value={draft.tide}
-            onChange={(tide) => setDraft({ ...draft, tide })}
-          />
-        )}
-        {tab === "snowday" && (
-          <SnowDayPanel
-            value={draft.snowDay ?? { url: "" }}
-            onChange={(snowDay) => setDraft({ ...draft, snowDay })}
-          />
-        )}
-        {tab === "baseball" && (
-          <BaseballPanel
-            value={draft.baseball ?? { enabled: true, teamId: 0, teamName: "", teamAbbr: "" }}
-            onChange={(baseball) => setDraft({ ...draft, baseball })}
-          />
-        )}
-        {tab === "hockey" && (
-          <HockeyPanel
-            value={draft.hockey ?? { enabled: true, teamAbbr: "", teamName: "" }}
-            onChange={(hockey) => setDraft({ ...draft, hockey })}
-          />
-        )}
-        {tab === "pool" && (
-          <PoolPanel
-            value={draft.pool ?? { enabled: true, deviceUrl: "" }}
-            onChange={(pool) => setDraft({ ...draft, pool })}
-          />
-        )}
-        {tab === "hottub" && (
-          <HotTubPanel
-            value={draft.hotTub ?? { enabled: false, host: "" }}
-            onChange={(hotTub) => setDraft({ ...draft, hotTub })}
-          />
-        )}
-        {tab === "display" && (
-          <DisplayPanel
-            value={draft.display}
-            onChange={(display) => setDraft({ ...draft, display })}
-            autoAvailable={
-              draft.weather.enabled &&
-              Boolean(draft.weather.location) &&
-              (draft.weather.latitude !== 0 || draft.weather.longitude !== 0)
-            }
-          />
-        )}
-      </div>
-
-      <footer className="admin-footer">
-        <div className="actions">
-          {live.config?.display.calendarEnabled && (
-            <button onClick={() => void refreshCalendars()}>Refresh calendars now</button>
-          )}
-          {live.config?.weather.enabled && (
-            <button onClick={() => void refreshWeather()}>Refresh weather now</button>
-          )}
-          {live.config?.tide.enabled && (
-            <button onClick={() => void refreshTide()}>Refresh tide now</button>
-          )}
-          {live.config?.snowDay.enabled && (
-            <button onClick={() => void refreshSnowDay()}>Refresh snow day now</button>
-          )}
-          {live.config?.baseball.enabled && live.config.baseball.teamId !== 0 && (
-            <button onClick={() => void refreshBaseball()}>Refresh baseball now</button>
-          )}
-          {live.config?.hockey.enabled && live.config.hockey.teamAbbr && (
-            <button onClick={() => void refreshHockey()}>Refresh hockey now</button>
-          )}
-          {live.config?.pool.enabled && live.config.pool.deviceUrl && (
-            <button onClick={() => void refreshPool()}>Refresh pool now</button>
-          )}
-          {live.config?.hotTub.enabled && live.config.hotTub.host && (
-            <button onClick={() => void refreshHotTub()}>Refresh hot tub now</button>
-          )}
-        </div>
-        <div className="save">
+      <main className="admin-main">
+        <div className="admin-body">{renderSection(sectionId, draft, setDraft, actions)}</div>
+        <footer className="admin-savebar">
           {error && <span className="error">{error}</span>}
           {savedAt && !dirty && <span className="saved">Saved</span>}
           <button className="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? "Saving…" : "Save"}
           </button>
-        </div>
-      </footer>
+        </footer>
+      </main>
     </div>
   );
+}
+
+function renderSection(
+  id: SectionId,
+  draft: Config,
+  setDraft: (c: Config) => void,
+  actions: ReactNode,
+) {
+  switch (id) {
+    case "calendars":
+      return (
+        <CalendarsPanel
+          actions={actions}
+          value={draft.calendars}
+          onChange={(calendars) => setDraft({ ...draft, calendars })}
+        />
+      );
+    case "weather":
+      return (
+        <WeatherPanel
+          actions={actions}
+          value={draft.weather}
+          onChange={(weather) => setDraft({ ...draft, weather })}
+        />
+      );
+    case "tide":
+      return (
+        <TidePanel actions={actions} value={draft.tide} onChange={(tide) => setDraft({ ...draft, tide })} />
+      );
+    case "snowday":
+      return (
+        <SnowDayPanel
+          actions={actions}
+          value={draft.snowDay ?? { url: "" }}
+          onChange={(snowDay) => setDraft({ ...draft, snowDay })}
+        />
+      );
+    case "baseball":
+      return (
+        <BaseballPanel
+          actions={actions}
+          value={draft.baseball ?? { enabled: true, teamId: 0, teamName: "", teamAbbr: "" }}
+          onChange={(baseball) => setDraft({ ...draft, baseball })}
+        />
+      );
+    case "hockey":
+      return (
+        <HockeyPanel
+          actions={actions}
+          value={draft.hockey ?? { enabled: true, teamAbbr: "", teamName: "" }}
+          onChange={(hockey) => setDraft({ ...draft, hockey })}
+        />
+      );
+    case "pool":
+      return (
+        <PoolPanel
+          actions={actions}
+          value={draft.pool ?? { enabled: true, deviceUrl: "" }}
+          onChange={(pool) => setDraft({ ...draft, pool })}
+        />
+      );
+    case "hottub":
+      return (
+        <HotTubPanel
+          actions={actions}
+          value={draft.hotTub ?? { enabled: false, host: "" }}
+          onChange={(hotTub) => setDraft({ ...draft, hotTub })}
+        />
+      );
+    case "display":
+      return (
+        <DisplayPanel
+          actions={actions}
+          value={draft.display}
+          onChange={(display) => setDraft({ ...draft, display })}
+          autoAvailable={
+            draft.weather.enabled &&
+            Boolean(draft.weather.location) &&
+            (draft.weather.latitude !== 0 || draft.weather.longitude !== 0)
+          }
+        />
+      );
+  }
 }

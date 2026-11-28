@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Baseball, BaseballTeam } from "../types";
 import { baseballTeamSearch } from "../api";
 
 interface Props {
   value: Baseball;
   onChange: (b: Baseball) => void;
+  actions?: ReactNode;
 }
 
 function formatTeamLabel(t: BaseballTeam): string {
   return t.name;
 }
 
-export default function BaseballPanel({ value, onChange }: Props) {
+export default function BaseballPanel({ actions, value, onChange }: Props) {
   const [query, setQuery] = useState(value.teamName);
   const [results, setResults] = useState<BaseballTeam[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -65,7 +66,10 @@ export default function BaseballPanel({ value, onChange }: Props) {
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Baseball (MLB Stats API)</h2>
+      <div className="panel-header">
+        <h2>Baseball (MLB Stats API)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { GeoResult, Weather } from "../types";
 import { geocode } from "../api";
 
 interface Props {
   value: Weather;
   onChange: (w: Weather) => void;
+  actions?: ReactNode;
 }
 
 function formatLabel(r: GeoResult): string {
   return [r.name, r.admin1, r.country].filter(Boolean).join(", ");
 }
 
-export default function WeatherPanel({ value, onChange }: Props) {
+export default function WeatherPanel({ actions, value, onChange }: Props) {
   const [query, setQuery] = useState(value.location);
   const [results, setResults] = useState<GeoResult[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -66,7 +67,10 @@ export default function WeatherPanel({ value, onChange }: Props) {
 
   return (
     <div className={`panel${value.enabled ? "" : " panel-disabled"}`}>
-      <h2>Weather (Open-Meteo)</h2>
+      <div className="panel-header">
+        <h2>Weather (Open-Meteo)</h2>
+        {actions}
+      </div>
       <div className="toggle-row">
         <label className="toggle">
           <input

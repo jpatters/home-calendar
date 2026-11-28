@@ -87,6 +87,9 @@ type Config struct {
 	Pool      Pool       `json:"pool"`
 	HotTub    HotTub     `json:"hotTub"`
 	Display   Display    `json:"display"`
+	// Layout is the display's serialized dockview layout. The server treats
+	// it as opaque; only the frontend interprets it.
+	Layout json.RawMessage `json:"layout,omitempty"`
 }
 
 type Event struct {

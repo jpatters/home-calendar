@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Display from "./Display";
-import type { LiveData } from "../useLiveData";
-import type { Config } from "../types";
+import { buildConfig, buildLive } from "./displayFixtures";
 
 vi.mock("./CalendarView", () => ({
   default: () => <div data-testid="calendar-view" />,
@@ -18,91 +17,6 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-
-function buildConfig(
-  overrides: Partial<{
-    weatherEnabled: boolean;
-    tideEnabled: boolean;
-    snowDayEnabled: boolean;
-    baseballEnabled: boolean;
-    hockeyEnabled: boolean;
-    poolEnabled: boolean;
-    hotTubEnabled: boolean;
-    calendarEnabled: boolean;
-    clockEnabled: boolean;
-  }> = {},
-): Config {
-  return {
-    calendars: [],
-    weather: {
-      latitude: 0,
-      longitude: 0,
-      units: "metric",
-      timezone: "UTC",
-      location: "Test",
-      enabled: overrides.weatherEnabled ?? true,
-    },
-    tide: {
-      stationCode: "01710",
-      units: "metric",
-      location: "Test",
-      enabled: overrides.tideEnabled ?? true,
-    },
-    snowDay: {
-      url: "https://example.com",
-      enabled: overrides.snowDayEnabled ?? true,
-    },
-    baseball: {
-      enabled: overrides.baseballEnabled ?? true,
-      teamId: 0,
-      teamName: "",
-      teamAbbr: "",
-    },
-    hockey: {
-      enabled: overrides.hockeyEnabled ?? true,
-      teamAbbr: "",
-      teamName: "",
-    },
-    pool: {
-      enabled: overrides.poolEnabled ?? true,
-      deviceUrl: "http://pool.test",
-    },
-    hotTub: {
-      enabled: overrides.hotTubEnabled ?? true,
-      host: "192.168.1.50",
-    },
-    display: {
-      defaultView: "week",
-      calendarRefreshSeconds: 300,
-      weatherRefreshSeconds: 900,
-      tideRefreshSeconds: 3600,
-      baseballRefreshSeconds: 600,
-      hockeyRefreshSeconds: 600,
-      poolRefreshSeconds: 30,
-      hotTubRefreshSeconds: 30,
-      theme: "default",
-      mode: "light",
-      calendarEnabled: overrides.calendarEnabled ?? true,
-      clockEnabled: overrides.clockEnabled ?? true,
-    },
-  };
-}
-
-function buildLive(config: Config): LiveData {
-  return {
-    ready: true,
-    connected: true,
-    config,
-    events: [],
-    weather: null,
-    snowday: null,
-    tide: null,
-    baseball: null,
-    hockey: null,
-    pool: null,
-    hottub: null,
-  };
-}
 
 describe("Display widget enable/disable", () => {
   test("weather widget is hidden when weather.enabled is false", () => {

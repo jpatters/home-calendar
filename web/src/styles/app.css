@@ -227,17 +227,64 @@ input, select {
   color: var(--fg-muted);
 }
 
-/* -------- display grid -------- */
-.display-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(300px, 1fr);
-  gap: 16px;
-  padding: 16px;
+/* -------- display dock -------- */
+.display {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
+  padding: 16px 16px 8px;
+  gap: 8px;
 }
 
-.display-grid[data-calendar-hidden="true"] {
-  grid-template-columns: 1fr;
+.display-dock {
+  flex: 1;
+  min-height: 0;
+}
+
+.display-dock .dockview-theme-light-spaced {
+  --dv-group-view-background-color: transparent;
+  --dv-tabs-and-actions-container-background-color: var(--bg);
+  --dv-tabs-and-actions-container-height: 44px;
+  --dv-tabs-and-actions-container-font-size: 0.95rem;
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bg-widget);
+  --dv-activegroup-visiblepanel-tab-color: var(--fg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg-hover);
+  --dv-activegroup-hiddenpanel-tab-color: var(--fg-muted);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg-widget);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--fg);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg-hover);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--fg-muted);
+  --dv-tab-divider-color: var(--border);
+  --dv-separator-border: transparent;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--accent);
+  --dv-drag-over-background-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  --dv-drag-over-border-color: var(--accent);
+  --dv-paneview-active-outline-color: transparent;
+  --dv-border-radius: 12px;
+  --dv-tab-border-radius: 8px;
+  --dv-scrollbar-background-color: var(--border);
+  --dv-icon-hover-background-color: var(--bg-hover);
+  background: transparent;
+  color: var(--fg);
+}
+
+/* Each panel is a size container: widgets scale their type with the panel
+   (cqmin/cqi/cqh units) and the per-widget @container rules below hide
+   lower-priority details as the panel shrinks. */
+.dock-panel {
+  height: 100%;
+  overflow: hidden;
+  container: panel / size;
+}
+
+.dock-panel > .widget {
+  height: 100%;
+  overflow: hidden;
+  padding: clamp(8px, 5cqmin, 20px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .calendar-pane {
@@ -246,15 +293,9 @@ input, select {
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   padding: 12px 16px 16px;
-}
-
-.widget-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
 }
 
 .widget {
@@ -518,20 +559,207 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .scores-period,
 .scores-clock { font-variant-numeric: tabular-nums; }
 
+/* -------- responsive panels -------- */
+.dock-panel .widget > *,
+.dock-panel .weather-current > *,
+.dock-panel .scores-section > * { min-width: 0; }
+
+/* clock: the time and date always show, scaled to the panel */
+.dock-panel .clock-widget { gap: 0.4em; }
+.dock-panel .clock-time {
+  font-size: clamp(1.25rem, min(19cqi, 42cqh), 8rem);
+  white-space: nowrap;
+}
+.dock-panel .clock-date {
+  margin-top: 0;
+  font-size: clamp(0.7rem, min(5.5cqi, 9cqh), 1.6rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container panel (min-aspect-ratio: 3) {
+  .dock-panel .clock-widget { flex-direction: row; align-items: baseline; justify-content: center; gap: 0.75em; }
+  .dock-panel .clock-time { font-size: clamp(1.25rem, min(11cqi, 62cqh), 8rem); }
+  .dock-panel .clock-date { font-size: clamp(0.7rem, min(3.5cqi, 16cqh), 1.6rem); }
+}
+
+/* weather: forecast rows go first, then meta, location and label */
+.dock-panel .weather-widget { gap: clamp(4px, 3cqh, 12px); }
+.dock-panel .weather-icon { font-size: clamp(1.5rem, 16cqmin, 4rem); }
+.dock-panel .weather-temp { font-size: clamp(1.25rem, 14cqmin, 3rem); margin-top: 0; line-height: 1.1; }
+.dock-panel .weather-meta,
+.dock-panel .weather-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-panel .daily-row { grid-template-columns: minmax(2.5em, 60px) 32px 1fr; gap: 8px; }
+@container panel (max-height: 400px) { .dock-panel .daily-row:nth-child(3) { display: none; } }
+@container panel (max-height: 360px) { .dock-panel .daily-row:nth-child(2) { display: none; } }
+@container panel (max-height: 320px) { .dock-panel .weather-daily { display: none; } }
+@container panel (max-height: 240px) { .dock-panel .weather-meta { display: none; } }
+@container panel (max-height: 190px) { .dock-panel .weather-location { display: none; } }
+@container panel (max-height: 140px) {
+  .dock-panel .weather-label { display: none; }
+  .dock-panel .weather-current { display: flex; align-items: center; justify-content: center; gap: 0.5em; }
+}
+@container panel (min-aspect-ratio: 2) and (min-width: 380px) and (min-height: 110px) {
+  .dock-panel .weather-widget { flex-direction: row; align-items: center; gap: 5cqi; }
+  .dock-panel .weather-current { flex: 1; }
+  .dock-panel .weather-daily {
+    display: flex; flex: 1; border-top: none; padding-top: 0;
+    border-left: 1px solid var(--border); padding-left: 5cqi; gap: 4px;
+  }
+  .dock-panel .daily-row:nth-child(n) { display: grid; }
+  .dock-panel .weather-label,
+  .dock-panel .weather-meta,
+  .dock-panel .weather-location { display: none; }
+}
+
+/* tide: the next event always shows; later events, the current height and the
+   location go as the panel shrinks */
+.dock-panel .tide-widget { gap: clamp(4px, 2.5cqh, 8px); }
+.dock-panel .tide-current { font-size: clamp(1rem, 6cqmin, 1.4rem); }
+.dock-panel .tide-event { font-size: clamp(0.9rem, 5cqmin, 1.25rem); }
+.dock-panel .tide-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-panel .tide-event { grid-template-columns: 20px auto 1fr auto; gap: 8px; }
+.dock-panel .tide-time,
+.dock-panel .tide-height { white-space: nowrap; }
+@container panel (max-width: 260px) {
+  .dock-panel .tide-event { grid-template-columns: 20px 1fr auto; }
+  .dock-panel .tide-type { display: none; }
+}
+@container panel (max-width: 170px) {
+  .dock-panel .tide-event { grid-template-columns: 20px 1fr; }
+  .dock-panel .tide-height { display: none; }
+}
+@container panel (max-height: 260px) { .dock-panel .tide-event:nth-child(4) { display: none; } }
+@container panel (max-height: 225px) { .dock-panel .tide-event:nth-child(3) { display: none; } }
+@container panel (max-height: 190px) { .dock-panel .tide-location { display: none; } }
+@container panel (max-height: 160px) { .dock-panel .tide-event:nth-child(2) { display: none; } }
+@container panel (max-height: 120px) { .dock-panel .tide-current { display: none; } }
+@container panel (min-aspect-ratio: 2.5) and (min-width: 420px) {
+  .dock-panel .tide-events { flex-direction: row; flex-wrap: wrap; column-gap: 24px; }
+  .dock-panel .tide-event:nth-child(n) { display: grid; }
+  .dock-panel .tide-event:nth-child(n+3) { display: none; }
+}
+
+/* snow day: the percentage always shows */
+.dock-panel .snowday-icon { font-size: clamp(1.25rem, 14cqmin, 3rem); }
+.dock-panel .snowday-percent { font-size: clamp(1.5rem, 18cqmin, 3.5rem); }
+.dock-panel .snowday-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container panel (max-height: 250px) { .dock-panel .snowday-meta { display: none; } }
+@container panel (max-height: 205px) { .dock-panel .snowday-category { display: none; } }
+@container panel (max-height: 160px) { .dock-panel .snowday-icon { display: none; } }
+@container panel (max-height: 110px) { .dock-panel .snowday-label { display: none; } }
+@container panel (min-aspect-ratio: 2.5) and (min-height: 90px) {
+  .dock-panel .snowday-widget {
+    display: grid; grid-template-columns: auto auto; grid-auto-flow: column;
+    grid-template-rows: auto auto; justify-content: center; align-content: center; column-gap: 0.5em;
+  }
+  .dock-panel .snowday-icon { display: inline-flex; grid-row: 1 / span 2; font-size: clamp(1.5rem, 40cqh, 3.5rem); }
+  .dock-panel .snowday-category,
+  .dock-panel .snowday-meta { display: none; }
+}
+
+/* pool / hot tub: the temperature and heating state always show */
+.dock-panel .pool-temp-value,
+.dock-panel .hottub-temp-value { font-size: clamp(1.5rem, min(22cqi, 30cqh), 4rem); }
+@container panel (max-height: 130px) {
+  .dock-panel .pool-target,
+  .dock-panel .hottub-target { display: none; }
+}
+
+/* scores: the latest (or live) result always shows; meta lines go first,
+   then the Next section. Wide panels put the sections side by side. */
+.dock-panel .scores-scoreline,
+.dock-panel .scores-matchup { flex-wrap: wrap; row-gap: 0; font-size: clamp(1rem, 6.5cqmin, 1.6rem); }
+.dock-panel .scores-score { font-size: 1.15em; }
+.dock-panel .scores-meta { font-size: clamp(0.8rem, 4cqmin, 1.05rem); }
+@container panel (max-height: 190px) or (max-width: 200px) { .dock-panel .scores-meta { display: none; } }
+@container panel (max-height: 130px) or ((max-width: 170px) and (max-height: 160px)) {
+  .dock-panel .scores-section:nth-child(2) { display: none; }
+}
+@container panel (min-aspect-ratio: 2.2) and (min-width: 400px) {
+  .dock-panel .baseball-widget,
+  .dock-panel .hockey-widget { flex-direction: row; align-items: center; gap: 6cqi; }
+  .dock-panel .scores-section { flex: 1; }
+  .dock-panel .scores-section:nth-child(2) { display: flex; }
+}
+
+.dock-panel .baseball-widget-empty,
+.dock-panel .hockey-widget-empty { text-align: center; }
+
+/* calendar: header weather, then the title, give way as the panel narrows */
+@container panel (max-width: 700px) { .dock-panel .calendar-day-weather { display: none; } }
+@container panel (max-width: 560px) {
+  .dock-panel .calendar-title { font-size: 1.1rem; }
+  .dock-panel .calendar-toolbar button { min-width: 40px; padding: 0 10px; }
+}
+@container panel (max-width: 440px) {
+  .dock-panel .calendar-title { display: none; }
+  .dock-panel .calendar-toolbar { flex-wrap: wrap; justify-content: center; }
+}
+
 /* -------- connection dot -------- */
 .status-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 4px;
 }
-.reload-btn {
+/* Edit mode: draw the dividers between panels so they can be found and
+   dragged. Dockview already widens their hit area on touch screens. */
+.display.editing .dv-sash-container > .dv-sash { background-color: var(--border); }
+.display.editing .dv-sash-container > .dv-sash.dv-disabled,
+.display.editing .dv-sash-container > .dv-sash.dv-disabled:hover,
+.display.editing .dv-sash-container > .dv-sash.dv-disabled:active {
+  background-color: var(--border);
+  opacity: 0.4;
+}
+.display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):active {
+  background-color: var(--accent);
+  transition-delay: 0s;
+}
+@media (hover: hover) {
+  .display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):hover {
+    background-color: var(--accent);
+    transition-delay: 0s;
+  }
+  .display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):hover::after { background: var(--accent); }
+}
+.display.editing .dv-sash-container > .dv-sash::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--fg-muted);
+  pointer-events: none;
+}
+.display.editing .dv-sash-container > .dv-sash:not(.dv-disabled):active::after { background: var(--accent); }
+.display.editing .dv-horizontal > .dv-sash-container > .dv-sash::after { width: 8px; height: 40px; }
+.display.editing .dv-vertical > .dv-sash-container > .dv-sash::after { width: 40px; height: 8px; }
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-btn {
   padding: 0 12px;
+  min-height: 40px;
   font-size: 0.85rem;
   color: var(--fg-muted);
   background: transparent;
   border-radius: 999px;
+}
+.status-btn.primary {
+  color: var(--bg-widget);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.layout-error {
+  font-size: 0.85rem;
+  color: var(--danger);
 }
 .connection-indicator {
   display: flex;
@@ -675,39 +903,137 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 
 /* -------- admin -------- */
 .admin {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.admin-topbar,
+.admin-backdrop { display: none; }
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 12px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+}
+.admin-title { font-size: 1.05rem; margin: 0 8px; }
+.admin-sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.admin-sidebar nav button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+.admin-sidebar nav button:hover { background: var(--bg-hover); }
+.admin-sidebar nav button[aria-current="page"] {
+  background: var(--bg-hover);
+  color: var(--accent);
+  font-weight: 600;
+}
+.admin-back {
+  margin-top: auto;
+  padding: 12px 16px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.admin-main { min-width: 0; display: flex; flex-direction: column; }
+.admin-body {
+  flex: 1;
+  width: 100%;
   max-width: 960px;
   margin: 0 auto;
-  padding: 24px 20px 120px;
-  min-height: 100vh;
+  padding: 24px 20px;
+  box-sizing: border-box;
 }
-.admin-header {
+.admin-savebar {
+  position: sticky;
+  bottom: 0;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
 }
-.admin-header h1 { font-size: 1.4rem; margin: 0; }
-.admin-header a { color: var(--accent); text-decoration: none; }
-.admin-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 20px 0 16px;
-  border-bottom: 1px solid var(--border);
-}
-.admin-tabs button {
-  border: none;
-  background: transparent;
-  padding: 12px 16px;
-  border-bottom: 2px solid transparent;
-  min-height: 48px;
-}
-.admin-tabs button.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
+.admin-savebar .error { color: var(--danger); flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.admin-savebar .saved { color: var(--success); }
+
+@media (max-width: 720px) {
+  .admin { display: flex; flex-direction: column; }
+  .admin-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-menu-btn {
+    width: 48px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 1.4rem;
+  }
+  .admin-topbar-title { font-weight: 600; }
+  .admin-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
+    overscroll-behavior: contain;
+  }
+  .admin.menu-open .admin-sidebar { transform: none; visibility: visible; }
+  .admin-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.4);
+    touch-action: none;
+  }
+  .admin-main { flex: 1; }
+  .admin-body { padding: 16px 12px; }
 }
 
 .panel { background: var(--bg-surface); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .panel h2 { margin: 0 0 8px; font-size: 1.15rem; }
+@media (max-width: 720px) {
+  .panel { padding: 16px; }
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+.panel-header h2 { margin: 0; min-width: 0; }
+.refresh-btn { flex: none; min-height: 40px; padding: 0 12px; }
 .hint { color: var(--fg-muted); margin: 0 0 16px; }
+.hint code { overflow-wrap: anywhere; }
 
 .panel-disabled .form-grid,
 .panel-disabled .hint,
@@ -749,8 +1075,9 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 }
 .calendar-row .color { padding: 0; height: 44px; }
 @media (max-width: 720px) {
-  .calendar-row { grid-template-columns: 60px 1fr auto; }
-  .calendar-row .url { grid-column: 1 / -1; }
+  .calendar-row { grid-template-columns: 60px minmax(0, 1fr) auto; }
+  .calendar-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+  .calendar-row .url { grid-column: 1 / -1; order: 1; }
 }
 
 .form-grid {
@@ -784,19 +1111,3 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .geo-results button:hover { background: var(--bg-hover); }
 .panel .error { color: var(--danger); margin: 0 0 16px; }
 
-.admin-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border);
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-.admin-footer .actions, .admin-footer .save { display: flex; gap: 8px; align-items: center; }
-.admin-footer .error { color: var(--danger); }
-.admin-footer .saved { color: var(--success); }

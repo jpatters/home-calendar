@@ -3,7 +3,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
 import type { DatesSetArg, DayHeaderContentArg, EventClickArg } from "@fullcalendar/core";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { refreshCalendars } from "../api";
 import type { CalendarEvent, Weather, WeatherDaily, WeatherSnapshot } from "../types";
 import { labelForCode, WeatherIcon } from "./weatherIcons";
@@ -43,6 +43,17 @@ export default function CalendarView({
   weatherConfig,
 }: Props) {
   const ref = useRef<FullCalendar | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // FullCalendar only re-measures on window resize; inside a resizable panel
+  // it must be told when its own box changes.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const observer = new ResizeObserver(() => ref.current?.getApi().updateSize());
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
   const [title, setTitle] = useState("");
 
   const fcEvents = events.map((e) => ({
@@ -109,7 +120,7 @@ export default function CalendarView({
   };
 
   return (
-    <div className="calendar-wrapper">
+    <div className="calendar-wrapper" ref={wrapperRef}>
       <div className="calendar-toolbar">
         <div className="group">
           <button onClick={() => ref.current?.getApi().prev()}>‹</button>
