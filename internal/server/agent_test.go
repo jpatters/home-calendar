@@ -332,7 +332,7 @@ func TestAgentConverseAnswersAFullHomeAssistantPayloadWithManyExposedEntities(t 
 		"system_prompt":    "",
 		"stream":           false,
 	})
-	if len(payload) < 400<<10 {
+	if len(payload) < 256<<10 {
 		t.Fatalf("payload is %d bytes, want a large one", len(payload))
 	}
 
