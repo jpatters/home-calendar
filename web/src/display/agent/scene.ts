@@ -15,7 +15,8 @@ export type OutfitId =
   | "canada"
   | "halloween"
   | "thanksgiving"
-  | "christmas";
+  | "christmas"
+  | "pajamas";
 
 export interface SceneInput {
   now: Date;
@@ -156,7 +157,7 @@ export function sceneFor({ now, weather, agentState, tool, awaitingReply = false
   const quiet = inQuietHours(minute, minutesOf(quietStart), minutesOf(quietEnd));
   return {
     pose: poseFor(agentState, tool, awaitingReply, quiet),
-    outfit: holidayOutfitFor(now) ?? seasonOutfit(now.getMonth()),
+    outfit: quiet ? "pajamas" : (holidayOutfitFor(now) ?? seasonOutfit(now.getMonth())),
     sky: skyFor(minute, today, weather),
     conditions: weather ? conditionsFor(weather.current.weatherCode) : "none",
   };

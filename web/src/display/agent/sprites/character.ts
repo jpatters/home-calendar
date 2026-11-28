@@ -96,6 +96,7 @@ const MARKS = {
   collar: { 16: "....wwwwwwww...." },
   summer: { 19: "..ss........ss..", 20: "..ss........ss..", 24: ".....ss..ss.....", 25: ".....ss..ss....." },
   buttons: { 17: ".......yy.......", 19: ".......yy......." },
+  stripes: { 17: "...wwwwwwwwww...", 19: "..ww.wwwwww.ww..", 24: ".....ww..ww....." },
 } satisfies Record<string, Layer>;
 
 /** Marks on the front of the shirt, hidden when Ziggy faces away. */
@@ -122,6 +123,8 @@ const OUTFITS: Record<OutfitId, Outfit> = {
   thanksgiving: { shirt: "#7a4a2a", pants: "#2b2233", shoes: "#2b2233", hat: "pilgrim", marks: ["collar"] },
   halloween: { shirt: "#e8772e", pants: "#2b2233", shoes: "#2b2233", hat: "stem", marks: ["jack"] },
   christmas: { shirt: "#d83b3b", pants: "#2e8b57", shoes: "#2b2233", hat: "santa" },
+  // Barefoot: the shoes take the skin colour.
+  pajamas: { shirt: "#8fb3e0", pants: "#8fb3e0", shoes: "#f4c9a3", marks: ["stripes"] },
 };
 
 export interface CharacterSprite {

@@ -98,7 +98,21 @@ describe("sceneFor outfit", () => {
   });
 
   test("holiday outfit still applies late at night on the holiday", () => {
-    expect(sceneFor(input({ now: at(2026, 12, 25, 23, 50) })).outfit).toBe("christmas");
+    const neverQuiet = { quietStart: "00:00", quietEnd: "00:00" };
+    expect(sceneFor(input({ ...neverQuiet, now: at(2026, 12, 25, 23, 50) })).outfit).toBe("christmas");
+  });
+
+  test.each([
+    ["up at night to answer", "thinking", at(2026, 7, 15, 2, 30)],
+    ["talking at night", "talking", at(2026, 7, 15, 23, 30)],
+    ["asleep", "idle", at(2026, 7, 15, 3)],
+    ["at night on a holiday", "talking", at(2026, 12, 25, 1)],
+  ] as const)("wears pajamas during quiet hours: %s", (_name, agentState, now) => {
+    expect(sceneFor(input({ agentState, now })).outfit).toBe("pajamas");
+  });
+
+  test("dresses again once quiet hours end", () => {
+    expect(sceneFor(input({ agentState: "talking", now: at(2026, 7, 15, 7) })).outfit).toBe("summer");
   });
 });
 
