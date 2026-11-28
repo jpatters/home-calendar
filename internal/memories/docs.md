@@ -15,7 +15,7 @@ Path: @/internal/memories
    `-- memories.Open(PathFor(config.json))  -> memories.json beside it
             |
             v
- internal/server  (Options.Memories, required)
+ internal/server  (Options.Memories, required: New fails without it)
    |-- memories.go        GET/POST /api/agent/memories, PUT/DELETE /api/agent/memories/{id}
    |-- agent.Options.Memories   List() read into the instructions every turn
    `-- tools.Deps.Memories      remember / update_memory / forget tools
@@ -26,14 +26,14 @@ Path: @/internal/memories
 
 ### Core Implementation
 
-- `Memory{ID, Text, Created, Updated}`; ids are UUIDs, times UTC. `List()` returns a copy, oldest first.
+- `Memory{ID, Text, Created, Updated}`; ids are UUIDs, times UTC. `List()` returns a copy, oldest first, and never nil (so the admin endpoint sends `[]`, not `null`, before anything is saved).
 - `Add`, `Update(id, text)` and `Delete(id)` go through `update`, which applies the change to a copy under the store's mutex, writes it (temp file in the same directory, `0600`, fsync, rename) and only then swaps it in, so a failed write changes nothing.
-- Text is trimmed; empty or longer than `MaxTextLen` (300 characters) is `ErrInvalid`. `Add` past `MaxMemories` (150) is `ErrFull`; updates and deletes still work when full. Unknown ids are `ErrNotFound`.
+- Text has all whitespace collapsed to single spaces (`strings.Fields`), so a memory can't contain a line break: memories are listed one per line in Ziggy's instructions and must not be able to start lines of their own there. Empty or longer than `MaxTextLen` (300 characters) is `ErrInvalid`. `Add` past `MaxMemories` (150) is `ErrFull`; updates and deletes still work when full. Unknown ids are `ErrNotFound`.
 
 ### Things to Know
 
-- The error messages are written as sentences Ziggy can relay ("memory is full (150 memories); update or forget one first"); the server capitalises them for admin.
-- Every memory is sent to the model on every turn, so the caps also bound prompt size (at most ~45,000 characters).
+- The error messages are written as sentences Ziggy can relay ("memory is full (150 memories)"); the server capitalises them for admin. `ErrFull` deliberately doesn't suggest forgetting something, so Ziggy never deletes a household memory on his own just to make room.
+- Every memory is sent to the model on every turn, so the caps also bound prompt size (at most about 51,000 characters with ids).
 - What Ziggy should and shouldn't remember (no sensitive details, no duplicates, saved silently unless asked) is in the agent's persona, not enforced here.
 
 Created and maintained by Nori.

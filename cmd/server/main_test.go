@@ -19,7 +19,7 @@ func TestStartupFailsOnACorruptSecretsFile(t *testing.T) {
 	}
 }
 
-func TestStartupOpensConfigAndSecretsTogether(t *testing.T) {
+func TestStartupOpensConfigSecretsAndMemoriesTogether(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 	dir := t.TempDir()

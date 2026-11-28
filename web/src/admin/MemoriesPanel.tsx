@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import type { Memory } from "../types";
 import { addMemory, deleteMemory, listMemories, updateMemory } from "../api";
 
+/** The server's limit on a memory's length, in characters. */
+const MAX_LENGTH = 300;
+
 // What Ziggy remembers. It lives outside the config (which every display can
 // read), so each change is sent to its own endpoint straight away rather than
 // with the page's Save.
@@ -28,6 +31,8 @@ export default function MemoriesPanel() {
     };
   }, []);
 
+  // A failed change may mean Ziggy changed his memories since the list was
+  // loaded, so the list is reloaded to match the server.
   const run = async (request: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -35,6 +40,11 @@ export default function MemoriesPanel() {
       await request();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      const fresh = await listMemories().catch(() => null);
+      if (fresh) {
+        setMemories(fresh);
+        setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([id]) => fresh.some((m) => m.id === id))));
+      }
     } finally {
       setBusy(false);
     }
@@ -82,6 +92,7 @@ export default function MemoriesPanel() {
                 <textarea
                   aria-label="Memory"
                   rows={2}
+                  maxLength={MAX_LENGTH}
                   value={draft}
                   onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
                 />
@@ -103,6 +114,7 @@ export default function MemoriesPanel() {
           <textarea
             aria-label="New memory"
             rows={2}
+            maxLength={MAX_LENGTH}
             placeholder="Something Ziggy should remember"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}

@@ -2,11 +2,17 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/memories"
+	"github.com/jpatters/home-calendar/internal/secrets"
 )
 
 type memoryJSON struct {
@@ -87,6 +93,17 @@ func TestMemoriesCanBeAddedEditedAndDeletedFromAdmin(t *testing.T) {
 	}
 }
 
+func TestAFreshInstallListsNoMemoriesAsAnEmptyList(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "ok")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	_, raw := memoriesRequest(t, http.MethodGet, app.URL+"/api/agent/memories", "")
+
+	if strings.TrimSpace(string(raw)) != `{"memories":[]}` {
+		t.Errorf("body = %s, want an empty list", raw)
+	}
+}
+
 func TestMemoryEndpointsRejectBadInputAndUnknownIDs(t *testing.T) {
 	openai, _ := fakeResponsesAPI(t, "ok")
 	app := agentApp(t, true, "sk-test", openai.URL)
@@ -98,7 +115,7 @@ func TestMemoryEndpointsRejectBadInputAndUnknownIDs(t *testing.T) {
 	}{
 		{"blank text", http.MethodPost, "/api/agent/memories", `{"text":"  "}`, http.StatusBadRequest},
 		{"not JSON", http.MethodPost, "/api/agent/memories", `{nope`, http.StatusBadRequest},
-		{"too long", http.MethodPost, "/api/agent/memories", `{"text":"` + strings.Repeat("a", 301) + `"}`, http.StatusBadRequest},
+		{"too long", http.MethodPost, "/api/agent/memories", `{"text":"` + strings.Repeat("a", memories.MaxTextLen+1) + `"}`, http.StatusBadRequest},
 		{"blank edit", http.MethodPut, "/api/agent/memories/" + kept.ID, `{"text":""}`, http.StatusBadRequest},
 		{"edit unknown", http.MethodPut, "/api/agent/memories/nope", `{"text":"x"}`, http.StatusNotFound},
 		{"delete unknown", http.MethodDelete, "/api/agent/memories/nope", "", http.StatusNotFound},
@@ -142,6 +159,24 @@ func TestZiggyIsGivenTheMemoriesAndTheToolsToChangeThem(t *testing.T) {
 	}
 }
 
+func TestAddingToAFullMemoryExplainsWhyInAdmin(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "ok")
+	app := agentApp(t, true, "sk-test", openai.URL)
+	for i := 0; i < memories.MaxMemories; i++ {
+		addMemory(t, app.URL, "fact")
+	}
+
+	status, raw := memoriesRequest(t, http.MethodPost, app.URL+"/api/agent/memories", `{"text":"one more"}`)
+
+	var e struct {
+		Error string `json:"error"`
+	}
+	json.Unmarshal(raw, &e)
+	if status != http.StatusBadRequest || !strings.HasPrefix(e.Error, "Memory is full") {
+		t.Errorf("POST when full = %d %q, want 400 saying memory is full", status, e.Error)
+	}
+}
+
 func TestMemoriesNeverReachThePublicConfigOrWebSocket(t *testing.T) {
 	openai, _ := fakeResponsesAPI(t, "ok")
 	app := agentApp(t, true, "sk-test", openai.URL)
@@ -153,16 +188,41 @@ func TestMemoriesNeverReachThePublicConfigOrWebSocket(t *testing.T) {
 	}
 	raw, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !bytes.Contains(raw, []byte(`"agent"`)) {
+		t.Fatalf("GET /api/config = %d %s, want the config", resp.StatusCode, raw)
+	}
 	if bytes.Contains(raw, []byte("private household fact")) {
 		t.Errorf("GET /api/config exposes a memory")
 	}
 
 	conn, ctx := dialWS(t, app)
-	_, frame, err := conn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read ws: %v", err)
+	postConverse(t, app, `{"conversation_id":"c","query":"what do you remember?"}`)
+	for {
+		_, frame, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("read ws before the reply frame: %v", err)
+		}
+		if bytes.Contains(frame, []byte("private household fact")) {
+			t.Errorf("a WebSocket frame exposes a memory: %s", frame)
+		}
+		if bytes.Contains(frame, []byte(`"talking"`)) {
+			break
+		}
 	}
-	if bytes.Contains(frame, []byte("private household fact")) {
-		t.Errorf("the WebSocket snapshot exposes a memory")
+}
+
+func TestTheServerWontStartWithoutAMemoryStore(t *testing.T) {
+	dir := t.TempDir()
+	store, err := config.Open(filepath.Join(dir, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec, err := secrets.Open(filepath.Join(dir, "secrets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := New(context.Background(), Options{Config: store, Secrets: sec}); err == nil {
+		t.Error("New err = nil, want it to refuse to start without memories")
 	}
 }

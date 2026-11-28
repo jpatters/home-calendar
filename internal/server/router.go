@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -58,6 +59,9 @@ type Options struct {
 }
 
 func New(ctx context.Context, o Options) (*Server, http.Handler, error) {
+	if o.Memories == nil {
+		return nil, nil, errors.New("server: a memory store is required")
+	}
 	cfg := o.Config
 	hub := NewHub()
 	s := &Server{

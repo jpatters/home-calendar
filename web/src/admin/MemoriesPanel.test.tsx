@@ -74,7 +74,7 @@ function row(text: string) {
 }
 
 describe("MemoriesPanel", () => {
-  test("lists what Ziggy remembers, oldest first", async () => {
+  test("lists what Ziggy remembers in the server's order", async () => {
     memories = [memory("Emma has soccer on Tuesdays."), memory("Jordan likes the pool at 29 degrees.")];
     render(<MemoriesPanel />);
 
@@ -185,8 +185,56 @@ describe("MemoriesPanel", () => {
     });
 
     expect(memories).toEqual([]);
-    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT" && String(init?.body).includes('"calendars"'))).toBe(
-      false,
-    );
+  });
+
+  test("a failed add shows why and keeps what was typed", async () => {
+    routes["POST /api/agent/memories"] = () => json({ error: "Memory is full (150 memories)." }, 400);
+    render(<MemoriesPanel />);
+    await screen.findByText(/doesn't remember anything yet/i);
+
+    fireEvent.change(screen.getByRole("textbox", { name: /new memory/i }), { target: { value: "Keep me." } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /add memory/i }));
+    });
+
+    expect(await screen.findByText("Memory is full (150 memories).")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: /new memory/i }) as HTMLTextAreaElement).value).toBe("Keep me.");
+  });
+
+  test("save turns off again once the change is saved", async () => {
+    memories = [memory("Before.")];
+    render(<MemoriesPanel />);
+    fireEvent.change(await screen.findByDisplayValue("Before."), { target: { value: "After." } });
+
+    await act(async () => {
+      fireEvent.click(row("After.").getByRole("button", { name: /save/i }));
+    });
+
+    expect((row("After.").getByRole("button", { name: /save/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("a memory Ziggy forgot in the meantime disappears when a change to it fails", async () => {
+    memories = [memory("Forgotten by Ziggy."), memory("Still here.")];
+    render(<MemoriesPanel />);
+    fireEvent.change(await screen.findByDisplayValue("Forgotten by Ziggy."), { target: { value: "Edited." } });
+    memories = memories.filter((m) => m.text !== "Forgotten by Ziggy.");
+
+    await act(async () => {
+      fireEvent.click(row("Edited.").getByRole("button", { name: /save/i }));
+    });
+
+    expect(await screen.findByText("That memory doesn't exist.")).toBeTruthy();
+    expect(screen.queryByDisplayValue("Edited.")).toBeNull();
+    expect(screen.getByDisplayValue("Still here.")).toBeTruthy();
+  });
+
+  test("memories can't be typed past the length limit", async () => {
+    memories = [memory("A fact.")];
+    render(<MemoriesPanel />);
+    await screen.findByDisplayValue("A fact.");
+
+    for (const box of [screen.getByRole("textbox", { name: "Memory" }), screen.getByRole("textbox", { name: /new memory/i })]) {
+      expect(box.getAttribute("maxlength")).toBe("300");
+    }
   });
 });

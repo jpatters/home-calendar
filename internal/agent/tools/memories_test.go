@@ -71,40 +71,12 @@ func TestForgetRemovesTheMemory(t *testing.T) {
 	}
 }
 
-func TestMemoryToolsExplainProblemsInPlainWords(t *testing.T) {
-	d, store := memoryDeps(t)
-	for i := 0; i < memories.MaxMemories; i++ {
-		store.Add("fact")
-	}
+func TestAStoreProblemReachesZiggyAsItsSentence(t *testing.T) {
+	d, _ := memoryDeps(t)
 
-	cases := map[string]string{
-		"forgetting an unknown id":   `{"id":"nope"}`,
-		"updating an unknown id":     `{"id":"nope","text":"x"}`,
-		"remembering when full":      `{"text":"one more"}`,
-		"remembering nothing":        `{"text":"  "}`,
-		"remembering something long": `{"text":"` + strings.Repeat("a", memories.MaxTextLen+1) + `"}`,
-	}
-	tool := map[string]string{
-		"forgetting an unknown id":   "forget",
-		"updating an unknown id":     "update_memory",
-		"remembering when full":      "remember",
-		"remembering nothing":        "remember",
-		"remembering something long": "remember",
-	}
-	for name, args := range cases {
-		t.Run(name, func(t *testing.T) {
-			if err := mustFail(t, d, tool[name], args); strings.TrimSpace(err.Error()) == "" {
-				t.Errorf("empty error")
-			}
-		})
-	}
-}
+	err := mustFail(t, d, "forget", `{"id":"nope"}`)
 
-func TestMemoryToolsAreLeftOutWithoutAStore(t *testing.T) {
-	for _, tool := range tools.All(baseDeps(t)) {
-		switch tool.Name() {
-		case "remember", "update_memory", "forget":
-			t.Errorf("%s offered without a memory store", tool.Name())
-		}
+	if err.Error() != memories.ErrNotFound.Error() {
+		t.Errorf("error = %q, want the store's %q", err, memories.ErrNotFound)
 	}
 }

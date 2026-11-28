@@ -29,7 +29,7 @@ const (
 var (
 	ErrNotFound = errors.New("that memory doesn't exist")
 	ErrInvalid  = fmt.Errorf("a memory must be between 1 and %d characters", MaxTextLen)
-	ErrFull     = fmt.Errorf("memory is full (%d memories); update or forget one first", MaxMemories)
+	ErrFull     = fmt.Errorf("memory is full (%d memories)", MaxMemories)
 )
 
 // Memory is one thing Ziggy remembers.
@@ -75,11 +75,11 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
-// List returns the memories, oldest first.
+// List returns the memories, oldest first; never nil.
 func (s *Store) List() []Memory {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return slices.Clone(s.data.Memories)
+	return append([]Memory{}, s.data.Memories...)
 }
 
 // Add remembers text.
@@ -132,8 +132,11 @@ func (s *Store) Delete(id string) error {
 	})
 }
 
+// clean collapses all whitespace, line breaks included, to single spaces:
+// memories are listed one per line in Ziggy's instructions, so a memory must
+// not be able to start a line of its own there.
 func clean(text string) (string, error) {
-	text = strings.TrimSpace(text)
+	text = strings.Join(strings.Fields(text), " ")
 	if text == "" || utf8.RuneCountInString(text) > MaxTextLen {
 		return "", ErrInvalid
 	}
