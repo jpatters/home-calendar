@@ -31,3 +31,25 @@ func TestStartupOpensConfigAndSecretsTogether(t *testing.T) {
 		t.Errorf("secrets.json not created beside config.json: %v", err)
 	}
 }
+
+// os.Getenv reports an unset TZ as "", and compose passes TZ="" when .env
+// has none; Go treats both as UTC.
+func TestZoneFallsBackToTheWeatherLocationWhenTZIsEmpty(t *testing.T) {
+	if loc := zoneFallback("", "America/Halifax"); loc == nil || loc.String() != "America/Halifax" {
+		t.Errorf("zoneFallback = %v, want America/Halifax", loc)
+	}
+}
+
+func TestZoneKeepsAnExplicitTZ(t *testing.T) {
+	if loc := zoneFallback("America/Toronto", "America/Halifax"); loc != nil {
+		t.Errorf("zoneFallback = %v, want nil so TZ is honoured", loc)
+	}
+}
+
+func TestZoneKeepsTheDefaultWithoutAUsableWeatherZone(t *testing.T) {
+	for _, weatherTZ := range []string{"", "auto", "Not/AZone"} {
+		if loc := zoneFallback("", weatherTZ); loc != nil {
+			t.Errorf("zoneFallback(weather %q) = %v, want nil", weatherTZ, loc)
+		}
+	}
+}

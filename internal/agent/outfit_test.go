@@ -12,6 +12,7 @@ import (
 // The fixture lives with the display's tests (scene.test.ts) and is checked by
 // both, so the outfit Ziggy describes always matches the one drawn on screen.
 const outfitFixture = "../../web/src/display/agent/outfits.fixture.json"
+
 type outfitCase struct {
 	Name       string `json:"name"`
 	At         string `json:"at"`
