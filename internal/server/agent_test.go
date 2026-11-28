@@ -301,11 +301,56 @@ func TestAgentOffersOnlyCalendarReadsWithoutGoogleCredentials(t *testing.T) {
 	}
 }
 
+// The Webhook Conversation integration sends every exposed entity and the
+// conversation so far alongside the query.
+func TestAgentConverseAnswersAFullHomeAssistantPayloadWithManyExposedEntities(t *testing.T) {
+	openai, hits := fakeResponsesAPI(t, "It's raining.")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	entities := make([]map[string]any, 2500)
+	for i := range entities {
+		entities[i] = map[string]any{
+			"entity_id": fmt.Sprintf("light.room_%d_ceiling", i),
+			"name":      fmt.Sprintf("Room %d ceiling light", i),
+			"state":     "off",
+			"aliases":   []string{fmt.Sprintf("room %d light", i)},
+			"area_id":   fmt.Sprintf("room_%d", i),
+			"area_name": fmt.Sprintf("Room %d", i),
+		}
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"conversation_id":  "01J8",
+		"user_id":          "abc",
+		"user_name":        "Jordan",
+		"language":         "en-CA",
+		"agent_id":         "conversation.ziggy",
+		"device_id":        "echo",
+		"device_info":      map[string]any{"name": "Kitchen Echo", "manufacturer": "Amazon", "model": "Echo Dot"},
+		"messages":         []map[string]any{{"role": "user", "content": "Is it raining?"}},
+		"query":            "Is it raining?",
+		"exposed_entities": entities,
+		"system_prompt":    "",
+		"stream":           false,
+	})
+	if len(payload) < 400<<10 {
+		t.Fatalf("payload is %d bytes, want a large one", len(payload))
+	}
+
+	status, body := postConverse(t, app, string(payload))
+
+	if status != http.StatusOK || body["output"] != "It's raining." {
+		t.Errorf("status = %d, body = %v, want 200 with the reply", status, body)
+	}
+	if hits.Load() != 1 {
+		t.Errorf("OpenAI hits = %d, want 1", hits.Load())
+	}
+}
+
 func TestAgentConverseRejectsOversizedBody(t *testing.T) {
 	openai, hits := fakeResponsesAPI(t, "unused")
 	app := agentApp(t, true, "sk-test", openai.URL)
 
-	body := `{"conversation_id":"c","query":"` + strings.Repeat("a", 100<<10) + `"}`
+	body := `{"conversation_id":"c","query":"` + strings.Repeat("a", 5<<20) + `"}`
 	if status, _ := postConverse(t, app, body); status != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", status)
 	}

@@ -16,8 +16,10 @@ import (
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
-// maxConverseBody bounds a converse request; a spoken query is far smaller.
-const maxConverseBody = 64 << 10
+// maxConverseBody bounds a converse request. Home Assistant's Webhook
+// Conversation integration sends every exposed entity and the conversation so
+// far with each query, which reaches hundreds of KB in a large home.
+const maxConverseBody = 4 << 20
 
 const agentDisabledReply = "I'm switched off right now. You can turn me on in the calendar's settings."
 
