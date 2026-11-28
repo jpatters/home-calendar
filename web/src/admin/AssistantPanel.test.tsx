@@ -409,7 +409,7 @@ describe("AssistantPanel connection", () => {
       fireEvent.click(ha.getByText("How to connect Home Assistant"));
 
       expect(ha.getByText(/Long-lived access tokens/)).toBeTruthy();
-      expect(ha.getByText(/Expose/)).toBeTruthy();
+      expect(ha.getByText(/Voice assistants → Expose/)).toBeTruthy();
     });
 
     test("reports when it isn't set up", async () => {
