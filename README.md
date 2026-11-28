@@ -334,6 +334,7 @@ assigns IDs, and triggers an immediate refresh.
 | DELETE | `/api/agent/auth/chatgpt`     | Sign out of ChatGPT (revokes the sign-in) |
 | PUT/DELETE | `/api/agent/auth/api-key` | Save (`{"key": "..."}`) or clear the OpenAI API key |
 | PUT/DELETE | `/api/agent/auth/google`  | Save (`{"json": "..."}`) or clear the Google service account key |
+| PUT/DELETE | `/api/agent/auth/home-assistant` | Connect (`{"url": "...", "token": "..."}`, checked against Home Assistant first) or disconnect Home Assistant |
 | GET/POST   | `/api/agent/memories`     | List Ziggy's memories (`{"memories": [...]}`) or add one (`{"text": "..."}`) |
 | PUT/DELETE | `/api/agent/memories/{id}` | Edit (`{"text": "..."}`) or delete a memory |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
@@ -396,6 +397,7 @@ admin saves config. The client reconnects with exponential backoff.
 | `LISTEN_ADDR`                 | `:8080`             | Listen address |
 | `OPENAI_API_KEY`              | (none)              | Optional. Overrides the API key saved in admin (it then can't be changed there). |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | (none)              | Optional. Overrides the Google service account saved in admin, as the JSON itself or a path to the file. |
+| `HOME_ASSISTANT_URL` / `HOME_ASSISTANT_TOKEN` | (none) | Optional. Override the Home Assistant connection saved in admin (both are used when the token is set). |
 | `TZ`                          | weather location's zone, else UTC | IANA time zone (e.g. `America/Halifax`). When unset or empty, the server uses the weather location's time zone from config (read at startup), so Ziggy reads and books times in local time. |
 
 ## Assistant setup (Ziggy)
@@ -446,12 +448,30 @@ key" or "Not connected").
    key**. Calendars are matched by the names you gave them in admin, and the
    Google calendar is identified from its iCal URL, so only calendars added
    with a Google Calendar iCal address can be changed.
-4. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
+4. **Home devices (optional).** To let Ziggy check and control lights,
+   switches, fans, blinds, thermostats, media players, scenes and scripts,
+   connect Home Assistant under **Assistant → Home Assistant**:
+   1. Optional but safer: add a Home Assistant user such as "Ziggy" that is
+      **not an administrator** (**Settings → People → Users**) and log in as it.
+   2. **Profile → Security → Long-lived access tokens → Create token**; copy
+      it (it's shown once).
+   3. Enter Home Assistant's address (e.g. `http://192.168.1.20:8123`) and the
+      token, and press **Connect**; it's checked against Home Assistant first.
+   4. Ziggy only sees devices exposed to Assist (**Settings → Voice
+      assistants → Expose**), using their names, rooms and aliases, and only
+      offers what each device supports. Locks, alarm panels, garage doors,
+      gates and doors, covers that don't say what they are, switches named
+      for a garage, gate or lock, and anything on the same device as those
+      are look-only: he can say how they are, but won't change them. Set a
+      blind's **Show as** if it's look-only by mistake. Exposed scenes and
+      scripts can do anything, so keep any that unlock or open things
+      unexposed, along with relays for doors.
+5. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
    reasoning effort and quiet hours, and press **Save**. **Voice delay** holds
    Ziggy's talking animation back on questions asked aloud, so it starts with
    the speaker's audio (about 1–2 seconds with ElevenLabs; tune it by eye). (Connection changes
    apply immediately and don't need Save.)
-5. **Home Assistant (voice).**
+6. **Home Assistant (voice).**
    - Install the **Webhook Conversation** integration via HACS (needs Home
      Assistant 2026.4 or newer): HACS → ⋮ → **Custom repositories**, add
      `https://github.com/eulemitkeule/webhook-conversation` as an
@@ -482,7 +502,8 @@ never sent to the displays; back it up with `config.json`.
 Credentials are stored in `secrets.json` next to `config.json` (with Docker,
 `/data/secrets.json`), readable only by the server's user. Back it up along
 with `config.json` and keep it private. The environment variables
-`OPENAI_API_KEY` and `GOOGLE_SERVICE_ACCOUNT_JSON` still work as optional
+`OPENAI_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON` and `HOME_ASSISTANT_URL` /
+`HOME_ASSISTANT_TOKEN` still work as optional
 overrides; when one is set, admin shows that field as set by the environment
 and it can't be edited there.
 

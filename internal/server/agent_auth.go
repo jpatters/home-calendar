@@ -1,14 +1,18 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jpatters/home-calendar/internal/gcal"
+	"github.com/jpatters/home-calendar/internal/homeassistant"
 	"github.com/jpatters/home-calendar/internal/secrets"
 )
 
@@ -19,6 +23,8 @@ type AuthStatus struct {
 	ChatGPT ChatGPTStatus `json:"chatgpt"`
 	APIKey  SecretStatus  `json:"apiKey"`
 	Google  GoogleStatus  `json:"google"`
+	// HomeAssistant shows the instance URL but never the token.
+	HomeAssistant HomeAssistantStatus `json:"homeAssistant"`
 	// Warning is set only on a sign-out whose remote revocation could not
 	// be confirmed.
 	Warning string `json:"warning,omitempty"`
@@ -32,6 +38,12 @@ type ChatGPTStatus struct {
 type SecretStatus struct {
 	Set     bool `json:"set"`
 	FromEnv bool `json:"fromEnv"`
+}
+
+type HomeAssistantStatus struct {
+	Set     bool   `json:"set"`
+	FromEnv bool   `json:"fromEnv"`
+	URL     string `json:"url"`
 }
 
 type GoogleStatus struct {
@@ -54,6 +66,9 @@ func (s *Server) authStatus() AuthStatus {
 		ChatGPT: ChatGPTStatus{SignedIn: cg.SignedIn, Email: cg.Email},
 		APIKey:  SecretStatus{Set: key.Value != "", FromEnv: key.FromEnv},
 		Google:  GoogleStatus{Set: google.Value != "", FromEnv: google.FromEnv},
+	}
+	if ha := s.secrets.HomeAssistant(); ha.Token != "" {
+		st.HomeAssistant = HomeAssistantStatus{Set: true, FromEnv: ha.FromEnv, URL: ha.URL}
 	}
 	switch {
 	case cg.SignedIn:
@@ -184,4 +199,42 @@ func (s *Server) handlePutGoogle(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteGoogle(w http.ResponseWriter, r *http.Request) {
 	s.credentialChanged(w, s.secrets.ClearGoogleServiceAccount(), secrets.EnvGoogleServiceAccount)
+}
+
+func (s *Server) handlePutHomeAssistant(w http.ResponseWriter, r *http.Request) {
+	if s.secrets.HomeAssistant().FromEnv {
+		s.credentialChanged(w, secrets.ErrFromEnv, secrets.EnvHomeAssistantToken)
+		return
+	}
+	var body struct {
+		URL   string `json:"url"`
+		Token string `json:"token"`
+	}
+	if !decodeAuthBody(w, r, &body) {
+		return
+	}
+	token := strings.TrimSpace(body.Token)
+	u, err := url.Parse(strings.TrimSpace(body.URL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		writeError(w, http.StatusBadRequest, "That isn't a web address like http://homeassistant.local:8123.")
+		return
+	}
+	// Only the scheme and host matter (an address copied from a dashboard
+	// page has a path), and the address is shown back unauthenticated.
+	base := u.Scheme + "://" + u.Host
+	if token == "" {
+		writeError(w, http.StatusBadRequest, "Paste the Home Assistant token.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	if err := homeassistant.New(base, token).Check(ctx); err != nil {
+		writeError(w, http.StatusBadRequest, sentence(err.Error()))
+		return
+	}
+	s.credentialChanged(w, s.secrets.SetHomeAssistant(base, token), secrets.EnvHomeAssistantToken)
+}
+
+func (s *Server) handleDeleteHomeAssistant(w http.ResponseWriter, r *http.Request) {
+	s.credentialChanged(w, s.secrets.ClearHomeAssistant(), secrets.EnvHomeAssistantToken)
 }

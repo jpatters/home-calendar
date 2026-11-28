@@ -33,6 +33,26 @@ type fakeResponses struct {
 	auths        []string
 	tools        [][]string
 	instructions []string
+	bodies       []string
+	// firstCall, when set, is a tool the first request calls (with
+	// firstArgs) before later requests answer with the reply.
+	firstCall, firstArgs string
+}
+
+// newFakeResponsesCalling is newFakeResponses whose first response calls the
+// tool name with args.
+func newFakeResponsesCalling(t *testing.T, name, args, reply string) *fakeResponses {
+	t.Helper()
+	f := newFakeResponses(t, reply)
+	f.firstCall, f.firstArgs = name, args
+	return f
+}
+
+// requestBodies returns every request body received.
+func (f *fakeResponses) requestBodies() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.bodies...)
 }
 
 func newFakeResponses(t *testing.T, reply string) *fakeResponses {
@@ -43,7 +63,8 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 			http.NotFound(w, r)
 			return
 		}
-		f.hits.Add(1)
+		hit := f.hits.Add(1)
+		raw, _ := io.ReadAll(r.Body)
 		var body struct {
 			Instructions string `json:"instructions"`
 			Tools        []struct {
@@ -54,7 +75,7 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 				} `json:"tools"`
 			} `json:"tools"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
+		_ = json.Unmarshal(raw, &body)
 		var names []string
 		for _, tool := range body.Tools {
 			if tool.Type != "namespace" {
@@ -68,6 +89,8 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 		f.auths = append(f.auths, r.Header.Get("Authorization"))
 		f.tools = append(f.tools, names)
 		f.instructions = append(f.instructions, body.Instructions)
+		f.bodies = append(f.bodies, string(raw))
+		callTool, callArgs := f.firstCall, f.firstArgs
 		f.mu.Unlock()
 		if reply == "" {
 			w.Header().Set("Content-Type", "application/json")
@@ -76,6 +99,11 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
+		if callTool != "" && hit == 1 {
+			call := fmt.Sprintf(`{"id":"resp_0","object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":%q,"arguments":%q,"status":"completed"}]}`, callTool, callArgs)
+			fmt.Fprintf(w, "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":0,\"response\":%s}\n\n", call)
+			return
+		}
 		final := fmt.Sprintf(`{"id":"resp_1","object":"response","created_at":1764200000,"status":"completed","model":"gpt-test","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":%q,"annotations":[]}]}]}`, reply)
 		fmt.Fprintf(w, "event: response.created\ndata: %s\n\n", `{"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1764200000,"status":"in_progress","model":"gpt-test","output":[]}}`)
 		fmt.Fprintf(w, "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":1,\"response\":%s}\n\n", final)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jpatters/home-calendar/internal/homeassistant"
 	"log"
 	"net/http"
 	"strings"
@@ -62,6 +63,9 @@ func (s *Server) refreshAgent() {
 	}
 	if client := s.googleCalendarClient(); client != nil {
 		deps.Calendar = client
+	}
+	if ha := s.secrets.HomeAssistant(); ha.URL != "" && ha.Token != "" {
+		deps.Home = homeassistant.New(ha.URL, ha.Token)
 	}
 	s.agent.SetCapabilities(agent.Capabilities{
 		Ready:            s.chatgpt.Status().SignedIn || s.secrets.OpenAIKey().Value != "",

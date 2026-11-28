@@ -140,6 +140,14 @@ export function clearAgentGoogle(): Promise<AgentAuth> {
   return agentAuthRequest("DELETE", "/google");
 }
 
+export function putAgentHomeAssistant(url: string, token: string): Promise<AgentAuth> {
+  return agentAuthRequest("PUT", "/home-assistant", { url, token });
+}
+
+export function clearAgentHomeAssistant(): Promise<AgentAuth> {
+  return agentAuthRequest("DELETE", "/home-assistant");
+}
+
 export async function geocode(query: string, signal?: AbortSignal): Promise<GeoResult[]> {
   const res = await fetch(`/api/weather/geocode?q=${encodeURIComponent(query)}`, { signal });
   if (!res.ok) throw new Error(`GET /api/weather/geocode ${res.status}`);

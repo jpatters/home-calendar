@@ -22,6 +22,10 @@ const (
 	// EnvGoogleServiceAccount, when non-empty, overrides the stored Google
 	// service account (the JSON itself or a path to it).
 	EnvGoogleServiceAccount = "GOOGLE_SERVICE_ACCOUNT_JSON"
+	// EnvHomeAssistantURL and EnvHomeAssistantToken, when the token is
+	// non-empty, override the stored Home Assistant connection.
+	EnvHomeAssistantURL   = "HOME_ASSISTANT_URL"
+	EnvHomeAssistantToken = "HOME_ASSISTANT_TOKEN"
 )
 
 // ErrFromEnv reports an attempt to change a value that an environment
@@ -56,10 +60,19 @@ type ChatGPT struct {
 	ExpiresAt    time.Time `json:"expiresAt,omitzero"`
 }
 
+// HomeAssistant is the connection Ziggy uses to control home devices: the
+// instance's base URL and a long-lived access token.
+type HomeAssistant struct {
+	URL     string `json:"url,omitempty"`
+	Token   string `json:"token,omitempty"`
+	FromEnv bool   `json:"-"`
+}
+
 type fileData struct {
-	OpenAIKey            string  `json:"openaiApiKey,omitempty"`
-	GoogleServiceAccount string  `json:"googleServiceAccount,omitempty"`
-	ChatGPT              ChatGPT `json:"chatgpt"`
+	OpenAIKey            string        `json:"openaiApiKey,omitempty"`
+	GoogleServiceAccount string        `json:"googleServiceAccount,omitempty"`
+	HomeAssistant        HomeAssistant `json:"homeAssistant,omitzero"`
+	ChatGPT              ChatGPT       `json:"chatgpt"`
 }
 
 // Store is the secrets file. Environment overrides are read once, at Open.
@@ -67,6 +80,7 @@ type Store struct {
 	path      string
 	envKey    string
 	envGoogle string
+	envHA     HomeAssistant
 	mu        sync.Mutex
 	data      fileData
 }
@@ -79,6 +93,9 @@ func Open(path string) (*Store, error) {
 		path:      path,
 		envKey:    os.Getenv(EnvOpenAIKey),
 		envGoogle: os.Getenv(EnvGoogleServiceAccount),
+	}
+	if tok := os.Getenv(EnvHomeAssistantToken); tok != "" {
+		s.envHA = HomeAssistant{URL: os.Getenv(EnvHomeAssistantURL), Token: tok, FromEnv: true}
 	}
 	raw, err := os.ReadFile(path)
 	switch {
@@ -134,6 +151,29 @@ func (s *Store) SetGoogleServiceAccount(json string) error {
 }
 
 func (s *Store) ClearGoogleServiceAccount() error { return s.SetGoogleServiceAccount("") }
+
+func (s *Store) HomeAssistant() HomeAssistant {
+	if s.envHA.FromEnv {
+		return s.envHA
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.HomeAssistant
+}
+
+func (s *Store) SetHomeAssistant(url, token string) error {
+	if s.envHA.FromEnv {
+		return ErrFromEnv
+	}
+	return s.update(func(d *fileData) { d.HomeAssistant = HomeAssistant{URL: url, Token: token} })
+}
+
+func (s *Store) ClearHomeAssistant() error {
+	if s.envHA.FromEnv {
+		return ErrFromEnv
+	}
+	return s.update(func(d *fileData) { d.HomeAssistant = HomeAssistant{} })
+}
 
 func (s *Store) ChatGPT() ChatGPT {
 	s.mu.Lock()
