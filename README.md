@@ -394,7 +394,7 @@ admin saves config. The client reconnects with exponential backoff.
 | `LISTEN_ADDR`                 | `:8080`             | Listen address |
 | `OPENAI_API_KEY`              | (none)              | Optional. Overrides the API key saved in admin (it then can't be changed there). |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | (none)              | Optional. Overrides the Google service account saved in admin, as the JSON itself or a path to the file. |
-| `TZ`                          | UTC                 | IANA time zone (e.g. `America/Halifax`). Set it so Ziggy reads and books times in local time. |
+| `TZ`                          | weather location's zone, else UTC | IANA time zone (e.g. `America/Halifax`). When unset or empty, the server uses the weather location's time zone from config (read at startup), so Ziggy reads and books times in local time. |
 
 ## Assistant setup (Ziggy)
 
@@ -402,9 +402,12 @@ Everything is configured in the admin **Assistant** tab. The **Connection**
 area shows what Ziggy is using ("Using: ChatGPT subscription", "Using: API
 key" or "Not connected").
 
-1. **Time zone.** Set `TZ` (e.g. `TZ=America/Halifax`) in the server's
-   environment so Ziggy uses local time; without it the container runs in UTC
-   and events are booked in UTC.
+1. **Time zone.** Ziggy books events and decides when it's night in the
+   server's local time. Without `TZ`, the server uses the time zone of the
+   location set in the admin **Weather** tab, picked up when the server starts
+   (restart it after changing the location); with no weather location either,
+   it runs in UTC. Set `TZ` (e.g. `TZ=America/Halifax` in `.env` beside
+   `docker-compose.yml`) to choose the zone explicitly.
 2. **Connect to OpenAI** — either one; a ChatGPT sign-in is used when both are
    set.
    - **Sign in with ChatGPT (uses your ChatGPT plan).** Click **Sign in with
