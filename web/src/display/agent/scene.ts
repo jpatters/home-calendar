@@ -1,6 +1,6 @@
 import type { AgentState, WeatherSnapshot } from "../../types";
 
-export type Pose = "idle" | "think" | "lookout" | "talk" | "sleep" | "confused";
+export type Pose = "idle" | "think" | "lookout" | "talk" | "listen" | "sleep" | "confused";
 export type Sky = "day" | "dusk" | "night";
 export type Conditions = "none" | "partly" | "overcast" | "rain" | "snow" | "fog" | "thunder";
 export type OutfitId =
@@ -23,6 +23,8 @@ export interface SceneInput {
   agentState: AgentState;
   /** The tool the agent is running while thinking. */
   tool?: string;
+  /** The last reply asked a question and its answer may still come. */
+  awaitingReply?: boolean;
   quietStart: string;
   quietEnd: string;
 }
@@ -119,10 +121,11 @@ function inQuietHours(minute: number, start: number, end: number): boolean {
   return minute >= start || minute < end;
 }
 
-function poseFor(state: AgentState, tool: string | undefined, quiet: boolean): Pose {
+function poseFor(state: AgentState, tool: string | undefined, awaitingReply: boolean, quiet: boolean): Pose {
   if (state === "thinking") return tool === "get_weather" ? "lookout" : "think";
   if (state === "talking") return "talk";
   if (state === "error") return "confused";
+  if (awaitingReply) return "listen";
   return quiet ? "sleep" : "idle";
 }
 
@@ -147,12 +150,12 @@ function conditionsFor(code: number): Conditions {
   return "none";
 }
 
-export function sceneFor({ now, weather, agentState, tool, quietStart, quietEnd }: SceneInput): Scene {
+export function sceneFor({ now, weather, agentState, tool, awaitingReply = false, quietStart, quietEnd }: SceneInput): Scene {
   const today = localDate(now);
   const minute = now.getHours() * 60 + now.getMinutes();
   const quiet = inQuietHours(minute, minutesOf(quietStart), minutesOf(quietEnd));
   return {
-    pose: poseFor(agentState, tool, quiet),
+    pose: poseFor(agentState, tool, awaitingReply, quiet),
     outfit: holidayOutfitFor(now) ?? seasonOutfit(now.getMonth()),
     sky: skyFor(minute, today, weather),
     conditions: weather ? conditionsFor(weather.current.weatherCode) : "none",

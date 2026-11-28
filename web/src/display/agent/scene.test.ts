@@ -125,6 +125,14 @@ describe("sceneFor pose", () => {
     expect(sceneFor(input({ agentState: "thinking", tool, now })).pose).toBe(pose);
   });
 
+  test("waiting for an answer keeps the assistant up during quiet hours", () => {
+    expect(sceneFor(input({ agentState: "idle", awaitingReply: true, now: at(2026, 7, 15, 23, 30) })).pose).toBe("listen");
+  });
+
+  test("waiting for an answer gives way to a new turn", () => {
+    expect(sceneFor(input({ agentState: "thinking", awaitingReply: true })).pose).toBe("think");
+  });
+
   test("a weather tool reported with a finished turn does not look out the window", () => {
     expect(sceneFor(input({ agentState: "talking", tool: "get_weather" })).pose).toBe("talk");
   });

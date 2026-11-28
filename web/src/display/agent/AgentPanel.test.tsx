@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import AgentPanel from "./AgentPanel";
-import { LOOKOUT_X, ROOM_W } from "./sprites/room";
+import { BEDSIDE_X, LOOKOUT_X, ROOM_W } from "./sprites/room";
 import type { AgentSnapshot } from "../../types";
 
 type Settings = { textInputEnabled: boolean; quietStart: string; quietEnd: string; voiceDelayMs: number };
@@ -192,7 +192,10 @@ describe("AgentPanel", () => {
     expect(screen.queryByText("Halfway.")).toBeNull();
   });
 
-  test("after talking during quiet hours the assistant goes back to sleep", () => {
+  const character = () => document.querySelector(".agent-character") as HTMLElement;
+  const fullHeight = () => screen.getByRole("img").getAttribute("viewBox") === "0 0 16 28";
+
+  test("after talking during quiet hours the assistant walks to bed, then goes back to sleep", () => {
     vi.setSystemTime(new Date(2026, 6, 15, 23, 30));
     render(
       <AgentPanel agent={snapshot({ state: "talking", reply: "Goodnight." })} weather={null} settings={settings()} />,
@@ -202,7 +205,14 @@ describe("AgentPanel", () => {
     advance(2100);
 
     expect(screen.queryByText("Goodnight.")).toBeNull();
+    expect(screen.getByRole("img", { name: "Assistant is going to bed" })).toBeTruthy();
+    expect(fullHeight()).toBe(true);
+    expect(character().style.left).toBe(`${(BEDSIDE_X / ROOM_W) * 100}%`);
+
+    advance(3100);
+
     expect(screen.getByRole("img", { name: "Assistant is sleeping" })).toBeTruthy();
+    expect(fullHeight()).toBe(false);
   });
 
   test("falls asleep within a minute of quiet hours beginning while the panel is open", () => {
@@ -211,8 +221,90 @@ describe("AgentPanel", () => {
     expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
 
     advance(60 * 1000);
+    expect(screen.getByRole("img", { name: "Assistant is going to bed" })).toBeTruthy();
+
+    advance(3100);
+    expect(screen.getByRole("img", { name: "Assistant is sleeping" })).toBeTruthy();
+  });
+
+  test("after asking a question at night the assistant waits up for the answer before going to bed", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 23, 30));
+    const question = "Which calendar should I add it to?";
+    render(<AgentPanel agent={snapshot({ state: "talking", reply: question })} weather={null} settings={settings()} />);
+
+    advance(question.length * 60 + 100);
+    expect(screen.queryByText(question)).toBeNull();
+    expect(screen.getByRole("img", { name: "Assistant is waiting for an answer" })).toBeTruthy();
+
+    advance(9000);
+    expect(screen.getByRole("img", { name: "Assistant is waiting for an answer" })).toBeTruthy();
+
+    advance(1100);
+    expect(screen.getByRole("img", { name: "Assistant is going to bed" })).toBeTruthy();
+  });
+
+  test("an answer while waiting is handled as a new turn", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 23, 30));
+    const question = "Which calendar?";
+    const { rerender } = render(
+      <AgentPanel agent={snapshot({ state: "talking", reply: question })} weather={null} settings={settings()} />,
+    );
+    advance(2100);
+    expect(screen.getByRole("img", { name: "Assistant is waiting for an answer" })).toBeTruthy();
+
+    rerender(
+      <AgentPanel
+        agent={snapshot({ state: "thinking", heard: "the family one", at: new Date().toISOString() })}
+        weather={null}
+        settings={settings()}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
+  });
+
+  test("opening the display during quiet hours finds the assistant already asleep", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 23, 30));
+    render(<AgentPanel agent={snapshot()} weather={null} settings={settings()} />);
+    expect(screen.getByRole("img", { name: "Assistant is sleeping" })).toBeTruthy();
+  });
+
+  test("getting into bed is immediate, not a slide across the bed", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 21, 59, 59));
+    render(<AgentPanel agent={snapshot()} weather={null} settings={settings()} />);
+    advance(60 * 1000);
+    advance(3100);
 
     expect(screen.getByRole("img", { name: "Assistant is sleeping" })).toBeTruthy();
+    expect(character().classList.contains("no-walk")).toBe(true);
+  });
+
+  test("woken in bed, the assistant gets up at the bedside and walks from there", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 23, 30));
+    const { rerender } = render(<AgentPanel agent={snapshot()} weather={null} settings={settings()} />);
+
+    rerender(<AgentPanel agent={snapshot({ state: "thinking" })} weather={null} settings={settings()} />);
+
+    expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
+    expect(fullHeight()).toBe(true);
+    expect(character().style.left).toBe(`${(BEDSIDE_X / ROOM_W) * 100}%`);
+    expect(character().classList.contains("no-walk")).toBe(true);
+
+    advance(100);
+
+    expect(character().style.left).not.toBe(`${(BEDSIDE_X / ROOM_W) * 100}%`);
+    expect(character().classList.contains("no-walk")).toBe(false);
+  });
+
+  test("woken while walking to bed, the assistant answers instead of getting into bed", () => {
+    vi.setSystemTime(new Date(2026, 6, 15, 21, 59, 59));
+    const { rerender } = render(<AgentPanel agent={snapshot()} weather={null} settings={settings()} />);
+    advance(60 * 1000);
+    expect(screen.getByRole("img", { name: "Assistant is going to bed" })).toBeTruthy();
+
+    rerender(<AgentPanel agent={snapshot({ state: "thinking" })} weather={null} settings={settings()} />);
+    advance(3100);
+
+    expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
   });
 
   test("shows an ellipsis bubble while thinking", () => {

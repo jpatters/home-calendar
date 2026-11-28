@@ -6,6 +6,7 @@ import { CHAR_H, CHAR_W, SLEEP_VISIBLE_ROWS, composeCharacter, type Face } from 
 import {
   ROOM_H,
   ROOM_W,
+  BEDSIDE_X,
   LOOKOUT_X,
   SLEEP_X,
   SLEEP_Y,
@@ -28,6 +29,12 @@ const MAX_TALK_MS = 12000;
 const SCENE_REFRESH_MS = 60 * 1000;
 const FRAME_MS = 200;
 const WANDER_MS = 4000;
+/** How long a walk across the room takes; matches `.agent-character`'s transition. */
+const WALK_MS = 3000;
+/** How long Ziggy waits for an answer after asking a question. */
+const FOLLOW_UP_MS = 10000;
+/** How long Ziggy stands at the bedside after getting up, before walking off. */
+const RISE_MS = 50;
 const SEND_FAILED_REPLY = "I couldn't reach the server. Try again.";
 
 type Speech = Pick<AgentSnapshot, "state" | "reply" | "at" | "spoken">;
@@ -37,6 +44,7 @@ const POSE_LABEL: Record<Pose, string> = {
   think: "thinking",
   lookout: "looking out the window",
   talk: "talking",
+  listen: "waiting for an answer",
   sleep: "sleeping",
   confused: "confused",
 };
@@ -95,6 +103,8 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     sendFailure && (!agent || Date.parse(sendFailure.at) >= Date.parse(agent.at)) ? sendFailure : agent;
   const talkFrom = speechStartsAt(speech, settings.voiceDelayMs);
   const talkUntil = speechEndsAt(speech, settings.voiceDelayMs);
+  // Home Assistant keeps listening after a reply that ends in a question.
+  const awaitUntil = speech?.state === "talking" && speech.reply.trim().endsWith("?") ? talkUntil + FOLLOW_UP_MS : 0;
   const reported = speech?.state ?? "idle";
   const agentState: AgentState = !speaks(reported)
     ? reported
@@ -109,6 +119,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     weather,
     agentState,
     tool: agent?.tool,
+    awaitingReply: now >= talkUntil && now < awaitUntil,
     quietStart: settings.quietStart,
     quietEnd: settings.quietEnd,
   });
@@ -118,18 +129,34 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   if (scene.pose === "lookout" && !atWindow) setAtWindow(true);
   if (atWindow && (scene.pose === "idle" || scene.pose === "sleep")) setAtWindow(false);
 
+  // Going to sleep, Ziggy walks to the bedside first and gets into bed once
+  // he's there; getting up, he appears at the bedside and walks from there.
+  // A display opened during quiet hours finds him already in bed.
+  const [bed, setBed] = useState<"up" | "walking" | "inBed" | "rising">(() =>
+    scene.pose === "sleep" ? "inBed" : "up",
+  );
+  if (scene.pose === "sleep" && (bed === "up" || bed === "rising")) setBed("walking");
+  if (scene.pose !== "sleep" && bed === "walking") setBed("up");
+  if (scene.pose !== "sleep" && bed === "inBed") setBed("rising");
+
+  useEffect(() => {
+    if (bed !== "walking" && bed !== "rising") return;
+    const id = setTimeout(() => setBed(bed === "walking" ? "inBed" : "up"), bed === "walking" ? WALK_MS : RISE_MS);
+    return () => clearTimeout(id);
+  }, [bed]);
+
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), SCENE_REFRESH_MS);
     return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
-    const timers = [talkFrom, talkUntil]
+    const timers = [talkFrom, talkUntil, awaitUntil]
       .map((at) => at - Date.now())
       .filter((remaining) => remaining > 0)
       .map((remaining) => setTimeout(() => setTick((t) => t + 1), remaining));
     return () => timers.forEach(clearTimeout);
-  }, [talkFrom, talkUntil]);
+  }, [talkFrom, talkUntil, awaitUntil]);
 
   useEffect(() => {
     const id = setInterval(() => setFrame((f) => f + 1), FRAME_MS);
@@ -156,14 +183,17 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
     if (e.key === "Enter") send();
   };
 
-  const sleeping = scene.pose === "sleep";
-  const sprite = composeCharacter(scene.outfit, faceFor(scene.pose, frame));
+  const goingToBed = scene.pose === "sleep" && bed !== "inBed";
+  const sleeping = scene.pose === "sleep" && !goingToBed;
+  const sprite = composeCharacter(scene.outfit, faceFor(goingToBed ? "idle" : scene.pose, frame));
   const grid = sleeping ? sprite.grid.slice(0, SLEEP_VISIBLE_ROWS) : sprite.grid;
   const charX = sleeping
     ? SLEEP_X
-    : atWindow || scene.pose === "lookout"
-      ? LOOKOUT_X
-      : Math.round(WANDER_MIN_X + wander * (WANDER_MAX_X - WANDER_MIN_X));
+    : goingToBed || bed === "rising"
+      ? BEDSIDE_X
+      : atWindow || scene.pose === "lookout"
+        ? LOOKOUT_X
+        : Math.round(WANDER_MIN_X + wander * (WANDER_MAX_X - WANDER_MIN_X));
   const charY = sleeping ? SLEEP_Y : STAND_Y;
   const charH = sleeping ? SLEEP_VISIBLE_ROWS : CHAR_H;
   const rects = roomRects({
@@ -179,7 +209,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const character = (
     <svg
       role="img"
-      aria-label={`Assistant is ${POSE_LABEL[scene.pose]}`}
+      aria-label={`Assistant is ${goingToBed ? "going to bed" : POSE_LABEL[scene.pose]}`}
       viewBox={`0 0 ${CHAR_W} ${charH}`}
       className="agent-character-sprite"
     >
@@ -199,7 +229,9 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
         </svg>
         {bubble && <div className="agent-bubble">{bubble}</div>}
         <div
-          className={`agent-character${scene.pose === "lookout" ? " to-window" : ""}`}
+          className={`agent-character${scene.pose === "lookout" ? " to-window" : ""}${
+            sleeping || bed === "rising" ? " no-walk" : ""
+          }`}
           style={{
             left: pct(charX, ROOM_W),
             top: pct(charY, ROOM_H),
