@@ -116,6 +116,20 @@ describe("sceneFor pose", () => {
   });
 });
 
+describe("sceneFor Biscuit", () => {
+  test.each([
+    ["runs on her wheel all night", at(2026, 7, 15, 23, 30), "wheel"],
+    ["still running at 3am", at(2026, 7, 15, 3, 7), "wheel"],
+    ["naps in her nest by day", at(2026, 7, 15, 12, 5), "nap"],
+    ["takes a short run at the top of the hour", at(2026, 7, 15, 12, 0), "wheel"],
+    ["still on that run a minute later", at(2026, 7, 15, 12, 1), "wheel"],
+    ["back in the nest after two minutes", at(2026, 7, 15, 12, 2), "nap"],
+    ["runs again each quarter hour", at(2026, 7, 15, 14, 45), "wheel"],
+  ] as const)("%s", (_name, now, biscuit) => {
+    expect(sceneFor(input({ now })).biscuit).toBe(biscuit);
+  });
+});
+
 describe("sceneFor sky", () => {
   test.each([
     ["well before sunrise", 5, 0, "night"],

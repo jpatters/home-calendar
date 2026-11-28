@@ -1,6 +1,6 @@
 // Ziggy's room, drawn as a list of pixel rectangles in a ROOM_W x ROOM_H grid.
 // The window shows the sky and weather; precipitation animates with `tick`.
-import type { Conditions, Sky } from "../scene";
+import type { Biscuit, Conditions, Sky } from "../scene";
 
 export const ROOM_W = 112;
 export const ROOM_H = 72;
@@ -30,6 +30,7 @@ export interface Rect {
 export interface RoomInput {
   sky: Sky;
   conditions: Conditions;
+  biscuit: Biscuit;
   tick: number;
   blanket: string;
 }
@@ -65,7 +66,7 @@ function mix(a: string, b: string, t: number): string {
   return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
 }
 
-export function roomRects({ sky, conditions, tick, blanket }: RoomInput): Rect[] {
+export function roomRects({ sky, conditions, biscuit, tick, blanket }: RoomInput): Rect[] {
   const out: Rect[] = [];
   const px = (x: number, y: number, w: number, h: number, fill: string, opacity?: number) =>
     out.push({ x, y, w, h, fill, opacity });
@@ -183,6 +184,58 @@ export function roomRects({ sky, conditions, tick, blanket }: RoomInput): Rect[]
   px(bx, by + 3, 22, 7, blanket);
   for (let i = 0; i < 22; i += 4) px(bx + i, by + 5, 2, 2, "#ffffff");
   outline(bx, by + 3, 32, 11);
+
+  // shelf above the bed with Biscuit's cage: a wheel on the left, a nest of
+  // bedding on the right
+  const sx = 77;
+  const sy = 27;
+  px(sx, sy, 28, 2, "#7a4a2a");
+  outline(sx, sy, 28, 2);
+  px(sx + 3, sy + 2, 2, 2, "#5c3820");
+  px(sx + 23, sy + 2, 2, 2, "#5c3820");
+  const gx = sx + 3;
+  const gy = sy - 14;
+  const gw = 22;
+  px(gx, gy + 12, gw, 2, "#4f86c6");
+  outline(gx, gy + 12, gw, 2);
+  px(gx + 1, gy + 11, gw - 2, 1, "#e8d39a");
+  for (let i = 0; i < gw; i += 2) px(gx + i, gy + 1, 1, 11, "#b7bcc8");
+  px(gx, gy, gw, 1, "#9aa0ab");
+  px(gx + 2, gy - 1, gw - 4, 1, "#9aa0ab");
+  px(gx + 14, gy + 8, 7, 3, "#e8d39a");
+  px(gx + 15, gy + 7, 5, 1, "#e8d39a");
+  px(gx + 16, gy + 9, 1, 1, "#c9b277");
+  px(gx + 19, gy + 8, 1, 1, "#c9b277");
+  // wheel: an 8x8 ring on a stand, spokes turning while she runs
+  const wx = gx + 2;
+  const wy = gy + 2;
+  const RING = ["..####..", ".#....#.", "#......#", "#......#", "#......#", "#......#", ".#....#.", "..####.."];
+  RING.forEach((row, r) => [...row].forEach((ch, c) => ch === "#" && px(wx + c, wy + r, 1, 1, "#d8473f")));
+  px(wx + 3, wy + 8, 2, 1, "#9aa0ab");
+  const spin = biscuit === "wheel" ? tick % 2 : 0;
+  if (spin === 0) {
+    px(wx + 1, wy + 3, 6, 1, "#9aa0ab");
+    px(wx + 3, wy + 1, 1, 6, "#9aa0ab");
+  } else {
+    for (let i = 1; i < 7; i++) px(wx + i, wy + i, 1, 1, "#9aa0ab");
+    for (let i = 1; i < 7; i++) px(wx + 7 - i, wy + i, 1, 1, "#9aa0ab");
+  }
+  // Biscuit: ginger and white
+  if (biscuit === "wheel") {
+    const hop = tick % 2;
+    px(wx + 2, wy + 4 - hop, 4, 2, "#e0a055");
+    px(wx + 5, wy + 4 - hop, 1, 1, "#fff3e0");
+    px(wx + 5, wy + 3 - hop, 1, 1, "#e0a055");
+    px(wx + 5, wy + 4 - hop, 1, 1, INK);
+    px(wx + 2 + hop, wy + 6 - hop, 1, 1, "#f5a3c0");
+    px(wx + 5 - hop, wy + 6 - hop, 1, 1, "#f5a3c0");
+  } else {
+    px(gx + 15, gy + 6, 5, 2, "#e0a055");
+    px(gx + 16, gy + 5, 3, 1, "#e0a055");
+    px(gx + 18, gy + 7, 2, 1, "#fff3e0");
+    px(gx + 18, gy + 6, 1, 1, INK);
+    px(gx + 16, gy + 5, 1, 1, "#f5a3c0");
+  }
 
   return out;
 }

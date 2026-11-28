@@ -1195,10 +1195,12 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   z-index: 1;
 }
 .agent-mark,
+/* Beside the pillow rather than above it, clear of Biscuit's shelf. */
 .agent-zzz {
   position: absolute;
-  bottom: 100%;
-  left: 80%;
+  bottom: 30%;
+  right: 100%;
+  white-space: nowrap;
   font-family: ui-monospace, monospace;
   font-weight: 700;
   color: #2b2233;

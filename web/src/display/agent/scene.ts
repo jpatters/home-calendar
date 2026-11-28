@@ -2,6 +2,8 @@ import type { AgentState, WeatherSnapshot } from "../../types";
 
 export type Pose = "idle" | "think" | "lookout" | "talk" | "listen" | "sleep" | "confused";
 export type Sky = "day" | "dusk" | "night";
+/** What Biscuit the hamster is doing. */
+export type Biscuit = "nap" | "wheel";
 export type Conditions = "none" | "partly" | "overcast" | "rain" | "snow" | "fog" | "thunder";
 export type OutfitId =
   | "winter"
@@ -35,6 +37,7 @@ export interface Scene {
   outfit: OutfitId;
   sky: Sky;
   conditions: Conditions;
+  biscuit: Biscuit;
 }
 
 /** Easter Sunday (Gregorian) via the anonymous Meeus/Jones/Butcher algorithm. */
@@ -141,6 +144,15 @@ function skyFor(minute: number, today: string, weather: WeatherSnapshot | null):
   return minute > sunrise && minute < sunset ? "day" : "night";
 }
 
+/** Minutes at the start of each quarter hour that Biscuit spends on her wheel by day. */
+const DAY_RUN_MINUTES = 2;
+
+// Biscuit is nocturnal: on her wheel all night, napping by day apart from a
+// short run every quarter hour.
+function biscuitFor(minute: number, quiet: boolean): Biscuit {
+  return quiet || minute % 15 < DAY_RUN_MINUTES ? "wheel" : "nap";
+}
+
 function conditionsFor(code: number): Conditions {
   if (code === 2) return "partly";
   if (code === 3) return "overcast";
@@ -160,5 +172,6 @@ export function sceneFor({ now, weather, agentState, tool, awaitingReply = false
     outfit: quiet ? "pajamas" : (holidayOutfitFor(now) ?? seasonOutfit(now.getMonth())),
     sky: skyFor(minute, today, weather),
     conditions: weather ? conditionsFor(weather.current.weatherCode) : "none",
+    biscuit: biscuitFor(minute, quiet),
   };
 }

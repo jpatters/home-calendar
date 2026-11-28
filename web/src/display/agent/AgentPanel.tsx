@@ -199,6 +199,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const rects = roomRects({
     sky: scene.sky,
     conditions: scene.conditions,
+    biscuit: scene.biscuit,
     tick: frame,
     blanket: scene.outfit === "christmas" ? "#2e8b57" : "#5b7fd6",
   });
