@@ -3,9 +3,11 @@ import type { AgentAuth } from "../types";
 import {
   clearAgentApiKey,
   clearAgentGoogle,
+  clearAgentHomeAssistant,
   completeChatGPTSignIn,
   putAgentApiKey,
   putAgentGoogle,
+  putAgentHomeAssistant,
   signOutChatGPT,
   startChatGPTSignIn,
 } from "../api";
@@ -55,6 +57,7 @@ export default function AssistantConnection({ auth, onAuth }: Props) {
       <ChatGPTAccount auth={auth} onAuth={onAuth} />
       <ApiKey auth={auth} onAuth={onAuth} />
       <GoogleCalendar auth={auth} onAuth={onAuth} />
+      <HomeAssistant auth={auth} onAuth={onAuth} />
     </div>
   );
 }
@@ -279,6 +282,99 @@ function GoogleKeySteps() {
         Only calendars added in admin with their Google "Secret address in iCal format" can be changed. Keep the
         downloaded file private; it grants access to every calendar you share with it.
       </p>
+    </details>
+  );
+}
+
+// The Home Assistant connection takes an address and a token together; the
+// server checks them against Home Assistant before saving.
+function HomeAssistant({ auth, onAuth }: Props) {
+  const { busy, error, run } = useAction();
+  const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const ha = auth.homeAssistant;
+  const locked = ha.fromEnv;
+
+  const connect = async () => {
+    const next = await run(() => putAgentHomeAssistant(url, token));
+    if (!next) return;
+    setUrl("");
+    setToken("");
+    onAuth(next);
+  };
+
+  const disconnect = async () => {
+    const next = await run(clearAgentHomeAssistant);
+    if (next) onAuth(next);
+  };
+
+  const status = locked
+    ? `Set by environment (HOME_ASSISTANT_TOKEN): ${ha.url}`
+    : ha.set
+      ? `Connected to ${ha.url}`
+      : "Not set up";
+
+  return (
+    <fieldset>
+      <legend>Home Assistant</legend>
+      <HomeAssistantSteps />
+      <label>
+        <span>Address</span>
+        <input
+          type="url"
+          autoComplete="off"
+          placeholder="http://homeassistant.local:8123"
+          disabled={locked}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </label>
+      <label>
+        <span>Long-lived access token</span>
+        <input
+          type="password"
+          autoComplete="off"
+          disabled={locked}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+      </label>
+      <div className="credential-row">
+        <span className="hint">{status}</span>
+        <button disabled={locked || busy || !url.trim() || !token.trim()} onClick={() => void connect()}>
+          Connect
+        </button>
+        <button disabled={locked || busy || !ha.set} onClick={() => void disconnect()}>
+          Disconnect
+        </button>
+      </div>
+      {error && <div className="error">{error}</div>}
+    </fieldset>
+  );
+}
+
+function HomeAssistantSteps() {
+  return (
+    <details className="setup-steps">
+      <summary>How to connect Home Assistant</summary>
+      <ol>
+        <li>
+          Optional but safer: in Home Assistant, go to <strong>Settings → People → Users</strong> and add a user
+          such as "Ziggy" that is <strong>not an administrator</strong>, then log in as that user for the next step.
+        </li>
+        <li>
+          Open your <strong>Profile → Security</strong>, and under <strong>Long-lived access tokens</strong> choose{" "}
+          <strong>Create token</strong>. Copy it right away; it's only shown once.
+        </li>
+        <li>
+          Enter your Home Assistant's address (the one you open in a browser, such as http://192.168.1.20:8123) and
+          the token below, then press <strong>Connect</strong>.
+        </li>
+        <li>
+          Ziggy can only use devices exposed to Assist: <strong>Settings → Voice assistants → Expose</strong>.
+          Locks, alarms, garage doors and gates are always look-only.
+        </li>
+      </ol>
     </details>
   );
 }

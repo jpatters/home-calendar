@@ -48,7 +48,7 @@ func (r *Registry) params() []responses.ToolUnionParam {
 	}
 	return []responses.ToolUnionParam{{OfNamespace: &responses.NamespaceToolParam{
 		Name:        toolNamespace,
-		Description: "Tools for the family's wall calendar: calendars, scores, weather, hot tub and pool.",
+		Description: "Tools for the family's wall calendar: calendars, scores, weather, hot tub and pool, memories and the home's devices.",
 		Tools:       fns,
 	}}}
 }

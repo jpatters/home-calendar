@@ -47,7 +47,8 @@ type PoolControl interface {
 }
 
 // Deps are the data sources and devices the tools act on. Calendar is nil
-// when no Google service account is configured. Location is the zone that
+// when no Google service account is configured, and Home when Home Assistant
+// isn't connected. Location is the zone that
 // times without an offset are interpreted in; nil means time.Local.
 type Deps struct {
 	Config   func() types.Config
@@ -60,6 +61,7 @@ type Deps struct {
 	HotTub   HotTubControl
 	Pool     PoolControl
 	Memories MemoryStore
+	Home     HomeControl
 }
 
 // All returns every tool, in the order they are offered to the model. The
@@ -89,6 +91,8 @@ func All(d Deps) []agent.Tool {
 		remember(d),
 		updateMemory(d),
 		forget(d),
+		listDevices(d),
+		controlDevice(d),
 	)
 	return all
 }

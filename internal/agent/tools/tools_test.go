@@ -23,8 +23,8 @@ func TestAllOffersEveryToolWithAStrictSchema(t *testing.T) {
 	d, _ := googleDeps(t)
 	d.Memories = memoryStore(t)
 	want := []string{
-		"create_event", "delete_event", "forget", "get_hot_tub", "get_pool", "get_scores", "get_weather",
-		"list_events", "remember", "set_hot_tub_target", "set_pool_target", "update_event", "update_memory",
+		"control_device", "create_event", "delete_event", "forget", "get_hot_tub", "get_pool", "get_scores", "get_weather",
+		"list_devices", "list_events", "remember", "set_hot_tub_target", "set_pool_target", "update_event", "update_memory",
 	}
 
 	var names []string

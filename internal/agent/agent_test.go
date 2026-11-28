@@ -1042,6 +1042,16 @@ func TestInstructionsReadMemoriesFreshEachTurn(t *testing.T) {
 	}
 }
 
+func TestInstructionsSayHomeDevicesChangeOnlyWhenAskedAndSecurityIsLookOnly(t *testing.T) {
+	instructions := instructionsAt(t, time.Time{}, nil)
+
+	for _, want := range []string{"control a device", "look-only"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("instructions missing %q:\n%s", want, instructions)
+		}
+	}
+}
+
 func TestInstructionsIntroduceBiscuit(t *testing.T) {
 	if instructions := instructionsAt(t, time.Time{}, nil); !strings.Contains(instructions, "Biscuit") {
 		t.Errorf("instructions don't mention Biscuit:\n%s", instructions)

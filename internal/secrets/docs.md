@@ -6,7 +6,8 @@ Path: @/internal/secrets
 
 - Owns `secrets.json`, the owner-only file that holds the assistant's credentials: the OpenAI API key, the Google service-account JSON key, and the "Sign in with ChatGPT" registration (issued client id, host id, account identity and tokens).
 - Exists separately from @/internal/config because `config.json` is served to every browser without authentication (`GET /api/config`, `config` WebSocket frames). Nothing in this store is ever part of that config.
-- Environment variables `OPENAI_API_KEY` and `GOOGLE_SERVICE_ACCOUNT_JSON` override the stored values; they are optional overrides, not the primary way to configure Ziggy.
+- Holds the Home Assistant connection too (`HomeAssistant{URL, Token}`, `SetHomeAssistant` / `ClearHomeAssistant`), which Ziggy uses to control home devices via @/internal/homeassistant.
+- Environment variables `OPENAI_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON` and `HOME_ASSISTANT_URL` + `HOME_ASSISTANT_TOKEN` (the pair applies when the token is non-empty) override the stored values; they are optional overrides, not the primary way to configure Ziggy.
 
 ### How it fits into the larger codebase
 

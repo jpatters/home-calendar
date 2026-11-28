@@ -26,6 +26,8 @@ func noEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(secrets.EnvOpenAIKey, "")
 	t.Setenv(secrets.EnvGoogleServiceAccount, "")
+	t.Setenv(secrets.EnvHomeAssistantURL, "")
+	t.Setenv(secrets.EnvHomeAssistantToken, "")
 }
 
 func TestPathForSitsBesideTheConfigFile(t *testing.T) {
@@ -232,5 +234,46 @@ func TestOpenRefusesACorruptFileInsteadOfReplacingIt(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(path); string(got) != string(corrupt) {
 		t.Errorf("corrupt file was rewritten to %q, want it left for the owner to repair", got)
+	}
+}
+
+func TestHomeAssistantConnectionIsSavedAndCleared(t *testing.T) {
+	noEnv(t)
+	dir := t.TempDir()
+	s := openIn(t, dir)
+
+	if err := s.SetHomeAssistant("http://192.168.68.20:8123", "ha-token"); err != nil {
+		t.Fatalf("SetHomeAssistant: %v", err)
+	}
+	want := secrets.HomeAssistant{URL: "http://192.168.68.20:8123", Token: "ha-token"}
+	if got := openIn(t, dir).HomeAssistant(); got != want {
+		t.Errorf("after reopen = %+v, want %+v", got, want)
+	}
+
+	if err := s.ClearHomeAssistant(); err != nil {
+		t.Fatalf("ClearHomeAssistant: %v", err)
+	}
+	if got := openIn(t, dir).HomeAssistant(); got != (secrets.HomeAssistant{}) {
+		t.Errorf("after clear = %+v, want empty", got)
+	}
+}
+
+func TestHomeAssistantFromTheEnvironmentOverridesAndCannotBeChanged(t *testing.T) {
+	noEnv(t)
+	dir := t.TempDir()
+	openIn(t, dir).SetHomeAssistant("http://stored:8123", "stored-token")
+
+	t.Setenv(secrets.EnvHomeAssistantURL, "http://env:8123")
+	t.Setenv(secrets.EnvHomeAssistantToken, "env-token")
+	s := openIn(t, dir)
+
+	if got := s.HomeAssistant(); got != (secrets.HomeAssistant{URL: "http://env:8123", Token: "env-token", FromEnv: true}) {
+		t.Errorf("HomeAssistant = %+v, want the environment values", got)
+	}
+	if err := s.SetHomeAssistant("http://new:8123", "new"); !errors.Is(err, secrets.ErrFromEnv) {
+		t.Errorf("SetHomeAssistant err = %v, want ErrFromEnv", err)
+	}
+	if err := s.ClearHomeAssistant(); !errors.Is(err, secrets.ErrFromEnv) {
+		t.Errorf("ClearHomeAssistant err = %v, want ErrFromEnv", err)
 	}
 }

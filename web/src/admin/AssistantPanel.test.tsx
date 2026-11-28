@@ -24,6 +24,7 @@ interface AuthOverrides {
   chatgpt?: Partial<AgentAuth["chatgpt"]>;
   apiKey?: Partial<AgentAuth["apiKey"]>;
   google?: Partial<AgentAuth["google"]>;
+  homeAssistant?: Partial<AgentAuth["homeAssistant"]>;
 }
 
 function agentAuth(overrides: AuthOverrides = {}): AgentAuth {
@@ -32,6 +33,7 @@ function agentAuth(overrides: AuthOverrides = {}): AgentAuth {
     chatgpt: { signedIn: false, email: "", ...overrides.chatgpt },
     apiKey: { set: false, fromEnv: false, ...overrides.apiKey },
     google: { set: false, fromEnv: false, serviceAccountEmail: "", ...overrides.google },
+    homeAssistant: { set: false, fromEnv: false, url: "", ...overrides.homeAssistant },
   };
 }
 
@@ -77,6 +79,9 @@ function defaultRoutes(): Record<string, Handler> {
     "PUT /api/agent/auth/google": () =>
       update({ google: { set: true, fromEnv: false, serviceAccountEmail: SERVICE_ACCOUNT_EMAIL } }),
     "DELETE /api/agent/auth/google": () => update({ google: { set: false, fromEnv: false, serviceAccountEmail: "" } }),
+    "PUT /api/agent/auth/home-assistant": (init) =>
+      update({ homeAssistant: { set: true, fromEnv: false, url: (bodyOf(init) as { url: string }).url } }),
+    "DELETE /api/agent/auth/home-assistant": () => update({ homeAssistant: { set: false, fromEnv: false, url: "" } }),
     "PUT /api/config": (init) => new Response(String(init?.body), { status: 200 }),
   };
 }
@@ -394,6 +399,69 @@ describe("AssistantPanel connection", () => {
       expect((apiKey.getByLabelText(/api key/i) as HTMLInputElement).disabled).toBe(true);
       expect((apiKey.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
       expect((apiKey.getByRole("button", { name: "Clear" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  describe("Home Assistant", () => {
+    test("explains how to create a token", async () => {
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      fireEvent.click(ha.getByText("How to connect Home Assistant"));
+
+      expect(ha.getByText(/Long-lived access tokens/)).toBeTruthy();
+      expect(ha.getByText(/Expose/)).toBeTruthy();
+    });
+
+    test("reports when it isn't set up", async () => {
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      expect(await ha.findByText("Not set up")).toBeTruthy();
+    });
+
+    test("connecting sends the address and token, then shows where it's connected and clears the token", async () => {
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      fireEvent.change(await ha.findByLabelText("Address"), { target: { value: "http://192.168.68.20:8123" } });
+      const token = ha.getByLabelText("Long-lived access token") as HTMLInputElement;
+      expect(token.type).toBe("password");
+      fireEvent.change(token, { target: { value: "ha-secret" } });
+      fireEvent.click(ha.getByRole("button", { name: "Connect" }));
+
+      expect(await ha.findByText("Connected to http://192.168.68.20:8123")).toBeTruthy();
+      const [, init] = requests("PUT", "/api/agent/auth/home-assistant")[0];
+      expect(bodyOf(init)).toEqual({ url: "http://192.168.68.20:8123", token: "ha-secret" });
+      expect(token.value).toBe("");
+    });
+
+    test("shows the server's error when the connection fails", async () => {
+      routes["PUT /api/agent/auth/home-assistant"] = () => json({ error: "The Home Assistant token was rejected." }, 400);
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      fireEvent.change(await ha.findByLabelText("Address"), { target: { value: "http://ha:8123" } });
+      fireEvent.change(ha.getByLabelText("Long-lived access token"), { target: { value: "nope" } });
+      fireEvent.click(ha.getByRole("button", { name: "Connect" }));
+
+      expect(await ha.findByText("The Home Assistant token was rejected.")).toBeTruthy();
+      expect(ha.queryByText(/Connected to/)).toBeNull();
+    });
+
+    test("disconnecting forgets the connection", async () => {
+      auth = agentAuth({ homeAssistant: { set: true, url: "http://ha:8123" } });
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      await ha.findByText("Connected to http://ha:8123");
+      fireEvent.click(ha.getByRole("button", { name: "Disconnect" }));
+
+      expect(await ha.findByText("Not set up")).toBeTruthy();
+    });
+
+    test("is locked when set by the environment", async () => {
+      auth = agentAuth({ homeAssistant: { set: true, fromEnv: true, url: "http://ha:8123" } });
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      expect(await ha.findByText(/Set by environment \(HOME_ASSISTANT_TOKEN\)/)).toBeTruthy();
+      expect((ha.getByRole("button", { name: "Disconnect" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((ha.getByLabelText("Address") as HTMLInputElement).disabled).toBe(true);
     });
   });
 

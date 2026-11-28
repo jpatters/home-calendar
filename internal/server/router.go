@@ -148,6 +148,8 @@ func New(ctx context.Context, o Options) (*Server, http.Handler, error) {
 	mux.HandleFunc("DELETE /api/agent/auth/api-key", s.handleDeleteAPIKey)
 	mux.HandleFunc("PUT /api/agent/auth/google", s.handlePutGoogle)
 	mux.HandleFunc("DELETE /api/agent/auth/google", s.handleDeleteGoogle)
+	mux.HandleFunc("PUT /api/agent/auth/home-assistant", s.handlePutHomeAssistant)
+	mux.HandleFunc("DELETE /api/agent/auth/home-assistant", s.handleDeleteHomeAssistant)
 	mux.HandleFunc("GET /api/agent/memories", s.handleListMemories)
 	mux.HandleFunc("POST /api/agent/memories", s.handleAddMemory)
 	mux.HandleFunc("PUT /api/agent/memories/{id}", s.handleUpdateMemory)
