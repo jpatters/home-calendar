@@ -18,6 +18,7 @@ import (
 	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
+	"github.com/jpatters/home-calendar/internal/memories"
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -705,7 +706,11 @@ func TestPoolTargetReturnsAndBroadcastsNewSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("secrets.Open: %v", err)
 	}
-	srv, handler, err := New(ctx, Options{Config: store, Secrets: sec})
+	mem, err := memories.Open(filepath.Join(t.TempDir(), "memories.json"))
+	if err != nil {
+		t.Fatalf("memories.Open: %v", err)
+	}
+	srv, handler, err := New(ctx, Options{Config: store, Secrets: sec, Memories: mem})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -285,6 +285,14 @@ export interface AgentSnapshot {
   calendarWritable: boolean;
 }
 
+/** Something Ziggy remembers about the household. */
+export interface Memory {
+  id: string;
+  text: string;
+  created: string;
+  updated: string;
+}
+
 export interface AgentAuth {
   using: "chatgpt" | "apiKey" | "none";
   chatgpt: { signedIn: boolean; email: string };

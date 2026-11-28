@@ -18,19 +18,21 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/memories"
 	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/types"
 )
 
 // fakeResponses emulates POST /responses as a server-sent event stream that
 // completes with reply, or answers 400 when reply is empty. It records the
-// Authorization header and tool names of every request.
+// Authorization header, tool names and instructions of every request.
 type fakeResponses struct {
 	*httptest.Server
-	hits  atomic.Int32
-	mu    sync.Mutex
-	auths []string
-	tools [][]string
+	hits         atomic.Int32
+	mu           sync.Mutex
+	auths        []string
+	tools        [][]string
+	instructions []string
 }
 
 func newFakeResponses(t *testing.T, reply string) *fakeResponses {
@@ -43,7 +45,8 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 		}
 		f.hits.Add(1)
 		var body struct {
-			Tools []struct {
+			Instructions string `json:"instructions"`
+			Tools        []struct {
 				Type  string `json:"type"`
 				Name  string `json:"name"`
 				Tools []struct {
@@ -64,6 +67,7 @@ func newFakeResponses(t *testing.T, reply string) *fakeResponses {
 		f.mu.Lock()
 		f.auths = append(f.auths, r.Header.Get("Authorization"))
 		f.tools = append(f.tools, names)
+		f.instructions = append(f.instructions, body.Instructions)
 		f.mu.Unlock()
 		if reply == "" {
 			w.Header().Set("Content-Type", "application/json")
@@ -145,7 +149,11 @@ func startApp(t *testing.T, dir string, enabled bool, authIssuer string) *httpte
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s, h, err := New(ctx, Options{Config: store, Secrets: sec, ChatGPTIssuer: authIssuer})
+	mem, err := memories.Open(memories.PathFor(configPath))
+	if err != nil {
+		t.Fatalf("memories.Open: %v", err)
+	}
+	s, h, err := New(ctx, Options{Config: store, Secrets: sec, Memories: mem, ChatGPTIssuer: authIssuer})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

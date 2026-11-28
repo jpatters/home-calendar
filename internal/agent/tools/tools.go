@@ -47,8 +47,9 @@ type PoolControl interface {
 }
 
 // Deps are the data sources and devices the tools act on. Calendar is nil
-// when no Google service account is configured. Location is the zone that
-// times without an offset are interpreted in; nil means time.Local.
+// when no Google service account is configured; Memories is nil when there is
+// nowhere to keep memories. Location is the zone that times without an offset
+// are interpreted in; nil means time.Local.
 type Deps struct {
 	Config   func() types.Config
 	Location *time.Location
@@ -59,11 +60,13 @@ type Deps struct {
 	Weather  WeatherSource
 	HotTub   HotTubControl
 	Pool     PoolControl
+	Memories MemoryStore
 }
 
 // All returns every tool, in the order they are offered to the model. The
-// calendar write tools are left out when there is no Google client, so the
-// model never offers changes it cannot make.
+// calendar write tools are left out when there is no Google client, and the
+// memory tools when there is no memory store, so the model never offers
+// changes it cannot make.
 func All(d Deps) []agent.Tool {
 	if d.Location == nil {
 		d.Location = time.Local
@@ -78,7 +81,7 @@ func All(d Deps) []agent.Tool {
 			deleteEvent(d),
 		)
 	}
-	return append(all,
+	all = append(all,
 		getScores(d),
 		getWeather(d),
 		getHotTub(d),
@@ -86,4 +89,12 @@ func All(d Deps) []agent.Tool {
 		getPool(d),
 		setPoolTarget(d),
 	)
+	if d.Memories != nil {
+		all = append(all,
+			remember(d),
+			updateMemory(d),
+			forget(d),
+		)
+	}
+	return all
 }
