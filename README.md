@@ -448,11 +448,15 @@ key" or "Not connected").
    apply immediately and don't need Save.)
 5. **Home Assistant (voice).**
    - Install the **Webhook Conversation** integration via HACS (needs Home
-     Assistant 2026.4 or newer).
-   - Add a conversation agent with URL
-     `http://<host>:8080/api/agent/converse`, output field `output`,
-     streaming **off**, and a 30-second timeout. (Use the host port you mapped
-     in `docker-compose.yml`.)
+     Assistant 2026.4 or newer): HACS → ⋮ → **Custom repositories**, add
+     `https://github.com/eulemitkeule/webhook-conversation` as an
+     **Integration**, install it and restart Home Assistant.
+   - **Settings → Devices & services → Add integration → Webhook
+     Conversation**, then on its page **Add Entry → Conversation Agent** with
+     **Webhook URL** `http://<host>:8080/api/agent/converse` (the host port
+     you mapped in `docker-compose.yml`), **Output Field** `output`,
+     **Timeout** 30, **Enable Response Streaming** off, and **System Prompt**
+     empty (Ziggy has its own).
    - Under **Settings → Voice assistants**, choose that agent as the
      conversation agent of an Assist pipeline.
    - The "Hey Ziggy" wake word is configured on the voice device / Home
