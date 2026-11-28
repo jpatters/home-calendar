@@ -463,6 +463,7 @@ input, select {
 .pool-temp-value, .hottub-temp-value { font-size: 2rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .pool-target, .hottub-target { color: var(--fg-muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
 .pool-empty, .hottub-empty { color: var(--fg-muted); text-align: center; }
+button.pool-widget,
 button.hottub-widget {
   text-align: left;
   font: inherit;
@@ -472,14 +473,16 @@ button.hottub-widget {
   cursor: pointer;
   width: 100%;
 }
+button.pool-widget:focus-visible,
 button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.hottub-modal-body { gap: 20px; }
-.hottub-modal-reading { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.hottub-modal-caption { color: var(--fg-muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; }
-.hottub-modal-temp { font-size: 2.75rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.hottub-modal-control { display: flex; align-items: center; gap: 16px; }
-.hottub-modal-target { min-width: 4.5ch; text-align: center; }
+.pool-modal-body, .hottub-modal-body { gap: 20px; }
+.pool-modal-reading, .hottub-modal-reading { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pool-modal-caption, .hottub-modal-caption { color: var(--fg-muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.pool-modal-temp, .hottub-modal-temp { font-size: 2.75rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pool-modal-control, .hottub-modal-control { display: flex; align-items: center; gap: 16px; }
+.pool-modal-target, .hottub-modal-target { min-width: 4.5ch; text-align: center; }
+.pool-arrow-btn,
 .hottub-arrow-btn {
   min-width: 72px;
   min-height: 72px;
@@ -491,9 +494,9 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   line-height: 1;
   cursor: pointer;
 }
-.hottub-arrow-btn:disabled { opacity: 0.3; cursor: default; }
-.hottub-arrow-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.hottub-modal-error { color: var(--danger, #c0392b); text-align: center; }
+.pool-arrow-btn:disabled, .hottub-arrow-btn:disabled { opacity: 0.3; cursor: default; }
+.pool-arrow-btn:focus-visible, .hottub-arrow-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pool-modal-error, .hottub-modal-error { color: var(--danger, #c0392b); text-align: center; }
 
 /* -------- scores (baseball, hockey) -------- */
 .baseball-widget,
@@ -1043,6 +1046,27 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
   pointer-events: none;
 }
 
+.assistant-connection { margin: 0 0 16px; display: flex; flex-direction: column; gap: 12px; }
+.assistant-connection h3 { margin: 0 0 8px; font-size: 1rem; }
+.panel-disabled .assistant-connection .hint { opacity: 1; pointer-events: auto; }
+.assistant-connection fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.assistant-connection legend { font-weight: 500; padding: 0 4px; }
+.assistant-connection label { display: flex; flex-direction: column; gap: 6px; }
+.assistant-connection label span { color: var(--fg-muted); font-size: 0.85rem; }
+.assistant-connection .hint { margin: 0; overflow-wrap: anywhere; }
+.assistant-connection .setup-steps summary { cursor: pointer; color: var(--accent); }
+.assistant-connection .setup-steps ol { margin: 8px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.panel-disabled .assistant-connection .setup-steps { opacity: 1; pointer-events: auto; }
+.credential-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 .toggle-row {
   display: flex;
   gap: 16px;
@@ -1111,3 +1135,94 @@ button.hottub-widget:focus-visible { outline: 2px solid var(--accent); outline-o
 .geo-results button:hover { background: var(--bg-hover); }
 .panel .error { color: var(--danger); margin: 0 0 16px; }
 
+/* -------- assistant -------- */
+.agent-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-room {
+  position: relative;
+}
+.agent-room-sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+.agent-character {
+  position: absolute;
+  transition: left 3s linear;
+}
+.agent-character.to-window {
+  transition: left 0.8s ease-out;
+}
+.agent-character.no-walk {
+  transition: none;
+}
+.agent-character-sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.agent-talk-btn,
+.agent-talk-btn:hover,
+.agent-talk-btn:active {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  transform: none;
+  cursor: pointer;
+}
+.agent-bubble {
+  position: absolute;
+  top: 4%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 92%;
+  width: max-content;
+  padding: 6px 10px;
+  border: 2px solid var(--fg);
+  border-radius: 4px;
+  background: var(--bg-widget);
+  font-size: 0.9rem;
+  text-align: center;
+  z-index: 1;
+}
+.agent-mark,
+/* Beside the pillow rather than above it, clear of Biscuit's shelf. */
+.agent-zzz {
+  position: absolute;
+  bottom: 30%;
+  right: 100%;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: #2b2233;
+  pointer-events: none;
+}
+.agent-zzz {
+  font-size: 0.7rem;
+  animation: agent-drift 3s ease-in-out infinite;
+}
+@keyframes agent-drift {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-character { transition: none; }
+  .agent-zzz { animation: none; }
+}
+.agent-input {
+  display: flex;
+  gap: 8px;
+}
+.agent-input input {
+  flex: 1;
+  min-width: 0;
+}

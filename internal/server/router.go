@@ -4,14 +4,18 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/jpatters/home-calendar/internal/agent"
 	"github.com/jpatters/home-calendar/internal/baseball"
+	"github.com/jpatters/home-calendar/internal/chatgpt"
 	"github.com/jpatters/home-calendar/internal/config"
 	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
 	"github.com/jpatters/home-calendar/internal/pool"
+	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/snowday"
 	"github.com/jpatters/home-calendar/internal/tide"
 	"github.com/jpatters/home-calendar/internal/types"
@@ -19,7 +23,11 @@ import (
 )
 
 type Server struct {
-	cfg              *config.Store
+	cfg     *config.Store
+	secrets *secrets.Store
+	chatgpt *chatgpt.Client
+	// credMu serializes rebuilding the agent's capabilities.
+	credMu           sync.Mutex
 	ical             *ical.Fetcher
 	weather          *weather.Fetcher
 	snowday          *snowday.Fetcher
@@ -28,6 +36,7 @@ type Server struct {
 	hockey           *hockey.Fetcher
 	pool             *pool.Fetcher
 	hottub           *hottub.Fetcher
+	agent            *agent.Agent
 	hub              *Hub
 	rootCtx          context.Context
 	geocode          func(ctx context.Context, query string) ([]weather.GeoResult, error)
@@ -36,10 +45,21 @@ type Server struct {
 	stationSearch    func(ctx context.Context, query string) ([]tide.StationResult, error)
 }
 
-func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) {
+// Options are the server's dependencies.
+type Options struct {
+	Config  *config.Store
+	Secrets *secrets.Store
+	// ChatGPTIssuer is the Sign in with ChatGPT authorization server; empty
+	// uses chatgpt.DefaultIssuer.
+	ChatGPTIssuer string
+}
+
+func New(ctx context.Context, o Options) (*Server, http.Handler, error) {
+	cfg := o.Config
 	hub := NewHub()
 	s := &Server{
 		cfg:     cfg,
+		secrets: o.Secrets,
 		hub:     hub,
 		rootCtx: ctx,
 	}
@@ -79,6 +99,8 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	stations := tide.NewDirectory(s.tide.HTTPClient(), tide.DefaultBaseURL)
 	s.stationSearch = stations.Search
 
+	s.newAgent(o.ChatGPTIssuer)
+
 	current := cfg.Get()
 	s.applyFetcherConfig(ctx, current, false)
 
@@ -104,9 +126,20 @@ func New(ctx context.Context, cfg *config.Store) (*Server, http.Handler, error) 
 	mux.HandleFunc("GET /api/hockey/teams", s.handleHockeyTeamSearch)
 	mux.HandleFunc("GET /api/pool", s.handleGetPool)
 	mux.HandleFunc("POST /api/pool/refresh", s.handlePoolRefresh)
+	mux.HandleFunc("POST /api/pool/target", s.handlePoolTarget)
 	mux.HandleFunc("GET /api/hottub", s.handleGetHotTub)
 	mux.HandleFunc("POST /api/hottub/refresh", s.handleHotTubRefresh)
 	mux.HandleFunc("POST /api/hottub/target", s.handleHotTubTarget)
+	mux.HandleFunc("GET /api/agent", s.handleGetAgent)
+	mux.HandleFunc("POST /api/agent/converse", s.handleAgentConverse)
+	mux.HandleFunc("GET /api/agent/auth", s.handleGetAgentAuth)
+	mux.HandleFunc("POST /api/agent/auth/chatgpt/start", s.handleChatGPTStart)
+	mux.HandleFunc("POST /api/agent/auth/chatgpt/complete", s.handleChatGPTComplete)
+	mux.HandleFunc("DELETE /api/agent/auth/chatgpt", s.handleChatGPTSignOut)
+	mux.HandleFunc("PUT /api/agent/auth/api-key", s.handlePutAPIKey)
+	mux.HandleFunc("DELETE /api/agent/auth/api-key", s.handleDeleteAPIKey)
+	mux.HandleFunc("PUT /api/agent/auth/google", s.handlePutGoogle)
+	mux.HandleFunc("DELETE /api/agent/auth/google", s.handleDeleteGoogle)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()

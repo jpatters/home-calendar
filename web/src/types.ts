@@ -96,6 +96,26 @@ export interface HotTub {
   host: string;
 }
 
+export type AgentEffort =
+  | "none"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
+
+export interface Agent {
+  enabled: boolean;
+  model: string;
+  effort: AgentEffort;
+  textInputEnabled: boolean;
+  quietStart: string;
+  quietEnd: string;
+  /** How long the display waits before talking on a spoken turn. */
+  voiceDelayMs: number;
+}
+
 export interface Config {
   calendars: Calendar[];
   weather: Weather;
@@ -105,6 +125,7 @@ export interface Config {
   hockey: Hockey;
   pool: Pool;
   hotTub: HotTub;
+  agent: Agent;
   display: Display;
   // The display's serialized dockview layout; absent means "use the default".
   layout?: unknown;
@@ -235,6 +256,8 @@ export interface PoolSnapshot {
   updatedAt: string;
   temperatureC: number;
   targetC: number;
+  minTargetC: number;
+  maxTargetC: number;
   heating: boolean;
 }
 
@@ -245,6 +268,30 @@ export interface HotTubSnapshot {
   minTargetF: number;
   maxTargetF: number;
   heating: boolean;
+}
+
+export type AgentState = "idle" | "thinking" | "talking" | "error";
+
+export interface AgentSnapshot {
+  state: AgentState;
+  heard: string;
+  reply: string;
+  /** The tool being run while thinking, if any. */
+  tool?: string;
+  /** The turn came from a voice device that also speaks the reply. */
+  spoken?: boolean;
+  at: string;
+  ready: boolean;
+  calendarWritable: boolean;
+}
+
+export interface AgentAuth {
+  using: "chatgpt" | "apiKey" | "none";
+  chatgpt: { signedIn: boolean; email: string };
+  apiKey: { set: boolean; fromEnv: boolean };
+  google: { set: boolean; fromEnv: boolean; serviceAccountEmail: string };
+  /** Present only after a sign-out OpenAI didn't confirm. */
+  warning?: string;
 }
 
 export type WSFrame =
@@ -259,6 +306,7 @@ export type WSFrame =
       hockey: HockeySnapshot | null;
       pool: PoolSnapshot | null;
       hottub: HotTubSnapshot | null;
+      agent: AgentSnapshot | null;
     }
   | { type: "calendar"; events: CalendarEvent[] }
   | { type: "weather"; weather: WeatherSnapshot | null }
@@ -268,4 +316,5 @@ export type WSFrame =
   | { type: "hockey"; hockey: HockeySnapshot | null }
   | { type: "pool"; pool: PoolSnapshot | null }
   | { type: "hottub"; hottub: HotTubSnapshot | null }
+  | { type: "agent"; agent: AgentSnapshot | null }
   | { type: "config"; config: Config };

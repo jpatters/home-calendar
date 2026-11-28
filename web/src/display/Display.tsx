@@ -20,8 +20,11 @@ import TideModal from "./TideModal";
 import BaseballWidget from "./BaseballWidget";
 import HockeyWidget from "./HockeyWidget";
 import PoolWidget from "./PoolWidget";
+import PoolModal from "./PoolModal";
 import HotTubWidget from "./HotTubWidget";
 import HotTubModal from "./HotTubModal";
+import AgentPanel from "./agent/AgentPanel";
+import { converse } from "./agent/agentApi";
 import EventModal from "./EventModal";
 import DayModal from "./DayModal";
 import { reloadPage } from "../browser";
@@ -47,7 +50,9 @@ interface DisplayContextValue {
   live: LiveData;
   openWeather: () => void;
   openTide: () => void;
+  openPool: () => void;
   openHotTub: () => void;
+  sendToAgent: (text: string) => Promise<void>;
   selectEvent: (ev: CalendarEvent) => void;
   selectDay: (dayISO: string) => void;
 }
@@ -110,11 +115,27 @@ const PANELS: Record<WidgetId, React.FunctionComponent<IDockviewPanelProps>> = {
     <BaseballWidget baseball={live.baseball} config={live.config?.baseball} />
   )),
   hockey: panel(({ live }) => <HockeyWidget hockey={live.hockey} config={live.config?.hockey} />),
-  pool: panel(({ live }) => <PoolWidget pool={live.pool} />),
+  pool: panel(({ live, openPool }) => <PoolWidget pool={live.pool} onOpen={openPool} />),
   hottub: panel(({ live, openHotTub }) => (
     <HotTubWidget hottub={live.hottub} onOpen={openHotTub} />
   )),
+  agent: panel(({ live, sendToAgent }) => (
+    <AgentPanel
+      agent={live.agent}
+      weather={live.weather}
+      settings={live.config?.agent ?? DEFAULT_AGENT_SETTINGS}
+      onSend={sendToAgent}
+    />
+  )),
 };
+
+// The agent panel only exists once config has arrived; this satisfies the
+// types for the frame before that.
+const DEFAULT_AGENT_SETTINGS = { textInputEnabled: false, quietStart: "22:00", quietEnd: "07:00", voiceDelayMs: 0 };
+
+function newConversationId(): string {
+  return `display-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 // Enabled widgets always have a panel, so a close button would only make a
 // widget vanish until panels are next reconciled.
@@ -138,7 +159,11 @@ export default function Display({ live }: Props) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [tideOpen, setTideOpen] = useState(false);
   const [weatherOpen, setWeatherOpen] = useState(false);
+  const [poolOpen, setPoolOpen] = useState(false);
   const [hotTubOpen, setHotTubOpen] = useState(false);
+  // Owned here rather than by the panel because dockview remounts a panel's
+  // component when it is moved; the server forgets idle conversations.
+  const [conversationId] = useState(newConversationId);
   const [editing, setEditing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -215,7 +240,11 @@ export default function Display({ live }: Props) {
     live,
     openWeather: () => setWeatherOpen(true),
     openTide: () => setTideOpen(true),
+    openPool: () => setPoolOpen(true),
     openHotTub: () => setHotTubOpen(true),
+    sendToAgent: async (text) => {
+      await converse(text, conversationId);
+    },
     selectEvent: setSelectedEvent,
     selectDay: setSelectedDay,
   };
@@ -276,6 +305,9 @@ export default function Display({ live }: Props) {
           config={live.config?.weather}
           onClose={() => setWeatherOpen(false)}
         />
+      )}
+      {poolOpen && live.pool && (
+        <PoolModal pool={live.pool} onClose={() => setPoolOpen(false)} />
       )}
       {hotTubOpen && live.hottub && (
         <HotTubModal hottub={live.hottub} onClose={() => setHotTubOpen(false)} />

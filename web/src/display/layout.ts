@@ -12,7 +12,8 @@ export type WidgetId =
   | "baseball"
   | "hockey"
   | "pool"
-  | "hottub";
+  | "hottub"
+  | "agent";
 
 interface WidgetDef {
   id: WidgetId;
@@ -33,6 +34,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: "hockey", title: "Hockey", enabled: (c) => c?.hockey.enabled ?? true },
   { id: "pool", title: "Pool", enabled: (c) => c?.pool.enabled ?? true },
   { id: "hottub", title: "Hot tub", enabled: (c) => c?.hotTub.enabled ?? false },
+  { id: "agent", title: "Ziggy", enabled: (c) => c?.agent.enabled ?? false },
 ];
 
 export const DOCK_THEME: DockviewTheme = {

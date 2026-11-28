@@ -35,6 +35,7 @@ func TestReplaceRoundTripsConfig(t *testing.T) {
 		Hockey:  types.Hockey{Enabled: true, TeamAbbr: "TOR", TeamName: "Toronto Maple Leafs"},
 		Pool:    types.Pool{DeviceURL: "http://pool.example"},
 		HotTub:  types.HotTub{Enabled: true, Host: "192.168.1.50"},
+		Agent:   types.Agent{Model: "gpt-6-luna", Effort: "none", QuietStart: "23:00", QuietEnd: "06:00"},
 		Display: types.Display{
 			DefaultView:            "day",
 			CalendarRefreshSeconds: 120,
@@ -380,5 +381,89 @@ func TestNormalizeUpperCasesAndTrimsHockeyAbbrev(t *testing.T) {
 	}
 	if saved.Hockey.TeamName != "Toronto Maple Leafs" {
 		t.Errorf("TeamName = %q, want trimmed", saved.Hockey.TeamName)
+	}
+}
+
+func openSeeded(t *testing.T, seed string) *Store {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	return s
+}
+
+func TestAgentIsDisabledWithDefaultsOnConfigWrittenBeforeAgentExisted(t *testing.T) {
+	got := openSeeded(t, `{"weather":{"enabled":true}}`).Get().Agent
+	want := types.Agent{
+		Enabled:          false,
+		Model:            "gpt-6.1-terra",
+		Effort:           "low",
+		TextInputEnabled: false,
+		QuietStart:       "22:00",
+		QuietEnd:         "07:00",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("agent defaults:\n got=%+v\nwant=%+v", got, want)
+	}
+}
+
+func TestAgentSettingsRoundTrip(t *testing.T) {
+	s := openSeeded(t, `{}`)
+	in := s.Get()
+	in.Agent = types.Agent{
+		Enabled:          true,
+		Model:            "gpt-6-luna",
+		Effort:           "none",
+		TextInputEnabled: true,
+		QuietStart:       "21:30",
+		QuietEnd:         "06:15",
+		VoiceDelayMs:     1500,
+	}
+	saved, err := s.Replace(in)
+	if err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	if !reflect.DeepEqual(saved.Agent, in.Agent) {
+		t.Errorf("saved agent=%+v want %+v", saved.Agent, in.Agent)
+	}
+}
+
+func TestAgentVoiceDelayIsClampedToZeroToTenSeconds(t *testing.T) {
+	for _, tc := range []struct{ in, want int }{{-200, 0}, {0, 0}, {1500, 1500}, {10000, 10000}, {60000, 10000}} {
+		s := openSeeded(t, `{}`)
+		in := s.Get()
+		in.Agent.VoiceDelayMs = tc.in
+		saved, err := s.Replace(in)
+		if err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+		if saved.Agent.VoiceDelayMs != tc.want {
+			t.Errorf("voice delay %d saved as %d, want %d", tc.in, saved.Agent.VoiceDelayMs, tc.want)
+		}
+	}
+}
+
+func TestAgentNormalizeRepairsInvalidValues(t *testing.T) {
+	s := openSeeded(t, `{}`)
+	in := s.Get()
+	in.Agent = types.Agent{
+		Enabled:    true,
+		Model:      "  ",
+		Effort:     "turbo",
+		QuietStart: "25:00",
+		QuietEnd:   "7am",
+	}
+	saved, err := s.Replace(in)
+	if err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+	a := saved.Agent
+	if a.Model != "gpt-6.1-terra" || a.Effort != "low" || a.QuietStart != "22:00" || a.QuietEnd != "07:00" {
+		t.Errorf("normalized agent=%+v", a)
 	}
 }

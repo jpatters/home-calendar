@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  AgentSnapshot,
   BaseballSnapshot,
   CalendarEvent,
   Config,
@@ -24,6 +25,7 @@ export interface LiveData {
   hockey: HockeySnapshot | null;
   pool: PoolSnapshot | null;
   hottub: HotTubSnapshot | null;
+  agent: AgentSnapshot | null;
 }
 
 const INITIAL: LiveData = {
@@ -38,6 +40,7 @@ const INITIAL: LiveData = {
   hockey: null,
   pool: null,
   hottub: null,
+  agent: null,
 };
 
 export function useLiveData(): LiveData {
@@ -83,6 +86,7 @@ export function useLiveData(): LiveData {
                 hockey: frame.hockey ?? null,
                 pool: frame.pool ?? null,
                 hottub: frame.hottub ?? null,
+                agent: frame.agent ?? null,
               };
             case "calendar":
               return { ...s, events: frame.events ?? [] };
@@ -100,6 +104,8 @@ export function useLiveData(): LiveData {
               return { ...s, pool: frame.pool ?? null };
             case "hottub":
               return { ...s, hottub: frame.hottub ?? null };
+            case "agent":
+              return { ...s, agent: frame.agent ?? null };
             case "config":
               return { ...s, config: frame.config };
             default:

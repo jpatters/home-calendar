@@ -22,3 +22,6 @@ web/tsconfig.tsbuildinfo
 
 # Worktrees
 .worktrees/
+
+# Local secrets for docker compose (OPENAI_API_KEY, GOOGLE_SERVICE_ACCOUNT_JSON)
+.env

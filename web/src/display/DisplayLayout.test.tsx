@@ -255,3 +255,59 @@ describe("Display layout editing", () => {
     expect(container.querySelector(".weather-widget")).not.toBeNull();
   });
 });
+
+function converseRequests(): { conversation_id: string; query: string }[] {
+  return fetchMock.mock.calls
+    .filter(([url, init]) => String(url).endsWith("/api/agent/converse") && init?.method === "POST")
+    .map(([, init]) => JSON.parse(String(init.body)));
+}
+
+async function sayToAssistant(text: string) {
+  fireEvent.click(screen.getByRole("button", { name: /talk to assistant/i }));
+  fireEvent.change(screen.getByRole("textbox", { name: /message/i }), { target: { value: text } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+  });
+}
+
+describe("Display assistant panel", () => {
+  test("is not shown while the assistant is disabled", () => {
+    render(<Display live={buildLive(buildConfig({ agentEnabled: false }))} />);
+    expect(screen.queryByRole("region", { name: "Assistant" })).toBeNull();
+  });
+
+  test("is shown once the assistant is enabled", () => {
+    const { rerender } = render(<Display live={buildLive(buildConfig({ agentEnabled: false }))} />);
+    rerender(<Display live={buildLive(buildConfig({ agentEnabled: true }))} />);
+    expect(screen.getByRole("region", { name: "Assistant" })).toBeTruthy();
+  });
+
+  test("is titled Ziggy in edit mode", () => {
+    render(<Display live={buildLive(buildConfig({ agentEnabled: true }))} />);
+    fireEvent.click(screen.getByRole("button", { name: /edit layout/i }));
+    expect(visibleTabs()).toContain("Ziggy");
+  });
+
+  test("offers no text box when typing is turned off", () => {
+    render(
+      <Display live={buildLive(buildConfig({ agentEnabled: true, agentTextInputEnabled: false }))} />,
+    );
+    expect(screen.getByRole("region", { name: "Assistant" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /talk to assistant/i })).toBeNull();
+  });
+
+  test("typed messages go to the assistant as one continuing conversation", async () => {
+    render(
+      <Display live={buildLive(buildConfig({ agentEnabled: true, agentTextInputEnabled: true }))} />,
+    );
+
+    await sayToAssistant("What's on tomorrow?");
+    expect(screen.queryByRole("textbox", { name: /message/i })).toBeNull();
+    await sayToAssistant("And the day after?");
+
+    const reqs = converseRequests();
+    expect(reqs.map((r) => r.query)).toEqual(["What's on tomorrow?", "And the day after?"]);
+    expect(reqs[0].conversation_id).toBeTruthy();
+    expect(reqs[1].conversation_id).toBe(reqs[0].conversation_id);
+  });
+});

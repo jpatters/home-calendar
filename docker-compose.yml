@@ -7,4 +7,9 @@ services:
       - "9090:8080"
     volumes:
       - ./data:/data
+    environment:
+      # Optional: override the API key / Google service account saved in admin.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      TZ: ${TZ:-}
     restart: unless-stopped

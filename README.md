@@ -2,7 +2,8 @@
 
 A touchscreen calendar dashboard for a homelab wall/desk display. Aggregates one
 or more Google Calendars (via their public iCal share URLs) and shows them in
-day / week / month views alongside a clock and weather widget. Everything is
+day / week / month views alongside clock, weather, tide, sports, pool and hot
+tub widgets, plus an optional voice assistant. Everything is
 configured from a bundled admin page. No user accounts — intended for a trusted
 private network.
 
@@ -49,7 +50,11 @@ private network.
   whether the heat pump is actively heating or idle. Reads the `climate` entity
   from an [ESPHome](https://esphome.io/) device's built-in web server over the
   LAN — no cloud, no API key. Set the device URL in admin (a fixed IP is more
-  reliable than an mDNS `.local` name from a container).
+  reliable than an mDNS `.local` name from a container). Tap the widget to
+  open a panel with up/down arrows that change the target half a degree
+  Celsius per tap; a burst of taps is sent as a single write, and the arrows
+  stop at the setpoint limits the thermostat reports (10–40 °C if it reports
+  none).
 - **Hot tub**: optional widget showing the hot tub's water temperature,
   setpoint, and whether the heater is on. Talks directly to a Gecko in.touch2
   WiFi module over the LAN using its UDP protocol on port 10022 (the same one
@@ -63,7 +68,22 @@ private network.
   pack reports (typically 59–106 °F). Set the module's IP in admin. This
   is unicast UDP to a fixed address, so it works from the default Docker bridge
   network without host networking.
-- **Config**: single JSON file on a bind-mounted volume.
+- **Assistant (Ziggy)**: optional voice assistant that can answer questions
+  about the calendar, live game scores and the weather, add/change/delete
+  calendar events, and read or change the hot tub and pool temperatures. It
+  runs on the OpenAI Responses API, using your ChatGPT subscription via
+  **Sign in with ChatGPT** or, as a fallback, an OpenAI API key — both set up
+  in the admin **Assistant** tab, along with the model and reasoning effort
+  (default `gpt-6.1-terra`, effort `low`). Voice in and
+  out goes through Home Assistant (see
+  [Assistant setup](#assistant-setup-ziggy)). On the display Ziggy is an 8-bit
+  character living in a pixel-art room panel: it thinks, talks (with a speech
+  bubble), sleeps during quiet hours, dresses for the season and for Canadian
+  holidays (from two days before each holiday), and its window shows the time
+  of day and the current weather. Optionally, people can tap Ziggy to type a
+  message instead of speaking.
+- **Config**: single JSON file on a bind-mounted volume. The assistant's
+  credentials live in a separate, private `secrets.json` next to it.
 - **Live updates**: one WebSocket (`/api/ws`), no polling.
 - **Layout**: the display is a [dockview](https://dockview.dev/) layout —
   calendar on the left and widgets stacked in a column on the right by default.
@@ -85,6 +105,10 @@ Open:
 
 - `http://<host>:8080/` — touchscreen display
 - `http://<host>:8080/admin` — configuration page
+
+The bundled `docker-compose.yml` publishes the container's port `8080` on host
+port `9090`, so with it use `http://<host>:9090/` instead (and in the Home
+Assistant URL below).
 
 ### Pulling the prebuilt image from GHCR
 
@@ -184,6 +208,11 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "teamName": "New York Yankees",
     "teamAbbr": "NYY"
   },
+  "hockey": {
+    "enabled": true,
+    "teamAbbr": "TOR",
+    "teamName": "Toronto Maple Leafs"
+  },
   "pool": {
     "enabled": true,
     "deviceUrl": "http://pool-thermostat.local"
@@ -192,12 +221,21 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
     "enabled": false,
     "host": "192.168.1.50"
   },
+  "agent": {
+    "enabled": false,
+    "model": "gpt-6.1-terra",
+    "effort": "low",
+    "textInputEnabled": false,
+    "quietStart": "22:00",
+    "quietEnd": "07:00"
+  },
   "display": {
     "defaultView": "week",
     "calendarRefreshSeconds": 300,
     "weatherRefreshSeconds": 900,
     "tideRefreshSeconds": 600,
     "baseballRefreshSeconds": 600,
+    "hockeyRefreshSeconds": 600,
     "poolRefreshSeconds": 30,
     "hotTubRefreshSeconds": 30,
     "theme": "default",
@@ -214,16 +252,25 @@ Stored in `CONFIG_PATH` (default `/data/config.json` in Docker). Shape:
 saving the config from admin never changes it. Omit it, or press **Reset
 layout**, to get the default arrangement.
 
-Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Pool, and
-Hot Tub each carry their own `enabled` field; the calendar and clock live under
+Each widget has an `enabled` flag. Weather, Tide, Snow Day, Baseball, Hockey,
+Pool, Hot Tub, and the assistant each carry their own `enabled` field; the calendar and clock live under
 `display.calendarEnabled` and `display.clockEnabled`. When a widget is disabled
 the server stops its background fetcher (so no API calls are made) and the
 display hides it. You can toggle widgets from the admin page — open the widget's
 section from the sidebar and use the "Show …" checkbox at the top (the calendar
 and clock toggles are in the **Display** section). Configs written before these flags
-existed are treated as all-enabled when loaded, with one exception: the hot tub
-widget defaults to disabled, and configs from before it existed stay disabled
-until you turn it on in admin.
+existed are treated as all-enabled when loaded, with two exceptions: the hot
+tub widget and the assistant default to disabled, and configs from before they
+existed keep them off until you turn them on in admin.
+
+`agent` configures Ziggy. `model` and `effort` are passed to OpenAI (`effort`
+is one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`); a blank
+model or unknown effort falls back to the defaults. `quietStart`/`quietEnd`
+(24-hour `HH:MM`, may wrap midnight) are when the character sleeps on screen;
+it still answers if spoken to. `textInputEnabled` adds the tap-to-type box on
+the display. Credentials are **never** stored in the config — it is served to
+every browser without authentication. They live in `secrets.json` next to
+`config.json` — see [Assistant setup](#assistant-setup-ziggy).
 
 The hot tub `host` is the in.touch2 module's LAN address as `ip` or `ip:port`;
 the port defaults to `10022`.
@@ -270,11 +317,23 @@ assigns IDs, and triggers an immediate refresh.
 | GET    | `/api/baseball`               | Current baseball snapshot                 |
 | POST   | `/api/baseball/refresh`       | Force a baseball refresh                  |
 | GET    | `/api/baseball/teams?q=`      | Team type-ahead search (MLB)              |
+| GET    | `/api/hockey`                 | Current hockey snapshot                   |
+| POST   | `/api/hockey/refresh`         | Force a hockey refresh                    |
+| GET    | `/api/hockey/teams?q=`        | Team type-ahead search (NHL)              |
 | GET    | `/api/pool`                   | Current pool temperature snapshot         |
 | POST   | `/api/pool/refresh`           | Force a pool refresh                      |
+| POST   | `/api/pool/target`            | Set the pool target (`{"targetC": 28.5}`) |
 | GET    | `/api/hottub`                 | Current hot tub temperature snapshot      |
 | POST   | `/api/hottub/refresh`         | Force a hot tub refresh                   |
 | POST   | `/api/hottub/target`          | Set the hot tub target (`{"targetF": 103}`) |
+| GET    | `/api/agent`                  | Assistant state, plus whether it has a credential and calendar write access |
+| POST   | `/api/agent/converse`         | Talk to Ziggy (Home Assistant Webhook Conversation contract) |
+| GET    | `/api/agent/auth`             | Which credential Ziggy uses and what is configured (never secret values) |
+| POST   | `/api/agent/auth/chatgpt/start`    | Start Sign in with ChatGPT; returns `{"authorizeUrl"}` |
+| POST   | `/api/agent/auth/chatgpt/complete` | Finish sign-in (`{"redirectUrl": "<pasted address>"}`) |
+| DELETE | `/api/agent/auth/chatgpt`     | Sign out of ChatGPT (revokes the sign-in) |
+| PUT/DELETE | `/api/agent/auth/api-key` | Save (`{"key": "..."}`) or clear the OpenAI API key |
+| PUT/DELETE | `/api/agent/auth/google`  | Save (`{"json": "..."}`) or clear the Google service account key |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
@@ -286,17 +345,37 @@ snapshot once the module acknowledges the write and broadcasts it as a `hottub`
 frame; `400` for a fractional or out-of-range target, `409` when the widget is
 disabled, and `502` when the module does not answer.
 
+`POST /api/pool/target` works the same way in degrees Celsius: the target must
+lie within the `minTargetC`–`maxTargetC` range the snapshot reports (`400`
+otherwise), and the fresh reading is broadcast as a `pool` frame.
+
+`POST /api/agent/converse` takes `{"conversation_id": "...", "query": "..."}`
+and answers `200 {"output": "..."}` with the text to speak. With
+`"stream": true` (Webhook Conversation's response streaming) it answers
+newline-delimited JSON instead: `{"type": "item", "content": "..."}` with the
+whole reply, then `{"type": "end"}`. It answers `200`
+even when the assistant is disabled, isn't connected, or fails — the `output`
+then explains the problem — because Home Assistant speaks nothing on an error
+status. Only a missing or blank `query` gets `400`. Follow-ups within five
+minutes on the same `conversation_id` continue the conversation.
+
+The `/api/agent/auth` endpoints answer with the same status object on success
+and `{"error": "..."}` otherwise; changing a credential that an environment
+variable sets returns `409`.
+
 ### WebSocket frames
 
 ```json
-{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...}, "pool": {...}, "hottub": {...} }
+{ "type": "snapshot", "config": {...}, "events": [...], "weather": {...}, "snowday": {...}, "tide": {...}, "baseball": {...}, "hockey": {...}, "pool": {...}, "hottub": {...}, "agent": {...} }
 { "type": "calendar", "events": [...] }
 { "type": "weather",  "weather": {...} }
 { "type": "snowday",  "snowday": {...} }
 { "type": "tide",     "tide": {...} }
 { "type": "baseball", "baseball": {...} }
+{ "type": "hockey",   "hockey": {...} }
 { "type": "pool",     "pool": {...} }
 { "type": "hottub",   "hottub": {...} }
+{ "type": "agent",    "agent": {...} }
 { "type": "config",   "config": {...} }
 ```
 
@@ -309,10 +388,99 @@ admin saves config. The client reconnects with exponential backoff.
 
 ## Environment variables
 
-| Var           | Default               | Description                 |
-|---------------|-----------------------|-----------------------------|
-| `CONFIG_PATH` | `/data/config.json`   | Config JSON path            |
-| `LISTEN_ADDR` | `:8080`               | Listen address              |
+| Var                           | Default             | Description |
+|-------------------------------|---------------------|-------------|
+| `CONFIG_PATH`                 | `/data/config.json` | Config JSON path |
+| `LISTEN_ADDR`                 | `:8080`             | Listen address |
+| `OPENAI_API_KEY`              | (none)              | Optional. Overrides the API key saved in admin (it then can't be changed there). |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | (none)              | Optional. Overrides the Google service account saved in admin, as the JSON itself or a path to the file. |
+| `TZ`                          | UTC                 | IANA time zone (e.g. `America/Halifax`). Set it so Ziggy reads and books times in local time. |
+
+## Assistant setup (Ziggy)
+
+Everything is configured in the admin **Assistant** tab. The **Connection**
+area shows what Ziggy is using ("Using: ChatGPT subscription", "Using: API
+key" or "Not connected").
+
+1. **Time zone.** Set `TZ` (e.g. `TZ=America/Halifax`) in the server's
+   environment so Ziggy uses local time; without it the container runs in UTC
+   and events are booked in UTC.
+2. **Connect to OpenAI** — either one; a ChatGPT sign-in is used when both are
+   set.
+   - **Sign in with ChatGPT (uses your ChatGPT plan).** Click **Sign in with
+     ChatGPT**; a sign-in tab opens at OpenAI. After you sign in and allow
+     access, that tab ends on a page that can't load (an address starting
+     `http://127.0.0.1:1455/auth/callback`). That's expected: copy the tab's
+     whole address, paste it into the admin field and press **Finish
+     sign-in**. This works from any device, including the wall tablet or a
+     phone. **Sign out** revokes the sign-in; if OpenAI doesn't confirm, admin
+     says so and you can disconnect Home Calendar in ChatGPT's settings.
+   - **OpenAI API key (fallback).** Paste a key and press **Save**. It is
+     write-only: admin only shows whether one is saved.
+
+   Ziggy uses the signed-in ChatGPT plan for **everyone** who talks to it.
+   OpenAI's Sign in with ChatGPT terms expect a plan to be used only for the
+   signed-in person's own activity, so if others in the house will talk to
+   Ziggy, use an API key instead.
+3. **Calendar changes (optional).** Without this Ziggy can read the calendars
+   but not change them.
+   1. In the Google Cloud console,
+      [create a project](https://console.cloud.google.com/projectcreate) (any
+      name, such as "Home calendar"), or pick an existing one.
+   2. [Enable the Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)
+      for that project.
+   3. Open [Service accounts](https://console.cloud.google.com/iam-admin/serviceaccounts),
+      choose **Create service account**, name it (e.g. "ziggy") and press
+      **Done** — it needs no roles or permissions.
+   4. Open the new service account → **Keys** tab → **Add key → Create new
+      key → JSON**. Your browser downloads a `.json` file; keep it private.
+   5. Open the file in a text editor, copy everything, paste it into
+      **Google Calendar** in admin and press **Save**. Admin then shows the
+      service account's email address.
+   6. In [Google Calendar settings](https://calendar.google.com/calendar/r/settings),
+      open **each** calendar Ziggy should be able to change → **Share with
+      specific people or groups → Add people and groups**, enter that email
+      address and choose **Make changes to events**.
+
+   The same steps are shown in admin under **How to get a service account
+   key**. Calendars are matched by the names you gave them in admin, and the
+   Google calendar is identified from its iCal URL, so only calendars added
+   with a Google Calendar iCal address can be changed.
+4. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
+   reasoning effort and quiet hours, and press **Save**. **Voice delay** holds
+   Ziggy's talking animation back on questions asked aloud, so it starts with
+   the speaker's audio (about 1–2 seconds with ElevenLabs; tune it by eye). (Connection changes
+   apply immediately and don't need Save.)
+5. **Home Assistant (voice).**
+   - Install the **Webhook Conversation** integration via HACS (needs Home
+     Assistant 2026.4 or newer): HACS → ⋮ → **Custom repositories**, add
+     `https://github.com/eulemitkeule/webhook-conversation` as an
+     **Integration**, install it and restart Home Assistant.
+   - **Settings → Devices & services → Add integration → Webhook
+     Conversation**, then on its page **Add Entry → Conversation Agent** with
+     **Webhook URL** `http://<host>:8080/api/agent/converse` (the host port
+     you mapped in `docker-compose.yml`), **Output Field** `output`,
+     **Timeout** 30, **Enable Response Streaming** either way (Ziggy sends
+     the whole reply at once), and **System Prompt**
+     empty (Ziggy has its own).
+   - Under **Settings → Voice assistants**, choose that agent as the
+     conversation agent of an Assist pipeline.
+   - The "Hey Ziggy" wake word is configured on the voice device / Home
+     Assistant side; this app never hears audio.
+
+Credentials are stored in `secrets.json` next to `config.json` (with Docker,
+`/data/secrets.json`), readable only by the server's user. Back it up along
+with `config.json` and keep it private. The environment variables
+`OPENAI_API_KEY` and `GOOGLE_SERVICE_ACCOUNT_JSON` still work as optional
+overrides; when one is set, admin shows that field as set by the environment
+and it can't be edited there.
+
+Each request has 25 seconds to answer, so Home Assistant's 30-second timeout
+is never hit; a slow or failed answer is spoken as a short apology, and Ziggy
+says so if the ChatGPT plan's usage limit is reached or it needs signing in
+again. Conversation history (for follow-up questions) is kept only in the
+server's memory for five minutes after the last reply; requests ask OpenAI not
+to store anything.
 
 ## Notes
 
