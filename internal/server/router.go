@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/jpatters/home-calendar/internal/hockey"
 	"github.com/jpatters/home-calendar/internal/hottub"
 	"github.com/jpatters/home-calendar/internal/ical"
+	"github.com/jpatters/home-calendar/internal/memories"
 	"github.com/jpatters/home-calendar/internal/pool"
 	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/snowday"
@@ -23,9 +25,10 @@ import (
 )
 
 type Server struct {
-	cfg     *config.Store
-	secrets *secrets.Store
-	chatgpt *chatgpt.Client
+	cfg      *config.Store
+	secrets  *secrets.Store
+	memories *memories.Store
+	chatgpt  *chatgpt.Client
 	// credMu serializes rebuilding the agent's capabilities.
 	credMu           sync.Mutex
 	ical             *ical.Fetcher
@@ -47,21 +50,26 @@ type Server struct {
 
 // Options are the server's dependencies.
 type Options struct {
-	Config  *config.Store
-	Secrets *secrets.Store
+	Config   *config.Store
+	Secrets  *secrets.Store
+	Memories *memories.Store
 	// ChatGPTIssuer is the Sign in with ChatGPT authorization server; empty
 	// uses chatgpt.DefaultIssuer.
 	ChatGPTIssuer string
 }
 
 func New(ctx context.Context, o Options) (*Server, http.Handler, error) {
+	if o.Memories == nil {
+		return nil, nil, errors.New("server: a memory store is required")
+	}
 	cfg := o.Config
 	hub := NewHub()
 	s := &Server{
-		cfg:     cfg,
-		secrets: o.Secrets,
-		hub:     hub,
-		rootCtx: ctx,
+		cfg:      cfg,
+		secrets:  o.Secrets,
+		memories: o.Memories,
+		hub:      hub,
+		rootCtx:  ctx,
 	}
 	s.ical = ical.New(func(events []types.Event) {
 		hub.Broadcast(Frame{Type: "calendar", Events: events})
@@ -140,6 +148,10 @@ func New(ctx context.Context, o Options) (*Server, http.Handler, error) {
 	mux.HandleFunc("DELETE /api/agent/auth/api-key", s.handleDeleteAPIKey)
 	mux.HandleFunc("PUT /api/agent/auth/google", s.handlePutGoogle)
 	mux.HandleFunc("DELETE /api/agent/auth/google", s.handleDeleteGoogle)
+	mux.HandleFunc("GET /api/agent/memories", s.handleListMemories)
+	mux.HandleFunc("POST /api/agent/memories", s.handleAddMemory)
+	mux.HandleFunc("PUT /api/agent/memories/{id}", s.handleUpdateMemory)
+	mux.HandleFunc("DELETE /api/agent/memories/{id}", s.handleDeleteMemory)
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	spa, err := newSPAHandler()

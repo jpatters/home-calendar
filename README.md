@@ -334,6 +334,8 @@ assigns IDs, and triggers an immediate refresh.
 | DELETE | `/api/agent/auth/chatgpt`     | Sign out of ChatGPT (revokes the sign-in) |
 | PUT/DELETE | `/api/agent/auth/api-key` | Save (`{"key": "..."}`) or clear the OpenAI API key |
 | PUT/DELETE | `/api/agent/auth/google`  | Save (`{"json": "..."}`) or clear the Google service account key |
+| GET/POST   | `/api/agent/memories`     | List Ziggy's memories (`{"memories": [...]}`) or add one (`{"text": "..."}`) |
+| PUT/DELETE | `/api/agent/memories/{id}` | Edit (`{"text": "..."}`) or delete a memory |
 | GET    | `/api/ws`                     | WebSocket: snapshot + live updates        |
 
 The `POST …/refresh` endpoints return `409 Conflict` when the corresponding
@@ -420,11 +422,6 @@ key" or "Not connected").
      says so and you can disconnect Home Calendar in ChatGPT's settings.
    - **OpenAI API key (fallback).** Paste a key and press **Save**. It is
      write-only: admin only shows whether one is saved.
-
-   Ziggy uses the signed-in ChatGPT plan for **everyone** who talks to it.
-   OpenAI's Sign in with ChatGPT terms expect a plan to be used only for the
-   signed-in person's own activity, so if others in the house will talk to
-   Ziggy, use an API key instead.
 3. **Calendar changes (optional).** Without this Ziggy can read the calendars
    but not change them.
    1. In the Google Cloud console,
@@ -470,6 +467,17 @@ key" or "Not connected").
      conversation agent of an Assist pipeline.
    - The "Hey Ziggy" wake word is configured on the voice device / Home
      Assistant side; this app never hears audio.
+
+**Memories.** Ziggy remembers lasting things about the household between
+conversations: preferences, routines, names, birthdays and corrections. He
+saves them on his own as he learns, or when asked ("remember that…"), and
+forgets them when asked ("forget that…"). He doesn't keep one-off requests,
+anything he can look up (like calendar events), or sensitive details such as
+health, passwords, money or where the children are. The admin **Memories**
+tab lists everything he remembers; edit, delete or add memories there, and the
+change applies the next time someone talks to him. Memories are stored in
+`memories.json` next to `config.json`, readable only by the server's user and
+never sent to the displays; back it up with `config.json`.
 
 Credentials are stored in `secrets.json` next to `config.json` (with Docker,
 `/data/secrets.json`), readable only by the server's user. Back it up along

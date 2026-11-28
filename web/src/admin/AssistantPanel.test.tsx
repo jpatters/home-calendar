@@ -329,11 +329,6 @@ describe("AssistantPanel connection", () => {
       expect(chatgpt.getByRole("button", { name: "Sign in with ChatGPT" })).toBeTruthy();
     });
 
-    test("notes that the plan is the signed-in person's to use", async () => {
-      renderPanel();
-      const chatgpt = await waitFor(() => group("ChatGPT account"));
-      expect(chatgpt.getByText(/uses your ChatGPT plan/i)).toBeTruthy();
-    });
   });
 
   describe("OpenAI API key", () => {

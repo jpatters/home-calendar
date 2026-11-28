@@ -5,6 +5,7 @@ import type {
   GeoResult,
   HockeyTeam,
   HotTubSnapshot,
+  Memory,
   PoolSnapshot,
   TideStation,
 } from "./types";
@@ -88,17 +89,23 @@ export async function setPoolTarget(targetC: number): Promise<PoolSnapshot> {
 
 // The credential endpoints answer errors with {"error": "message"}; that
 // message is what the admin shows, so it becomes the thrown error's message.
-async function agentAuthRequest<T = AgentAuth>(method: string, path: string, body?: object): Promise<T> {
-  const res = await fetch(`/api/agent/auth${path}`, {
+// Assistant endpoints answer errors as {"error": "..."}, which becomes the
+// thrown Error's message.
+async function agentRequest<T>(method: string, path: string, body?: object): Promise<T> {
+  const res = await fetch(`/api/agent${path}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new Error(data?.error || `${method} /api/agent/auth${path} ${res.status}`);
+    throw new Error(data?.error || `${method} /api/agent${path} ${res.status}`);
   }
-  return res.json();
+  return res.status === 204 ? (undefined as T) : res.json();
+}
+
+function agentAuthRequest<T = AgentAuth>(method: string, path: string, body?: object): Promise<T> {
+  return agentRequest<T>(method, `/auth${path}`, body);
 }
 
 export function getAgentAuth(): Promise<AgentAuth> {
@@ -159,4 +166,20 @@ export async function hockeyTeamSearch(query: string, signal?: AbortSignal): Pro
   if (!res.ok) throw new Error(`GET /api/hockey/teams ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
+}
+
+export async function listMemories(): Promise<Memory[]> {
+  return (await agentRequest<{ memories: Memory[] }>("GET", "/memories")).memories;
+}
+
+export function addMemory(text: string): Promise<Memory> {
+  return agentRequest("POST", "/memories", { text });
+}
+
+export function updateMemory(id: string, text: string): Promise<Memory> {
+  return agentRequest("PUT", `/memories/${encodeURIComponent(id)}`, { text });
+}
+
+export function deleteMemory(id: string): Promise<void> {
+  return agentRequest("DELETE", `/memories/${encodeURIComponent(id)}`);
 }

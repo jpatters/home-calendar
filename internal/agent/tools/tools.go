@@ -59,6 +59,7 @@ type Deps struct {
 	Weather  WeatherSource
 	HotTub   HotTubControl
 	Pool     PoolControl
+	Memories MemoryStore
 }
 
 // All returns every tool, in the order they are offered to the model. The
@@ -78,12 +79,16 @@ func All(d Deps) []agent.Tool {
 			deleteEvent(d),
 		)
 	}
-	return append(all,
+	all = append(all,
 		getScores(d),
 		getWeather(d),
 		getHotTub(d),
 		setHotTubTarget(d),
 		getPool(d),
 		setPoolTarget(d),
+		remember(d),
+		updateMemory(d),
+		forget(d),
 	)
+	return all
 }

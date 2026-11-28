@@ -34,8 +34,9 @@ func (s *Server) newAgent(issuer string) {
 		OnChange: s.refreshAgent,
 	})
 	s.agent = agent.New(agent.Options{
-		Token:  s.agentToken,
-		Config: s.cfg.Get,
+		Token:    s.agentToken,
+		Config:   s.cfg.Get,
+		Memories: s.memories,
 		OnState: func(snap *types.AgentSnapshot) {
 			s.hub.Broadcast(Frame{Type: "agent", Agent: snap})
 		},
@@ -57,6 +58,7 @@ func (s *Server) refreshAgent() {
 		Weather:  s.weather,
 		HotTub:   s.hottub,
 		Pool:     s.pool,
+		Memories: s.memories,
 	}
 	if client := s.googleCalendarClient(); client != nil {
 		deps.Calendar = client

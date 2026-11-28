@@ -91,11 +91,6 @@ function ChatGPTAccount({ auth, onAuth }: Props) {
   return (
     <fieldset>
       <legend>ChatGPT account</legend>
-      <div className="hint">
-        Ziggy uses your ChatGPT plan for everyone who talks to it. OpenAI's Sign in with ChatGPT terms expect only
-        the signed-in person's own activity to use their plan, so use an API key if others in the house will talk to
-        Ziggy.
-      </div>
       {auth.chatgpt.signedIn ? (
         <div className="credential-row">
           <span>{`Signed in as ${auth.chatgpt.email}`}</span>

@@ -13,6 +13,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/jpatters/home-calendar/internal/config"
+	"github.com/jpatters/home-calendar/internal/memories"
 	"github.com/jpatters/home-calendar/internal/secrets"
 	"github.com/jpatters/home-calendar/internal/server"
 )
@@ -21,10 +22,11 @@ func main() {
 	configPath := envOr("CONFIG_PATH", "/data/config.json")
 	addr := envOr("LISTEN_ADDR", ":8080")
 
-	store, sec, err := openStores(configPath)
+	st, err := openStores(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
+	store := st.config
 	// Before anything else starts, since everything reads time.Local.
 	if loc := zoneFallback(os.Getenv("TZ"), store.Get().Weather.Timezone); loc != nil {
 		time.Local = loc
@@ -34,7 +36,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	srv, handler, err := server.New(ctx, server.Options{Config: store, Secrets: sec})
+	srv, handler, err := server.New(ctx, server.Options{Config: store, Secrets: st.secrets, Memories: st.memories})
 	if err != nil {
 		log.Fatalf("start server: %v", err)
 	}
@@ -76,17 +78,28 @@ func zoneFallback(tz, weatherTZ string) *time.Location {
 	return loc
 }
 
-// openStores opens the config file and the secrets file beside it.
-func openStores(configPath string) (*config.Store, *secrets.Store, error) {
-	store, err := config.Open(configPath)
+type stores struct {
+	config   *config.Store
+	secrets  *secrets.Store
+	memories *memories.Store
+}
+
+// openStores opens the config file and the secrets and memories files beside
+// it.
+func openStores(configPath string) (stores, error) {
+	cfg, err := config.Open(configPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open config: %w", err)
+		return stores{}, fmt.Errorf("open config: %w", err)
 	}
 	sec, err := secrets.Open(secrets.PathFor(configPath))
 	if err != nil {
-		return nil, nil, fmt.Errorf("open secrets: %w", err)
+		return stores{}, fmt.Errorf("open secrets: %w", err)
 	}
-	return store, sec, nil
+	mem, err := memories.Open(memories.PathFor(configPath))
+	if err != nil {
+		return stores{}, fmt.Errorf("open memories: %w", err)
+	}
+	return stores{config: cfg, secrets: sec, memories: mem}, nil
 }
 
 func envOr(key, fallback string) string {

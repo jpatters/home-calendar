@@ -13,12 +13,13 @@ import PoolPanel from "./PoolPanel";
 import HotTubPanel from "./HotTubPanel";
 import DisplayPanel from "./DisplayPanel";
 import AssistantPanel from "./AssistantPanel";
+import MemoriesPanel from "./MemoriesPanel";
 
 interface Props {
   live: LiveData;
 }
 
-type SectionId = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "assistant" | "display";
+type SectionId = "calendars" | "weather" | "tide" | "snowday" | "baseball" | "hockey" | "pool" | "hottub" | "assistant" | "memories" | "display";
 
 interface Section {
   id: SectionId;
@@ -42,6 +43,7 @@ const SECTIONS: Section[] = [
   { id: "pool", label: "Pool", refresh: { noun: "pool", run: refreshPool, available: (c) => c.pool.enabled && !!c.pool.deviceUrl } },
   { id: "hottub", label: "Hot Tub", refresh: { noun: "hot tub", run: refreshHotTub, available: (c) => c.hotTub.enabled && !!c.hotTub.host } },
   { id: "assistant", label: "Assistant" },
+  { id: "memories", label: "Memories" },
   { id: "display", label: "Display" },
 ];
 
@@ -231,6 +233,8 @@ function renderSection(
       );
     case "assistant":
       return <AssistantPanel value={draft.agent} onChange={(agent) => setDraft({ ...draft, agent })} />;
+    case "memories":
+      return <MemoriesPanel />;
     case "display":
       return (
         <DisplayPanel
