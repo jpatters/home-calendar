@@ -112,6 +112,8 @@ export interface Agent {
   textInputEnabled: boolean;
   quietStart: string;
   quietEnd: string;
+  /** How long the display waits before talking on a spoken turn. */
+  voiceDelayMs: number;
 }
 
 export interface Config {
@@ -276,6 +278,8 @@ export interface AgentSnapshot {
   reply: string;
   /** The tool being run while thinking, if any. */
   tool?: string;
+  /** The turn came from a voice device that also speaks the reply. */
+  spoken?: boolean;
   at: string;
   ready: boolean;
   calendarWritable: boolean;

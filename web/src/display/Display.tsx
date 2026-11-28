@@ -131,7 +131,7 @@ const PANELS: Record<WidgetId, React.FunctionComponent<IDockviewPanelProps>> = {
 
 // The agent panel only exists once config has arrived; this satisfies the
 // types for the frame before that.
-const DEFAULT_AGENT_SETTINGS = { textInputEnabled: false, quietStart: "22:00", quietEnd: "07:00" };
+const DEFAULT_AGENT_SETTINGS = { textInputEnabled: false, quietStart: "22:00", quietEnd: "07:00", voiceDelayMs: 0 };
 
 function newConversationId(): string {
   return `display-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

@@ -171,35 +171,45 @@ func (a *Agent) capabilities() Capabilities {
 // always something that can be spoken; err is non-nil when the turn failed and
 // the reply is an apology rather than an answer.
 func (a *Agent) Converse(ctx context.Context, conversationID, text string) (string, error) {
+	return a.converse(ctx, conversationID, text, false)
+}
+
+// ConverseSpoken is Converse for a question asked aloud to a voice device,
+// which will speak the reply; its states are marked Spoken.
+func (a *Agent) ConverseSpoken(ctx context.Context, conversationID, text string) (string, error) {
+	return a.converse(ctx, conversationID, text, true)
+}
+
+func (a *Agent) converse(ctx context.Context, conversationID, text string, spoken bool) (string, error) {
 	caps := a.capabilities()
 	if !caps.Ready {
-		a.setState(types.AgentError, text, notReadyReply)
+		a.setState(types.AgentError, text, notReadyReply, spoken)
 		return notReadyReply, errNotReady
 	}
-	a.setState(types.AgentThinking, text, "")
+	a.setState(types.AgentThinking, text, "", spoken)
 
 	ctx, cancel := context.WithTimeout(ctx, a.opts.Timeout)
 	defer cancel()
 	reply, err := a.run(ctx, caps, conversationID, text)
 	if err != nil {
 		a.memory.forget(conversationID)
-		spoken := errorReply
+		apology := errorReply
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
-			spoken = timeoutReply
+			apology = timeoutReply
 		case errors.Is(err, errTooManyRounds):
-			spoken = gaveUpReply
+			apology = gaveUpReply
 		case errors.Is(err, errNotReady):
-			spoken = notReadyReply
+			apology = notReadyReply
 		case errors.Is(err, ErrSignInAgain):
-			spoken = signInAgainReply
+			apology = signInAgainReply
 		case errors.Is(err, errUsageLimit):
-			spoken = usageLimitReply
+			apology = usageLimitReply
 		}
-		a.setState(types.AgentError, text, spoken)
-		return spoken, err
+		a.setState(types.AgentError, text, apology, spoken)
+		return apology, err
 	}
-	a.setState(types.AgentTalking, text, reply)
+	a.setState(types.AgentTalking, text, reply, spoken)
 	return reply, nil
 }
 
@@ -358,12 +368,13 @@ func (a *Agent) instructions(cfg types.Config, calendarWritable bool) string {
 	return b.String()
 }
 
-func (a *Agent) setState(state types.AgentState, heard, reply string) {
+func (a *Agent) setState(state types.AgentState, heard, reply string, spoken bool) {
 	a.emit(func(s *types.AgentSnapshot) {
 		s.State = state
 		s.Heard = heard
 		s.Reply = reply
 		s.Tool = ""
+		s.Spoken = spoken
 	})
 }
 

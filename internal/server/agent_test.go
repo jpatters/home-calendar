@@ -523,6 +523,32 @@ func TestGetAgentReportsNotReadyWithoutAPIKey(t *testing.T) {
 	}
 }
 
+// Home Assistant includes the voice satellite's device_id only when the
+// question was spoken to a device, which will also speak the answer.
+func TestAgentConverseMarksTurnsFromAVoiceDeviceAsSpoken(t *testing.T) {
+	openai, _ := fakeResponsesAPI(t, "Hi there.")
+	app := agentApp(t, true, "sk-test", openai.URL)
+
+	cases := []struct {
+		name, body string
+		spoken     bool
+	}{
+		{"voice satellite", `{"conversation_id":"c","query":"hello","device_id":"echo"}`, true},
+		{"typed", `{"conversation_id":"c","query":"hello"}`, false},
+		{"blank device", `{"conversation_id":"c","query":"hello","device_id":""}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if status, body := postConverse(t, app, tc.body); status != http.StatusOK {
+				t.Fatalf("converse status = %d, body %v", status, body)
+			}
+			if _, snap := getAgent(t, app); snap.Spoken != tc.spoken {
+				t.Errorf("spoken = %v, want %v", snap.Spoken, tc.spoken)
+			}
+		})
+	}
+}
+
 func TestGetAgentReflectsLatestConversationState(t *testing.T) {
 	openai, _ := fakeResponsesAPI(t, "Hi there.")
 	app := agentApp(t, true, "sk-test", openai.URL)

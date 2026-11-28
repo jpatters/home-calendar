@@ -447,7 +447,9 @@ key" or "Not connected").
    Google calendar is identified from its iCal URL, so only calendars added
    with a Google Calendar iCal address can be changed.
 4. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
-   reasoning effort and quiet hours, and press **Save**. (Connection changes
+   reasoning effort and quiet hours, and press **Save**. **Voice delay** holds
+   Ziggy's talking animation back on questions asked aloud, so it starts with
+   the speaker's audio (about 1–2 seconds with ElevenLabs; tune it by eye). (Connection changes
    apply immediately and don't need Save.)
 5. **Home Assistant (voice).**
    - Install the **Webhook Conversation** integration via HACS (needs Home

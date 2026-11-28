@@ -18,7 +18,7 @@ import {
 interface Props {
   agent: AgentSnapshot | null;
   weather: WeatherSnapshot | null;
-  settings: Pick<Agent, "textInputEnabled" | "quietStart" | "quietEnd">;
+  settings: Pick<Agent, "textInputEnabled" | "quietStart" | "quietEnd" | "voiceDelayMs">;
   onSend?: (text: string) => Promise<void>;
 }
 
@@ -30,7 +30,7 @@ const FRAME_MS = 200;
 const WANDER_MS = 4000;
 const SEND_FAILED_REPLY = "I couldn't reach the server. Try again.";
 
-type Speech = Pick<AgentSnapshot, "state" | "reply" | "at">;
+type Speech = Pick<AgentSnapshot, "state" | "reply" | "at" | "spoken">;
 
 const POSE_LABEL: Record<Pose, string> = {
   idle: "idle",
@@ -47,10 +47,17 @@ function speaks(state: AgentState | undefined): boolean {
   return state === "talking" || state === "error";
 }
 
-function speechEndsAt(agent: Speech | null): number {
+// A spoken reply starts once the voice device has had time to start playing
+// it; a typed one starts straight away.
+function speechStartsAt(agent: Speech | null, voiceDelayMs: number): number {
+  if (!agent || !speaks(agent.state)) return 0;
+  return Date.parse(agent.at) + (agent.spoken ? voiceDelayMs : 0);
+}
+
+function speechEndsAt(agent: Speech | null, voiceDelayMs: number): number {
   if (!agent || !speaks(agent.state)) return 0;
   const duration = Math.min(MAX_TALK_MS, Math.max(MIN_TALK_MS, agent.reply.length * MS_PER_CHAR));
-  return Date.parse(agent.at) + duration;
+  return speechStartsAt(agent, voiceDelayMs) + duration;
 }
 
 function faceFor(pose: Pose, frame: number): Face {
@@ -86,9 +93,16 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   const now = Date.now();
   const speech: Speech | null =
     sendFailure && (!agent || Date.parse(sendFailure.at) >= Date.parse(agent.at)) ? sendFailure : agent;
-  const talkUntil = speechEndsAt(speech);
+  const talkFrom = speechStartsAt(speech, settings.voiceDelayMs);
+  const talkUntil = speechEndsAt(speech, settings.voiceDelayMs);
   const reported = speech?.state ?? "idle";
-  const agentState: AgentState = speaks(reported) && talkUntil <= now ? "idle" : reported;
+  const agentState: AgentState = !speaks(reported)
+    ? reported
+    : now >= talkUntil
+      ? "idle"
+      : now < talkFrom
+        ? "thinking"
+        : reported;
 
   const scene = sceneFor({
     now: new Date(now),
@@ -102,7 +116,7 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   // After looking out the window Ziggy stays there to give the answer, and
   // leaves once the turn is over.
   if (scene.pose === "lookout" && !atWindow) setAtWindow(true);
-  if (atWindow && scene.pose !== "lookout" && scene.pose !== "talk" && scene.pose !== "confused") setAtWindow(false);
+  if (atWindow && (scene.pose === "idle" || scene.pose === "sleep")) setAtWindow(false);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), SCENE_REFRESH_MS);
@@ -110,11 +124,12 @@ export default function AgentPanel({ agent, weather, settings, onSend }: Props) 
   }, []);
 
   useEffect(() => {
-    const remaining = talkUntil - Date.now();
-    if (remaining <= 0) return;
-    const id = setTimeout(() => setTick((t) => t + 1), remaining);
-    return () => clearTimeout(id);
-  }, [talkUntil]);
+    const timers = [talkFrom, talkUntil]
+      .map((at) => at - Date.now())
+      .filter((remaining) => remaining > 0)
+      .map((remaining) => setTimeout(() => setTick((t) => t + 1), remaining));
+    return () => timers.forEach(clearTimeout);
+  }, [talkFrom, talkUntil]);
 
   useEffect(() => {
     const id = setInterval(() => setFrame((f) => f + 1), FRAME_MS);

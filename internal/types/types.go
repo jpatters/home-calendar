@@ -80,6 +80,9 @@ type Agent struct {
 	TextInputEnabled bool   `json:"textInputEnabled"`
 	QuietStart       string `json:"quietStart"`
 	QuietEnd         string `json:"quietEnd"`
+	// VoiceDelayMs is how long the display waits before Ziggy starts talking
+	// on a spoken turn, so the animation lines up with the voice device.
+	VoiceDelayMs int `json:"voiceDelayMs"`
 }
 
 // HotTub configures the Gecko in.touch2 hot tub widget. Host is the module's
@@ -287,7 +290,8 @@ const (
 
 // AgentSnapshot describes the latest conversation turn. Heard is what the user
 // said (or typed); Reply is the agent's answer, empty while thinking. Tool names
-// the tool being run while thinking, if any. Ready is
+// the tool being run while thinking, if any. Spoken is true when the turn came
+// from a voice device that will also speak the answer. Ready is
 // false when the agent has no OpenAI credentials; CalendarWritable is false
 // when no Google service account is configured.
 type AgentSnapshot struct {
@@ -295,6 +299,7 @@ type AgentSnapshot struct {
 	Heard            string     `json:"heard"`
 	Reply            string     `json:"reply"`
 	Tool             string     `json:"tool,omitempty"`
+	Spoken           bool       `json:"spoken,omitempty"`
 	At               time.Time  `json:"at"`
 	Ready            bool       `json:"ready"`
 	CalendarWritable bool       `json:"calendarWritable"`

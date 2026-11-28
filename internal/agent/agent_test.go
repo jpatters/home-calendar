@@ -956,6 +956,46 @@ func TestConverseReportsThinkingThenTalking(t *testing.T) {
 	}
 }
 
+func TestConverseSpokenMarksEveryStateOfItsTurn(t *testing.T) {
+	var mu sync.Mutex
+	var states []types.AgentSnapshot
+	weather := &recordingTool{name: "get_weather", result: "rain"}
+	fake := newFakeOpenAI(t,
+		calls("resp_1", fnCall{"call_1", "get_weather", `{}`}),
+		text("resp_2", "Rainy."),
+		text("resp_3", "Hello."),
+	)
+	a, _ := newAgent(t, fake, func(o *agent.Options) {
+		o.OnState = func(s *types.AgentSnapshot) {
+			mu.Lock()
+			states = append(states, *s)
+			mu.Unlock()
+		}
+	}, weather)
+
+	if _, err := a.ConverseSpoken(context.Background(), "conv-1", "Weather?"); err != nil {
+		t.Fatalf("ConverseSpoken: %v", err)
+	}
+	mu.Lock()
+	spokenTurn := append([]types.AgentSnapshot(nil), states...)
+	states = nil
+	mu.Unlock()
+	converse(t, a, "conv-2", "Hi")
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, s := range spokenTurn {
+		if !s.Spoken {
+			t.Errorf("spoken turn state %s (tool %q) is not marked spoken", s.State, s.Tool)
+		}
+	}
+	for _, s := range states {
+		if s.Spoken {
+			t.Errorf("typed turn state %s is marked spoken", s.State)
+		}
+	}
+}
+
 func TestConverseReportsEachToolAsItRunsThenClearsIt(t *testing.T) {
 	var mu sync.Mutex
 	var states []types.AgentSnapshot

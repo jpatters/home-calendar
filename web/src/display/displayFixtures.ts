@@ -63,6 +63,7 @@ export function buildConfig(
       textInputEnabled: overrides.agentTextInputEnabled ?? false,
       quietStart: "22:00",
       quietEnd: "07:00",
+      voiceDelayMs: 0,
     },
     display: {
       defaultView: "week",

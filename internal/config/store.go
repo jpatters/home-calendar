@@ -223,8 +223,11 @@ func normalizeAgent(cur, def types.Agent) types.Agent {
 	if !validClock(cur.QuietEnd) {
 		cur.QuietEnd = def.QuietEnd
 	}
+	cur.VoiceDelayMs = min(max(cur.VoiceDelayMs, 0), maxVoiceDelayMs)
 	return cur
 }
+
+const maxVoiceDelayMs = 10000
 
 // validClock reports whether s is a 24-hour "HH:MM" time.
 func validClock(s string) bool {

@@ -91,6 +91,18 @@ export default function AssistantPanel({ value, onChange }: Props) {
             onChange={(e) => onChange({ ...value, quietEnd: e.target.value })}
           />
         </label>
+        <label>
+          <span>Voice delay (seconds)</span>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.1}
+            value={value.voiceDelayMs / 1000}
+            onChange={(e) => onChange({ ...value, voiceDelayMs: Math.round(Number(e.target.value) * 1000) })}
+          />
+          <span className="hint">How long Ziggy waits to start talking when you asked aloud, so he moves with the speaker.</span>
+        </label>
       </div>
     </div>
   );

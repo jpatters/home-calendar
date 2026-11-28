@@ -4,13 +4,14 @@ import AgentPanel from "./AgentPanel";
 import { LOOKOUT_X, ROOM_W } from "./sprites/room";
 import type { AgentSnapshot } from "../../types";
 
-type Settings = { textInputEnabled: boolean; quietStart: string; quietEnd: string };
+type Settings = { textInputEnabled: boolean; quietStart: string; quietEnd: string; voiceDelayMs: number };
 
 function settings(overrides: Partial<Settings> = {}): Settings {
   return {
     textInputEnabled: false,
     quietStart: "22:00",
     quietEnd: "07:00",
+    voiceDelayMs: 0,
     ...overrides,
   };
 }
@@ -75,6 +76,81 @@ describe("AgentPanel", () => {
     advance(200);
     expect(screen.queryByText(reply)).toBeNull();
     expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
+  });
+
+  test("a spoken answer keeps thinking for the voice delay, then talks for its full time", () => {
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "talking", reply: "Hello there!", spoken: true })}
+        weather={null}
+        settings={settings({ voiceDelayMs: 1500 })}
+      />,
+    );
+    expect(screen.getByRole("img", { name: "Assistant is thinking" })).toBeTruthy();
+    expect(screen.queryByText("Hello there!")).toBeNull();
+
+    advance(1400);
+    expect(screen.queryByText("Hello there!")).toBeNull();
+
+    advance(200);
+    expect(screen.getByRole("img", { name: "Assistant is talking" })).toBeTruthy();
+    expect(screen.getByText("Hello there!")).toBeTruthy();
+
+    advance(1800);
+    expect(screen.getByText("Hello there!")).toBeTruthy();
+
+    advance(200);
+    expect(screen.getByRole("img", { name: "Assistant is idle" })).toBeTruthy();
+  });
+
+  test("a spoken apology also waits for the voice delay", () => {
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "error", reply: "Sorry, try again.", spoken: true })}
+        weather={null}
+        settings={settings({ voiceDelayMs: 1000 })}
+      />,
+    );
+    expect(screen.queryByText("Sorry, try again.")).toBeNull();
+
+    advance(1100);
+    expect(screen.getByRole("img", { name: "Assistant is confused" })).toBeTruthy();
+  });
+
+  test("a typed answer talks immediately whatever the voice delay", () => {
+    render(
+      <AgentPanel
+        agent={snapshot({ state: "talking", reply: "Typed reply." })}
+        weather={null}
+        settings={settings({ voiceDelayMs: 1500 })}
+      />,
+    );
+    expect(screen.getByText("Typed reply.")).toBeTruthy();
+  });
+
+  test("stays at the window through the voice delay after looking out", () => {
+    const windowLeft = `${(LOOKOUT_X / ROOM_W) * 100}%`;
+    const position = () => (document.querySelector(".agent-character") as HTMLElement).style.left;
+    const { rerender } = render(
+      <AgentPanel
+        agent={snapshot({ state: "thinking", tool: "get_weather", spoken: true })}
+        weather={null}
+        settings={settings({ voiceDelayMs: 1500 })}
+      />,
+    );
+
+    rerender(
+      <AgentPanel
+        agent={snapshot({ state: "talking", reply: "It's raining.", spoken: true })}
+        weather={null}
+        settings={settings({ voiceDelayMs: 1500 })}
+      />,
+    );
+    expect(position()).toBe(windowLeft);
+
+    advance(1600);
+    expect(screen.getByRole("img", { name: "Assistant is talking" })).toBeTruthy();
+    expect(position()).toBe(windowLeft);
   });
 
   test("a new talking snapshot with the same reply restarts the talking time", () => {

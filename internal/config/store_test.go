@@ -422,6 +422,7 @@ func TestAgentSettingsRoundTrip(t *testing.T) {
 		TextInputEnabled: true,
 		QuietStart:       "21:30",
 		QuietEnd:         "06:15",
+		VoiceDelayMs:     1500,
 	}
 	saved, err := s.Replace(in)
 	if err != nil {
@@ -429,6 +430,21 @@ func TestAgentSettingsRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(saved.Agent, in.Agent) {
 		t.Errorf("saved agent=%+v want %+v", saved.Agent, in.Agent)
+	}
+}
+
+func TestAgentVoiceDelayIsClampedToZeroToTenSeconds(t *testing.T) {
+	for _, tc := range []struct{ in, want int }{{-200, 0}, {0, 0}, {1500, 1500}, {10000, 10000}, {60000, 10000}} {
+		s := openSeeded(t, `{}`)
+		in := s.Get()
+		in.Agent.VoiceDelayMs = tc.in
+		saved, err := s.Replace(in)
+		if err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+		if saved.Agent.VoiceDelayMs != tc.want {
+			t.Errorf("voice delay %d saved as %d, want %d", tc.in, saved.Agent.VoiceDelayMs, tc.want)
+		}
 	}
 }
 

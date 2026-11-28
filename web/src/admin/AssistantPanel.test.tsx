@@ -14,6 +14,7 @@ function agentConfig(overrides: Partial<Agent> = {}): Agent {
     textInputEnabled: false,
     quietStart: "22:00",
     quietEnd: "07:00",
+    voiceDelayMs: 0,
     ...overrides,
   };
 }
@@ -154,11 +155,21 @@ describe("AssistantPanel", () => {
       () => fireEvent.change(screen.getByLabelText(/quiet hours end/i), { target: { value: "06:45" } }),
       { quietEnd: "06:45" },
     ],
+    [
+      "the voice delay in seconds",
+      () => fireEvent.change(screen.getByLabelText(/voice delay/i), { target: { value: "1.5" } }),
+      { voiceDelayMs: 1500 },
+    ],
   ])("editing %s propagates", (_name, edit, expected) => {
     const initial = agentConfig();
     const changed = renderPanel(initial);
     edit();
     expect(changed()).toEqual({ ...initial, ...expected });
+  });
+
+  test("shows the saved voice delay in seconds", () => {
+    renderPanel(agentConfig({ voiceDelayMs: 1250 }));
+    expect((screen.getByLabelText(/voice delay/i) as HTMLInputElement).value).toBe("1.25");
   });
 
   test("offers every reasoning effort", () => {

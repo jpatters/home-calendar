@@ -120,6 +120,7 @@ func (s *Server) handleAgentConverse(w http.ResponseWriter, r *http.Request) {
 		ConversationID string `json:"conversation_id"`
 		Query          string `json:"query"`
 		Stream         bool   `json:"stream"`
+		DeviceID       string `json:"device_id"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxConverseBody)).Decode(&body); err != nil || strings.TrimSpace(body.Query) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"output": "I didn't catch that."})
@@ -129,7 +130,11 @@ func (s *Server) handleAgentConverse(w http.ResponseWriter, r *http.Request) {
 		writeSpoken(w, body.Stream, agentDisabledReply)
 		return
 	}
-	reply, err := s.agent.Converse(r.Context(), body.ConversationID, strings.TrimSpace(body.Query))
+	converse := s.agent.Converse
+	if body.DeviceID != "" {
+		converse = s.agent.ConverseSpoken
+	}
+	reply, err := converse(r.Context(), body.ConversationID, strings.TrimSpace(body.Query))
 	if err != nil {
 		log.Printf("agent: %v", err)
 	}
