@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -30,6 +31,9 @@ type Entity struct {
 	Aliases  []string
 	// Exposed is whether the entity is exposed to Assist (conversation).
 	Exposed bool
+	// Hidden marks an entity hidden in the registry (hidden_by "user"), as
+	// Home Assistant does to a switch wrapped by switch_as_x.
+	Hidden bool
 }
 
 type Area struct{ ID, Name string }
@@ -56,6 +60,23 @@ type Server struct {
 	calls    []Call
 	// ServiceError, when set, makes every call_service fail with it.
 	serviceError *Error
+	serviceDelay time.Duration
+}
+
+// services are the services Home Assistant 2026.8 provides for each domain
+// (from each integration's services.yaml), so a call to a service that
+// doesn't exist fails here as it would on a real instance.
+var services = map[string][]string{
+	"light":         {"turn_on", "turn_off", "toggle"},
+	"switch":        {"turn_on", "turn_off", "toggle"},
+	"input_boolean": {"turn_on", "turn_off", "toggle"},
+	"fan":           {"turn_on", "turn_off", "toggle", "set_percentage", "increase_speed", "decrease_speed", "oscillate", "set_direction", "set_preset_mode"},
+	"media_player":  {"turn_on", "turn_off", "toggle", "volume_up", "volume_down", "volume_set", "volume_mute", "media_play", "media_pause", "media_play_pause", "media_stop", "media_next_track", "media_previous_track", "select_source"},
+	"cover":         {"open_cover", "close_cover", "stop_cover", "toggle", "set_cover_position", "open_cover_tilt", "close_cover_tilt", "stop_cover_tilt", "set_cover_tilt_position"},
+	"climate":       {"turn_on", "turn_off", "toggle", "set_temperature", "set_hvac_mode", "set_fan_mode", "set_preset_mode", "set_humidity", "set_swing_mode"},
+	"scene":         {"turn_on"},
+	"script":        {"turn_on", "turn_off", "toggle"},
+	"lock":          {"lock", "unlock", "open"},
 }
 
 // Error is a Home Assistant WebSocket error result.
@@ -77,6 +98,14 @@ func (s *Server) Calls() []Call {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]Call(nil), s.calls...)
+}
+
+// DelayServices makes every later call_service take d before answering, as a
+// slow cloud device would.
+func (s *Server) DelayServices(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.serviceDelay = d
 }
 
 // FailServices makes every later call_service fail with code and message.
@@ -124,6 +153,16 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		lastID = int(id)
 		result, e := s.dispatch(msg)
+		if msg["type"] == "call_service" {
+			s.mu.Lock()
+			delay := s.serviceDelay
+			s.mu.Unlock()
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return
+			}
+		}
 		s.reply(ctx, conn, lastID, result, e)
 	}
 }
@@ -168,6 +207,8 @@ func (s *Server) dispatch(msg map[string]any) (any, *Error) {
 			}
 		}
 		return out, nil
+	case "get_config":
+		return map[string]any{"unit_system": map[string]any{"temperature": "°C", "length": "km"}}, nil
 	case "config/area_registry/list":
 		list := []map[string]any{}
 		for _, a := range s.areas {
@@ -187,6 +228,13 @@ func (s *Server) dispatch(msg map[string]any) (any, *Error) {
 		call := Call{}
 		call.Domain, _ = msg["domain"].(string)
 		call.Service, _ = msg["service"].(string)
+		known := false
+		for _, svc := range services[call.Domain] {
+			known = known || svc == call.Service
+		}
+		if !known {
+			return nil, &Error{Code: "not_found", Message: "Service " + call.Domain + "." + call.Service + " not found."}
+		}
 		if target, ok := msg["target"].(map[string]any); ok {
 			call.EntityID, _ = target["entity_id"].(string)
 		}
@@ -204,6 +252,10 @@ func (s *Server) registryEntry(e Entity, extended bool) map[string]any {
 		"area_id":   nilIfEmpty(e.AreaID),
 		"device_id": nilIfEmpty(e.DeviceID),
 		"options":   map[string]any{"conversation": map[string]any{"should_expose": e.Exposed}},
+		"hidden_by": nil,
+	}
+	if e.Hidden {
+		entry["hidden_by"] = "user"
 	}
 	if extended {
 		entry["aliases"] = append([]string{}, e.Aliases...)

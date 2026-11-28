@@ -445,6 +445,15 @@ describe("AssistantPanel connection", () => {
       expect(ha.queryByText(/Connected to/)).toBeNull();
     });
 
+    test("the address is kept, so changing the token doesn't mean retyping it", async () => {
+      auth = agentAuth({ homeAssistant: { set: true, url: "http://ha:8123" } });
+      renderPanel();
+      const ha = await waitFor(() => group("Home Assistant"));
+      await ha.findByText("Connected to http://ha:8123");
+
+      expect((ha.getByLabelText("Address") as HTMLInputElement).value).toBe("http://ha:8123");
+    });
+
     test("disconnecting forgets the connection", async () => {
       auth = agentAuth({ homeAssistant: { set: true, url: "http://ha:8123" } });
       renderPanel();

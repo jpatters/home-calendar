@@ -213,12 +213,15 @@ func (s *Server) handlePutHomeAssistant(w http.ResponseWriter, r *http.Request) 
 	if !decodeAuthBody(w, r, &body) {
 		return
 	}
-	base := strings.TrimRight(strings.TrimSpace(body.URL), "/")
 	token := strings.TrimSpace(body.Token)
-	if u, err := url.Parse(base); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	u, err := url.Parse(strings.TrimSpace(body.URL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
 		writeError(w, http.StatusBadRequest, "That isn't a web address like http://homeassistant.local:8123.")
 		return
 	}
+	// Only the scheme and host matter (an address copied from a dashboard
+	// page has a path), and the address is shown back unauthenticated.
+	base := u.Scheme + "://" + u.Host
 	if token == "" {
 		writeError(w, http.StatusBadRequest, "Paste the Home Assistant token.")
 		return

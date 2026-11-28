@@ -290,23 +290,26 @@ function GoogleKeySteps() {
 // server checks them against Home Assistant before saving.
 function HomeAssistant({ auth, onAuth }: Props) {
   const { busy, error, run } = useAction();
-  const [url, setUrl] = useState("");
-  const [token, setToken] = useState("");
   const ha = auth.homeAssistant;
+  const [url, setUrl] = useState(ha.url);
+  const [token, setToken] = useState("");
   const locked = ha.fromEnv;
 
   const connect = async () => {
     const next = await run(() => putAgentHomeAssistant(url, token));
     if (!next) return;
-    setUrl("");
+    setUrl(next.homeAssistant.url);
     setToken("");
     onAuth(next);
   };
 
   const disconnect = async () => {
     const next = await run(clearAgentHomeAssistant);
-    if (next) onAuth(next);
+    if (!next) return;
+    setUrl("");
+    onAuth(next);
   };
+
 
   const status = locked
     ? `Set by environment (HOME_ASSISTANT_TOKEN): ${ha.url}`
@@ -372,7 +375,8 @@ function HomeAssistantSteps() {
         </li>
         <li>
           Ziggy can only use devices exposed to Assist: <strong>Settings → Voice assistants → Expose</strong>.
-          Locks, alarms, garage doors and gates are always look-only.
+          Locks, alarms, garage doors, gates and doors are always look-only. Exposed scenes and scripts can do
+          anything, so keep any that unlock or open things unexposed, along with relays for doors.
         </li>
       </ol>
     </details>

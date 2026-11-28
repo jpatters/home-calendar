@@ -458,9 +458,14 @@ key" or "Not connected").
    3. Enter Home Assistant's address (e.g. `http://192.168.1.20:8123`) and the
       token, and press **Connect**; it's checked against Home Assistant first.
    4. Ziggy only sees devices exposed to Assist (**Settings → Voice
-      assistants → Expose**), using their names, rooms and aliases. Locks,
-      alarm panels, garage doors and gates are always look-only: he can say
-      whether they're locked, armed or open, but won't change them.
+      assistants → Expose**), using their names, rooms and aliases, and only
+      offers what each device supports. Locks, alarm panels, garage doors,
+      gates and doors, covers that don't say what they are, switches named
+      for a garage, gate or lock, and anything on the same device as those
+      are look-only: he can say how they are, but won't change them. Set a
+      blind's **Show as** if it's look-only by mistake. Exposed scenes and
+      scripts can do anything, so keep any that unlock or open things
+      unexposed, along with relays for doors.
 5. **Turn Ziggy on** in the admin **Assistant** tab, pick the model,
    reasoning effort and quiet hours, and press **Save**. **Voice delay** holds
    Ziggy's talking animation back on questions asked aloud, so it starts with

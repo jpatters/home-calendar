@@ -34,6 +34,16 @@ func putHome(t *testing.T, base, body string) (int, homeStatus, string) {
 	return status, st, string(raw)
 }
 
+func getHomeStatus(t *testing.T, base string) homeStatus {
+	t.Helper()
+	_, raw := memoriesRequest(t, http.MethodGet, base+"/api/agent/auth", "")
+	var st homeStatus
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	return st
+}
+
 func homeBody(url, token string) string {
 	b, _ := json.Marshal(map[string]string{"url": url, "token": token})
 	return string(b)
@@ -56,15 +66,28 @@ func TestConnectingHomeAssistantChecksTheTokenAndNeverEchoesIt(t *testing.T) {
 			t.Errorf("a response contains the token: %s", body)
 		}
 	}
-	if !strings.Contains(string(got), `"homeAssistant":{"set":true`) {
-		t.Errorf("GET /api/agent/auth = %s, want Home Assistant connected", got)
+	if st := getHomeStatus(t, app.URL); !st.HomeAssistant.Set || st.HomeAssistant.URL != ha.URL {
+		t.Errorf("status = %+v, want Home Assistant connected", st.HomeAssistant)
 	}
 
 	if status, _ := memoriesRequest(t, http.MethodDelete, app.URL+"/api/agent/auth/home-assistant", ""); status != http.StatusOK {
 		t.Errorf("DELETE = %d", status)
 	}
-	if _, got := memoriesRequest(t, http.MethodGet, app.URL+"/api/agent/auth", ""); !strings.Contains(string(got), `"homeAssistant":{"set":false`) {
-		t.Errorf("after DELETE = %s, want disconnected", got)
+	if st := getHomeStatus(t, app.URL); st.HomeAssistant.Set {
+		t.Errorf("after DELETE = %+v, want disconnected", st.HomeAssistant)
+	}
+}
+
+func TestADashboardAddressIsSavedAsTheServerAddress(t *testing.T) {
+	t.Setenv("HOME_ASSISTANT_TOKEN", "")
+	openai, _ := fakeResponsesAPI(t, "ok")
+	app := agentApp(t, true, "sk-test", openai.URL)
+	ha := fakeHome(t)
+
+	status, st, raw := putHome(t, app.URL, homeBody(ha.URL+"/lovelace/0", hatest.Token))
+
+	if status != http.StatusOK || st.HomeAssistant.URL != ha.URL {
+		t.Errorf("PUT = %d %s, want it saved as %s", status, raw, ha.URL)
 	}
 }
 
@@ -79,6 +102,8 @@ func TestConnectingHomeAssistantRejectsABadTokenOrAddress(t *testing.T) {
 		{"not a web address", homeBody("homeassistant.local", hatest.Token), "address"},
 		{"no token", homeBody(ha.URL, " "), "token"},
 		{"nothing there", homeBody("http://127.0.0.1:1", hatest.Token), "reach Home Assistant"},
+		{"a password in the address", homeBody(strings.Replace(ha.URL, "http://", "http://me:secret@", 1), hatest.Token), "address"},
+		{"not Home Assistant", homeBody(openai.URL, hatest.Token), "isn't Home Assistant"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,8 +113,8 @@ func TestConnectingHomeAssistantRejectsABadTokenOrAddress(t *testing.T) {
 			}
 		})
 	}
-	if _, got := memoriesRequest(t, http.MethodGet, app.URL+"/api/agent/auth", ""); !strings.Contains(string(got), `"homeAssistant":{"set":false`) {
-		t.Errorf("a rejected connection was saved: %s", got)
+	if st := getHomeStatus(t, app.URL); st.HomeAssistant.Set {
+		t.Errorf("a rejected connection was saved: %+v", st.HomeAssistant)
 	}
 }
 
@@ -103,8 +128,11 @@ func TestHomeAssistantSetByTheEnvironmentCantBeChangedInAdmin(t *testing.T) {
 	if status, _, raw := putHome(t, app.URL, homeBody(ha.URL, hatest.Token)); status != http.StatusConflict {
 		t.Errorf("PUT = %d %s, want 409", status, raw)
 	}
-	if _, got := memoriesRequest(t, http.MethodGet, app.URL+"/api/agent/auth", ""); !strings.Contains(string(got), `"fromEnv":true`) {
-		t.Errorf("status = %s, want set by the environment", got)
+	if status, raw := memoriesRequest(t, http.MethodDelete, app.URL+"/api/agent/auth/home-assistant", ""); status != http.StatusConflict {
+		t.Errorf("DELETE = %d %s, want 409", status, raw)
+	}
+	if st := getHomeStatus(t, app.URL).HomeAssistant; !st.Set || !st.FromEnv || st.URL != ha.URL {
+		t.Errorf("status = %+v, want set by the environment with its URL", st)
 	}
 }
 
@@ -122,5 +150,21 @@ func TestZiggyCanReadTheHomeOnceHomeAssistantIsConnected(t *testing.T) {
 	bodies := openai.requestBodies()
 	if len(bodies) < 2 || !strings.Contains(bodies[1], "Kitchen Lights") {
 		t.Errorf("the tool result sent back to the model doesn't describe the kitchen lights: %v", bodies)
+	}
+}
+
+func TestZiggyLosesTheHomeOnceHomeAssistantIsDisconnected(t *testing.T) {
+	t.Setenv("HOME_ASSISTANT_TOKEN", "")
+	openai := newFakeResponsesCalling(t, "list_devices", "{}", "I can't reach the house.")
+	app := agentApp(t, true, "sk-test", openai.URL)
+	ha := fakeHome(t)
+	putHome(t, app.URL, homeBody(ha.URL, hatest.Token))
+	memoriesRequest(t, http.MethodDelete, app.URL+"/api/agent/auth/home-assistant", "")
+
+	postConverse(t, app, `{"conversation_id":"c","query":"are the kitchen lights on?"}`)
+
+	bodies := openai.requestBodies()
+	if len(bodies) < 2 || !strings.Contains(bodies[1], "Home Assistant isn't connected") {
+		t.Errorf("after disconnecting, the tool result should say Home Assistant isn't connected: %v", bodies)
 	}
 }

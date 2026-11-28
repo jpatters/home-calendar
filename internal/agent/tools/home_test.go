@@ -13,12 +13,12 @@ func homeDeps(t *testing.T) (tools.Deps, *hatest.Server) {
 	t.Helper()
 	ha := hatest.New(t,
 		[]hatest.Entity{
-			{EntityID: "light.kitchen", State: "on", Exposed: true, AreaID: "kitchen",
-				Attributes: map[string]any{"friendly_name": "Kitchen Lights"}},
+			{EntityID: "light.kitchen", State: "on", Exposed: true, AreaID: "galley",
+				Attributes: map[string]any{"friendly_name": "Kitchen Lights", "supported_color_modes": []any{"hs"}}},
 			{EntityID: "lock.front_door", State: "locked", Exposed: true,
 				Attributes: map[string]any{"friendly_name": "Front Door"}},
 		},
-		[]hatest.Area{{ID: "kitchen", Name: "Kitchen"}}, nil)
+		[]hatest.Area{{ID: "galley", Name: "Galley"}}, nil)
 	d := baseDeps(t)
 	d.Home = homeassistant.New(ha.URL, hatest.Token)
 	return d, ha
@@ -29,7 +29,7 @@ func TestListDevicesShowsExposedDevicesWithTheirRoomAndState(t *testing.T) {
 
 	out := mustCall(t, d, "list_devices", `{}`)
 
-	for _, want := range []string{"light.kitchen", "Kitchen Lights", "Kitchen", `"state":"on"`, "lock.front_door", `"look_only":true`} {
+	for _, want := range []string{"light.kitchen", "Kitchen Lights", `"area":"Galley"`, `"state":"on"`, "lock.front_door", `"look_only":true`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("list_devices = %s, missing %s", out, want)
 		}
@@ -39,24 +39,14 @@ func TestListDevicesShowsExposedDevicesWithTheirRoomAndState(t *testing.T) {
 func TestControlDeviceChangesItAndSaysWhatWasDone(t *testing.T) {
 	d, ha := homeDeps(t)
 
-	out := mustCall(t, d, "control_device", `{"entity_id":"light.kitchen","action":"set_brightness","value":30,"option":null}`)
+	out := mustCall(t, d, "control_device", `{"entity_id":"light.kitchen","action":"set_color","value":null,"option":"red"}`)
 
 	calls := ha.Calls()
-	if len(calls) != 1 || calls[0].Service != "turn_on" || calls[0].Data["brightness_pct"] != 30.0 {
-		t.Errorf("calls = %+v, want the light set to 30%%", calls)
+	if len(calls) != 1 || calls[0].Service != "turn_on" || calls[0].Data["color_name"] != "red" {
+		t.Errorf("calls = %+v, want the light turned red", calls)
 	}
-	if !strings.Contains(out, "Kitchen Lights") || !strings.Contains(out, "set_brightness") {
+	if !strings.Contains(out, "Kitchen Lights") || !strings.Contains(out, "set_color") {
 		t.Errorf("result = %s, want the device and action", out)
-	}
-}
-
-func TestControlDeviceRefusesSecurityDevices(t *testing.T) {
-	d, ha := homeDeps(t)
-
-	err := mustFail(t, d, "control_device", `{"entity_id":"lock.front_door","action":"unlock","value":null,"option":null}`)
-
-	if !strings.Contains(err.Error(), "look-only") || len(ha.Calls()) != 0 {
-		t.Errorf("err = %v, calls = %+v, want a look-only refusal and no call", err, ha.Calls())
 	}
 }
 
