@@ -908,6 +908,89 @@ func TestInstructionsIncludeLocalDateWeekdayAndZone(t *testing.T) {
 	}
 }
 
+func instructionsAt(t *testing.T, at time.Time, cfg func(*types.Config)) string {
+	t.Helper()
+	fake := newFakeOpenAI(t, text("resp_1", "ok"))
+	a, clk := newAgent(t, fake, func(o *agent.Options) {
+		c := testConfig()
+		if cfg != nil {
+			cfg(&c)
+		}
+		o.Config = func() types.Config { return c }
+	})
+	if !at.IsZero() {
+		clk.mu.Lock()
+		clk.now = at
+		clk.mu.Unlock()
+	}
+	converse(t, a, "conv-1", "hi")
+	instructions, _ := request(t, fake, 0)["instructions"].(string)
+	return instructions
+}
+
+func TestInstructionsSayWhatZiggyIsWearing(t *testing.T) {
+	christmasAfternoon := time.Date(2026, 12, 25, 15, 0, 0, 0, halifax(t))
+
+	instructions := instructionsAt(t, christmasAfternoon, nil)
+
+	if !strings.Contains(instructions, agent.DescribeOutfit("christmas")) {
+		t.Errorf("instructions don't describe the Christmas outfit:\n%s", instructions)
+	}
+	if strings.Contains(instructions, agent.DescribeOutfit("pajamas")) {
+		t.Errorf("instructions put Ziggy in pajamas in the afternoon:\n%s", instructions)
+	}
+}
+
+func TestInstructionsAtNightSayZiggyGotOutOfBedInPajamas(t *testing.T) {
+	night := time.Date(2026, 11, 27, 2, 30, 0, 0, halifax(t))
+
+	instructions := instructionsAt(t, night, nil)
+
+	for _, want := range []string{agent.DescribeOutfit("pajamas"), "out of bed"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("instructions missing %q:\n%s", want, instructions)
+		}
+	}
+}
+
+func TestInstructionsInTheDaytimeDontMentionGettingOutOfBed(t *testing.T) {
+	instructions := instructionsAt(t, time.Date(2026, 11, 27, 14, 0, 0, 0, halifax(t)), nil)
+
+	if strings.Contains(instructions, "out of bed") {
+		t.Errorf("daytime instructions mention getting out of bed:\n%s", instructions)
+	}
+}
+
+func TestInstructionsNameTheTeamsZiggyFollows(t *testing.T) {
+	instructions := instructionsAt(t, time.Time{}, func(c *types.Config) {
+		c.Baseball = types.Baseball{Enabled: true, TeamID: 141, TeamName: "Toronto Blue Jays", TeamAbbr: "TOR"}
+		c.Hockey = types.Hockey{Enabled: true, TeamAbbr: "TOR", TeamName: "Toronto Maple Leafs"}
+	})
+
+	for _, want := range []string{"Toronto Blue Jays", "Toronto Maple Leafs"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("instructions missing team %q:\n%s", want, instructions)
+		}
+	}
+}
+
+func TestInstructionsLeaveOutTeamsThatArentFollowed(t *testing.T) {
+	instructions := instructionsAt(t, time.Time{}, func(c *types.Config) {
+		c.Baseball = types.Baseball{Enabled: false, TeamID: 141, TeamName: "Toronto Blue Jays"}
+		c.Hockey = types.Hockey{Enabled: true}
+	})
+
+	if strings.Contains(instructions, "Blue Jays") || strings.Contains(instructions, "fan of") {
+		t.Errorf("instructions name a team that isn't followed:\n%s", instructions)
+	}
+}
+
+func TestInstructionsIntroduceBiscuit(t *testing.T) {
+	if instructions := instructionsAt(t, time.Time{}, nil); !strings.Contains(instructions, "Biscuit") {
+		t.Errorf("instructions don't mention Biscuit:\n%s", instructions)
+	}
+}
+
 func TestInstructionsNameConfiguredCalendars(t *testing.T) {
 	fake := newFakeOpenAI(t, text("resp_1", "ok"))
 	a, _ := newAgent(t, fake, nil)

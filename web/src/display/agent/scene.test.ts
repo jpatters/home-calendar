@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { sceneFor, type SceneInput } from "./scene";
 import type { WeatherSnapshot } from "../../types";
+import outfitFixture from "./outfits.fixture.json";
 
 function at(y: number, mo: number, d: number, h = 12, mi = 0): Date {
   return new Date(y, mo - 1, d, h, mi);
@@ -57,62 +58,18 @@ function input(overrides: Partial<SceneInput> = {}): SceneInput {
   };
 }
 
+// Shared with the server (internal/agent/outfit_test.go) so the outfit Ziggy
+// describes always matches the one drawn here.
+const outfitCases: { name: string; at: string; quietStart?: string; quietEnd?: string; outfit: string }[] =
+  outfitFixture;
+
 describe("sceneFor outfit", () => {
-  test.each([
-    ["New Year's Day", at(2026, 1, 1), "newyear"],
-    ["Valentine's Day", at(2026, 2, 14), "valentines"],
-    ["St. Patrick's Day", at(2026, 3, 17), "stpatricks"],
-    ["Easter Sunday 2027", at(2027, 3, 28), "easter"],
-    ["Easter Sunday 2026", at(2026, 4, 5), "easter"],
-    ["Easter Sunday 2025", at(2025, 4, 20), "easter"],
-    ["Easter Sunday 2030", at(2030, 4, 21), "easter"],
-    ["Canada Day", at(2026, 7, 1), "canada"],
-    ["Canadian Thanksgiving 2026", at(2026, 10, 12), "thanksgiving"],
-    ["Canadian Thanksgiving 2027", at(2027, 10, 11), "thanksgiving"],
-    ["Halloween morning", at(2026, 10, 31, 9), "halloween"],
-    ["Christmas", at(2026, 12, 25), "christmas"],
-    ["Christmas Eve", at(2026, 12, 24), "christmas"],
-    ["two days before Christmas", at(2026, 12, 23), "christmas"],
-    ["Good Friday (two days before Easter)", at(2026, 4, 3), "easter"],
-    ["the Saturday before Thanksgiving", at(2026, 10, 10), "thanksgiving"],
-    ["Oct 29 (two days before Halloween)", at(2026, 10, 29), "halloween"],
-    ["Dec 30 (two days before New Year's, across the year boundary)", at(2026, 12, 30), "newyear"],
-  ])("%s wears the holiday outfit", (_name, now, outfit) => {
-    expect(sceneFor(input({ now })).outfit).toBe(outfit);
-  });
-
-  test.each([
-    ["Feb 28", at(2026, 2, 28), "winter"],
-    ["Mar 1", at(2026, 3, 1), "spring"],
-    ["May 31", at(2026, 5, 31), "spring"],
-    ["Jun 1", at(2026, 6, 1), "summer"],
-    ["Aug 31", at(2026, 8, 31), "summer"],
-    ["Sep 1", at(2026, 9, 1), "fall"],
-    ["Nov 30", at(2026, 11, 30), "fall"],
-    ["Dec 1", at(2026, 12, 1), "winter"],
-    ["three days before Christmas", at(2026, 12, 22), "winter"],
-    ["three days before Easter", at(2026, 4, 2), "spring"],
-    ["the day after Christmas", at(2026, 12, 26), "winter"],
-  ])("%s wears the season outfit", (_name, now, outfit) => {
-    expect(sceneFor(input({ now })).outfit).toBe(outfit);
-  });
-
-  test("holiday outfit still applies late at night on the holiday", () => {
-    const neverQuiet = { quietStart: "00:00", quietEnd: "00:00" };
-    expect(sceneFor(input({ ...neverQuiet, now: at(2026, 12, 25, 23, 50) })).outfit).toBe("christmas");
-  });
-
-  test.each([
-    ["up at night to answer", "thinking", at(2026, 7, 15, 2, 30)],
-    ["talking at night", "talking", at(2026, 7, 15, 23, 30)],
-    ["asleep", "idle", at(2026, 7, 15, 3)],
-    ["at night on a holiday", "talking", at(2026, 12, 25, 1)],
-  ] as const)("wears pajamas during quiet hours: %s", (_name, agentState, now) => {
-    expect(sceneFor(input({ agentState, now })).outfit).toBe("pajamas");
-  });
-
-  test("dresses again once quiet hours end", () => {
-    expect(sceneFor(input({ agentState: "talking", now: at(2026, 7, 15, 7) })).outfit).toBe("summer");
+  test.each(outfitCases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+    const [date, time] = c.at.split("T");
+    const [y, mo, d] = date.split("-").map(Number);
+    const [h, mi] = time.split(":").map(Number);
+    const quiet = c.quietStart ? { quietStart: c.quietStart, quietEnd: c.quietEnd } : {};
+    expect(sceneFor(input({ now: at(y, mo, d, h, mi), ...quiet })).outfit).toBe(c.outfit);
   });
 });
 
